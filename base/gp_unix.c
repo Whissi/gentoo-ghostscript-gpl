@@ -19,6 +19,7 @@
 #ifdef __MINGW32__
 #  include "windows_.h"
 #endif
+#include "errno_.h"
 #include "pipe_.h"
 #include "string_.h"
 #include "time_.h"
@@ -148,6 +149,7 @@ void
 gp_get_realtime(long *pdt)
 {
     struct timeval tp;
+    const char *env;
 
 #if gettimeofday_no_timezone    /* older versions of SVR4 */
     {
@@ -166,6 +168,26 @@ gp_get_realtime(long *pdt)
         }
     }
 #endif
+
+    env = getenv("SOURCE_DATE_EPOCH");
+    if (env) {
+        char *end;
+        long timestamp;
+
+        errno = 0;
+        timestamp = strtol(env, &end, 10);
+        if (env == end || *end || errno != 0) {
+            lprintf("Ghostscript: SOURCE_DATE_EPOCH is not a number!\n");
+            timestamp = 0;
+        }
+
+        tp.tv_sec = timestamp;
+        tp.tv_usec = 0;
+
+        /* We need to fix the environment timezone to get reproducible */
+        /* results when parsing the result of gp_get_realtime. */
+        setenv("TZ", "UTC", 1);
+    }
 
     /* tp.tv_sec is #secs since Jan 1, 1970 */
     pdt[0] = tp.tv_sec;
