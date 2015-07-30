@@ -183,10 +183,12 @@ psw_begin_file_header(gp_file *f, const gx_device *dev, const gs_rect *pbbox,
     fprintf(f, "%%%%Creator: %s %ld (%s)\n", gs_product, (long)gs_revision,
             dev->dname);
     {
+        long secs_ns[2];
         time_t t;
         struct tm tms;
 
-        time(&t);
+        gp_get_realtime(secs_ns);
+        t = secs_ns[0];
         tms = *localtime(&t);
         fprintf(f, "%%%%CreationDate: %d/%02d/%02d %02d:%02d:%02d\n",
                 tms.tm_year + 1900, tms.tm_mon + 1, tms.tm_mday,

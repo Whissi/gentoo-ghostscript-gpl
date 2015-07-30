@@ -391,6 +391,7 @@ pdf_initialize_ids(gx_device_pdf * pdev)
      */
     {
         struct tm tms;
+        long secs_ns[2];
         time_t t;
         char buf[1+2+4+2+2+2+2+2+1+2+1+2+1+1+1]; /* (D:yyyymmddhhmmssZhh'mm')\0 */
         int timeoffset;
@@ -402,7 +403,8 @@ pdf_initialize_ids(gx_device_pdf * pdev)
         timesign = 'Z';
         timeoffset = 0;
 #else
-        time(&t);
+        gp_get_realtime(secs_ns);
+        t = secs_ns[0];
         tms = *gmtime(&t);
         tms.tm_isdst = -1;
         timeoffset = (int)difftime(t, mktime(&tms)); /* tz+dst in seconds */

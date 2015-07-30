@@ -199,10 +199,12 @@ pdf_xmp_time(char *buf, int buf_length)
 {
     /* We don't write a day time because we don't have a time zone. */
     struct tm tms;
+    long secs_ns[2];
     time_t t;
     char buf1[4+1+2+1+2+1]; /* yyyy-mm-dd\0 */
 
-    time(&t);
+    gp_get_realtime(secs_ns);
+    t = secs_ns[0];
     tms = *localtime(&t);
     gs_sprintf(buf1,
             "%04d-%02d-%02d",
