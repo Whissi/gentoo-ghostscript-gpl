@@ -858,6 +858,14 @@ currentdict /.makeinternaldict .undef
            { /undefinedfilename signalerror }
           ifelse
         } bind def
+/runlibfileifexists
+        {		% We don't want to bind 'run' into this procedure,
+                        % since run may get redefined.
+          findlibfile
+           { exch pop /run .systemvar exec }
+           { pop }
+          ifelse
+        } bind def
 /selectdevice
         { finddevice setdevice .setdefaultscreen } bind def
 /signalerror		% <object> <errorname> signalerror -
@@ -986,6 +994,7 @@ def
         } bind def
 % Temporarily substitute it for the real runlibfile.
 /.runlibfile /runlibfile load def
+/.runlibfileifexists /runlibfileifexists load def
 /runlibfile //runlibfile0 def
 currentdict /runlibfile0 .undef
 

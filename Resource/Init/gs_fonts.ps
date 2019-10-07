@@ -139,10 +139,19 @@ userdict /.nativeFontmap .FontDirectory maxlength dict put
       } if
       1 index type /stringtype eq
       1 index type /nametype eq and 1 index xcheck and
-      1 index /run eq 2 index /.runlibfile eq or and {
+      1 index /run eq 2 index /.runlibfile eq 3 index /.runlibfileifexists eq or or and {
                 % This is an inclusion entry.
-        pop findlibfile { exch pop } { file } ifelse
-        2 index exch .readFontmap pop
+        0 index /.runlibfileifexists eq {
+          pop findlibfile {
+            exch pop
+            2 index exch .readFontmap pop
+          } {
+            pop
+          } ifelse
+        } {
+          pop findlibfile { exch pop } { file } ifelse
+          2 index exch .readFontmap pop
+        } ifelse
       } {
                 % This is a real entry.
                 % Read and pop tokens until a semicolon.
