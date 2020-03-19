@@ -58,11 +58,16 @@ cal_OBJS = \
 	$(CAL_OBJ)$(CAL_PREFIX)blend.$(OBJ)	\
 	$(CAL_OBJ)$(CAL_PREFIX)cmsavx2.$(OBJ)	\
 	$(CAL_OBJ)$(CAL_PREFIX)cmssse42.$(OBJ)	\
+	$(CAL_OBJ)$(CAL_PREFIX)cmsneon.$(OBJ)	\
 	$(CAL_OBJ)$(CAL_PREFIX)lcms2mt_cal.$(OBJ)
 
 cal_HDRS = \
 	$(CAL_SRC)cal.h		\
 	$(CAL_SRC)cal-impl.h	\
+	$(CAL_SRC)cal-impl.h	\
+	$(CAL_SRC)cal-immintrin.h	\
+	$(CAL_SRC)cal-nmmintrin.h	\
+	$(arch_h)
 
 # external link .dev - empty, as we add the lib to LDFLAGS
 #$(GLOBJ)cal.dev : $(CAL_MAK) $(ECHOGS_XE) \
@@ -75,7 +80,7 @@ $(GLOBJ)cal.dev : $(ECHOGS_XE) $(cal_OBJS) \
 	$(SETMOD) $(GLOBJ)cal $(cal_OBJS)
 
 # define our specific compiler
-CAL_CC=$(CC) $(CFLAGS) $(CAL_CFLAGS) $(D_)OPJ_STATIC$(_D) $(D_)STANDARD_SLOW_VERSION$(_D) $(I_)$(CAL_GEN)$(_I) $(I_)$(CAL_SRC)$(_I)
+CAL_CC=$(CC) $(CFLAGS) $(CAL_CFLAGS) $(I_)$(CAL_GEN)$(_I) $(I_)$(CAL_SRC)$(_I)
 CAL_O=$(O_)$(CAL_OBJ)$(CAL_PREFIX)
 
 CAL_DEP=$(AK) $(CAL_MAK) $(MAKEDIRS)
@@ -101,6 +106,9 @@ $(CAL_OBJ)$(CAL_PREFIX)cmsavx2.$(OBJ) : $(CAL_SRC)cmsavx2.c $(cal_HDRS) $(CAL_DE
 $(CAL_OBJ)$(CAL_PREFIX)cmssse42.$(OBJ) : $(CAL_SRC)cmssse42.c $(cal_HDRS) $(CAL_DEP)
 	$(CAL_CC) $(CAL_SSE4_2_CFLAGS) $(I_)$(LCMS2MTSRCDIR)$(D)include $(I_)$(LCMS2MTSRCDIR)$(D)src $(CAL_O)cmssse42.$(OBJ) $(C_) $(CAL_SRC)cmssse42.c
 
+$(CAL_OBJ)$(CAL_PREFIX)cmsneon.$(OBJ) : $(CAL_SRC)cmsneon.c $(cal_HDRS) $(CAL_DEP)
+	$(CAL_CC) $(CAL_SSE4_2_CFLAGS) $(CAL_NEON_CFLAGS) $(I_)$(LCMS2MTSRCDIR)$(D)include $(I_)$(LCMS2MTSRCDIR)$(D)src $(CAL_O)cmsneon.$(OBJ) $(C_) $(CAL_SRC)cmsneon.c
+
 $(CAL_OBJ)$(CAL_PREFIX)lcms2mt_cal.$(OBJ) : $(CAL_SRC)lcms2mt_cal.c $(cal_HDRS) $(CAL_DEP) $(gsmemory_h)
 	$(CAL_CC) $(I_)$(LCMS2MTSRCDIR)$(D)include $(I_)$(GLSRC) $(I_)$(LCMS2MTSRCDIR)$(D)src $(CAL_O)lcms2mt_cal.$(OBJ) $(C_) $(CAL_SRC)lcms2mt_cal.c
 
@@ -112,6 +120,12 @@ $(CAL_OBJ)$(CAL_PREFIX)blendsse42.$(OBJ) : $(CAL_SRC)blendsse42.c $(cal_HDRS) $(
 
 $(CAL_OBJ)$(CAL_PREFIX)blend.$(OBJ) : $(CAL_SRC)blend.c $(cal_HDRS) $(CAL_DEP) $(gsmemory_h)
 	$(CAL_CC) $(I_)$(GLSRC) $(CAL_O)blend.$(OBJ) $(C_) $(CAL_SRC)blend.c
+
+cal_ets_h=$(CAL_SRC)cal_ets.h
+ca_ets_tm_h=$(CAL_SRC)cal_ets_tm.h
+$(GLOBJ)ets_1.$(OBJ) : $(CAL_SRC)cal_ets.c $(CAL_SRC)ets_template.c \
+ $(cal_ets_h) $(cal_ets_tm_h) $(cal_HDRS) $(CAL_DEP) $(LIB_MAK)
+	$(GLCC) $(CAL_SSE4_2_CFLAGS) $(CAL_NEON_CFLAGS) $(GLO_)ets_1.$(OBJ) $(C_) $(CAL_SRC)cal_ets.c
 
 
 # end of file

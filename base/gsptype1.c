@@ -118,8 +118,11 @@ gs_pattern1_init(gs_pattern1_template_t * ppat)
 }
 
 /* Make an instance of a PatternType 1 pattern. */
-static int compute_inst_matrix(gs_pattern1_instance_t * pinst,
-        gs_gstate * saved, gs_rect * pbbox, int width, int height);
+static int compute_inst_matrix(gs_pattern1_instance_t *pinst,
+                               gs_gstate *saved,
+                               gs_rect *pbbox,
+                               int width, int height,
+                               float *bbw, float *bbh);
 int
 gs_makepattern(gs_client_color * pcc, const gs_pattern1_template_t * pcp,
                const gs_matrix * pmat, gs_gstate * pgs, gs_memory_t * mem)
@@ -145,6 +148,7 @@ gs_pattern1_make_pattern(gs_client_color * pcc,
     int code = gs_make_pattern_common(pcc, (const gs_pattern_template_t *)pcp,
                                       pmat, pgs, mem,
                                       &st_pattern1_instance);
+    float bbw, bbh;
 
     if (code < 0)
         return code;
@@ -181,7 +185,7 @@ gs_pattern1_make_pattern(gs_client_color * pcc,
             goto fsaved;
     }
     inst.templat = *pcp;
-    code = compute_inst_matrix(&inst, saved, &bbox, dev_width, dev_height);
+    code = compute_inst_matrix(&inst, saved, &bbox, dev_width, dev_height, &bbw, &bbh);
     if (code < 0)
         goto fsaved;
 
@@ -214,9 +218,6 @@ gs_pattern1_make_pattern(gs_client_color * pcc,
     if_debug5m('t', mem, "[t]bbox=(%g,%g),(%g,%g), uses_transparency=%d\n",
                bbox.p.x, bbox.p.y, bbox.q.x, bbox.q.y, inst.templat.uses_transparency);
     {
-        float bbw = bbox.q.x - bbox.p.x;
-        float bbh = bbox.q.y - bbox.p.y;
-
         /* If the step and the size agree to within 1/2 pixel, */
         /* make them the same. */
         if (ADJUST_SCALE_BY_GS_TRADITION) {
@@ -235,7 +236,7 @@ gs_pattern1_make_pattern(gs_client_color * pcc,
             bbox.p.x = bbox.p.y = bbox.q.x = bbox.q.y = 0;
         } else {
             /* Check for singular stepping matrix. */
-            if (fabs(inst.step_matrix.xx * inst.step_matrix.yy - inst.step_matrix.xy * inst.step_matrix.yx) < 1.0e-6) {
+            if (fabs(inst.step_matrix.xx * inst.step_matrix.yy - inst.step_matrix.xy * inst.step_matrix.yx) < 1.0e-9) {
                 code = gs_note_error(gs_error_rangecheck);
                 goto fsaved;
             }
@@ -247,7 +248,7 @@ gs_pattern1_make_pattern(gs_client_color * pcc,
                 gs_scale(saved, fabs(inst.size.x / inst.step_matrix.xx),
                          fabs(inst.size.y / inst.step_matrix.yy));
                 code = compute_inst_matrix(&inst, saved, &bbox,
-                                                dev_width, dev_height);
+                                           dev_width, dev_height, &bbw, &bbh);
                 if (code < 0)
                     goto fsaved;
                 if (ADJUST_SCALE_FOR_THIN_LINES) {
@@ -529,14 +530,30 @@ clamp_pattern_bbox(gs_pattern1_instance_t * pinst, gs_rect * pbbox,
 /* from the step values and the saved matrix. */
 static int
 compute_inst_matrix(gs_pattern1_instance_t * pinst, gs_gstate * saved,
-                            gs_rect * pbbox, int width, int height)
+                    gs_rect * pbbox, int width, int height,
+                    float *pbbw, float *pbbh)
 {
     float xx, xy, yx, yy, dx, dy, temp;
     int code;
+    gs_matrix m = ctm_only(saved);
 
-    code = gs_bbox_transform(&pinst->templat.BBox, &ctm_only(saved), pbbox);
+    /* Bug 702124: Due to the limited precision of floats, we find that
+     * transforming (say) small height boxes in the presence of large tx/ty
+     * values can cause the box heights to map to 0. So calculate the
+     * width/height of the bbox before we roll the offset into it. */
+    m.tx = 0; m.ty = 0;
+
+    code = gs_bbox_transform(&pinst->templat.BBox, &m, pbbox);
     if (code < 0)
         return code;
+
+    *pbbw = pbbox->q.x - pbbox->p.x;
+    *pbbh = pbbox->q.y - pbbox->p.y;
+
+    pbbox->p.x += ctm_only(saved).tx;
+    pbbox->p.y += ctm_only(saved).ty;
+    pbbox->q.x += ctm_only(saved).tx;
+    pbbox->q.y += ctm_only(saved).ty;
     /*
      * Adjust saved.ctm to map the bbox origin to pixels.
      */
@@ -704,7 +721,7 @@ gs_pattern1_set_color(const gs_client_color * pcc, gs_gstate * pgs)
         gs_overprint_params_t   params;
 
         params.retain_any_comps = false;
-        pgs->effective_overprint_mode = 0;
+        params.effective_opm = pgs->color[0].effective_opm = 0;
         return gs_gstate_update_overprint(pgs, &params);
     }
 }
@@ -1628,6 +1645,7 @@ typedef struct gx_dc_serialized_tile_s {
 } gx_dc_serialized_tile_t;
 
 enum {
+    TILE_IS_LOCKED   = 0x80000000,
     TILE_HAS_OVERLAP = 0x40000000,
     TILE_IS_SIMPLE   = 0x20000000,
     TILE_USES_TRANSP = 0x10000000,
@@ -1672,7 +1690,8 @@ gx_dc_pattern_write_raster(gx_color_tile *ptile, int64_t offset, byte *data,
         buf.flags = ptile->depth
                   | (ptile->tiling_type<<TILE_TYPE_SHIFT)
                   | (ptile->is_simple ? TILE_IS_SIMPLE : 0)
-                  | (ptile->has_overlap ? TILE_HAS_OVERLAP : 0);
+                  | (ptile->has_overlap ? TILE_HAS_OVERLAP : 0)
+                  | (ptile->is_locked ? TILE_IS_LOCKED : 0);
         if (sizeof(buf) > left) {
             /* For a while we require the client to provide enough buffer size. */
             return_error(gs_error_unregistered); /* Must not happen. */
@@ -1764,7 +1783,8 @@ gx_dc_pattern_trans_write_raster(gx_color_tile *ptile, int64_t offset, byte *dat
                   | TILE_USES_TRANSP
                   | (ptile->tiling_type<<TILE_TYPE_SHIFT)
                   | (ptile->is_simple ? TILE_IS_SIMPLE : 0)
-                  | (ptile->has_overlap ? TILE_HAS_OVERLAP : 0);
+                  | (ptile->has_overlap ? TILE_HAS_OVERLAP : 0)
+                  | (ptile->is_locked ? TILE_IS_LOCKED : 0);
         buf.step_matrix = ptile->step_matrix;
         buf.bbox = ptile->bbox;
         buf.blending_mode = ptile->blending_mode;
@@ -1889,6 +1909,7 @@ gx_dc_pattern_write(
                   | (ptile->tiling_type<<TILE_TYPE_SHIFT)
                   | (ptile->is_simple ? TILE_IS_SIMPLE : 0)
                   | (ptile->has_overlap ? TILE_HAS_OVERLAP : 0)
+                  | (ptile->is_locked ? TILE_IS_LOCKED : 0)
                   | (ptile->cdev->common.page_uses_transparency ? TILE_USES_TRANSP : 0);
         buf.blending_mode = ptile->blending_mode;    /* in case tile has transparency */
         if (sizeof(buf) > left) {
@@ -2114,8 +2135,9 @@ gx_dc_pattern_read(
         ptile->tiling_type = (buf.flags & TILE_TYPE_MASK)>>TILE_TYPE_SHIFT;
         ptile->is_simple = !!(buf.flags & TILE_IS_SIMPLE);
         ptile->has_overlap = !!(buf.flags & TILE_HAS_OVERLAP);
+        ptile->is_locked = !!(buf.flags & TILE_IS_LOCKED);
         ptile->blending_mode = buf.blending_mode;
-        ptile->is_dummy = 0;
+        ptile->is_dummy = false;
 
         if (!(buf.flags & TILE_IS_CLIST)) {
 

@@ -380,6 +380,8 @@ s_CFE_process(stream_state * st, stream_cursor_read * pr,
 }
 
 /* Encode a 1-D scan line. */
+/* Attempt to stop coverity thinking skip_white_pixels() taints lbuf:*/
+/* coverity[ -tainted_data_argument : arg-1 ] */
 static void
 cf_encode_1d(stream_CFE_state * ss, const byte * lbuf, stream_cursor_write * pw)
 {
@@ -411,6 +413,7 @@ cf_encode_1d(stream_CFE_state * ss, const byte * lbuf, stream_cursor_write * pw)
 }
 
 /* Encode a 2-D scan line. */
+/* coverity[ -tainted_data_argument : arg-1 ] */
 static void
 cf_encode_2d(stream_CFE_state * ss, const byte * lbuf, stream_cursor_write * pw,
              const byte * lprev)

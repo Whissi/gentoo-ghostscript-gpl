@@ -1787,7 +1787,7 @@ bjc_compress(const byte *row, const byte *end_row, byte *compressed)
     register byte test, test2;
 
     test = *exam;
-    while ( exam < end_row ) {
+    while ( exam + 1 < end_row ) {
       test2 = *++exam;
       if ( test == test2 )
           break;
@@ -1969,7 +1969,7 @@ ep_print_image(gp_file *prn_stream, ep_globals *eg, char cmd, byte *data, int si
           /* p2 is the head of non zero image. */
           p2 = p3;
         redo:
-          for (p3 += row_bytes; memcmp(p3, zeros, row_bytes); p3 += row_bytes);
+          for (p3 += row_bytes; p3 < outp && memcmp(p3, zeros, row_bytes); p3 += row_bytes);
           if (p3 < outp && memcmp(p3+row_bytes, zeros, row_bytes)) goto redo;
         } else p1 = p2 = outp;
 
@@ -2022,6 +2022,7 @@ hp_colour_print_page(gx_device_printer * pdev, gp_file * prn_stream, int ptype)
   int compression = 0;
   int scan = 0;
   int *errors[2];
+  int code = 0;
   const char *cid_string = (const char*) 0;
   byte *data[4], *plane_data[4][4], *out_data;
   byte *out_row, *out_row_alt;
@@ -2414,7 +2415,9 @@ hp_colour_print_page(gx_device_printer * pdev, gp_file * prn_stream, int ptype)
       word *data_words = (word *)data[scan];
       register word *end_data = data_words + line_size_words;
 
-      gdev_prn_copy_scan_lines(pdev, lnum, data[scan], line_size);
+      code = gdev_prn_copy_scan_lines(pdev, lnum, data[scan], line_size);
+      if (code < 0)
+          goto xit;
 
       /* Mask off 1-bits beyond the line width. */
       end_data[-1] &= rmask;
@@ -2744,11 +2747,12 @@ hp_colour_print_page(gx_device_printer * pdev, gp_file * prn_stream, int ptype)
   } else
     gp_fputs("\033&l0H", prn_stream);
 
+xit:
   /* free temporary storage */
   gs_free(pdev->memory, (char *) eg.storage, eg.storage_size_words, W, "ep_print_buffer");
   gs_free(pdev->memory, (char *) storage, storage_size_words, W, "hp_colour_print_page");
 
-  return 0;
+  return code;
 }
 
 /*

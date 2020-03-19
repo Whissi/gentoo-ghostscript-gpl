@@ -1,5 +1,3 @@
-/* $Id: tif_jpeg.c,v 1.134 2017-10-17 19:04:47 erouault Exp $ */
-
 /*
  * Copyright (c) 1994-1997 Sam Leffler
  * Copyright (c) 1994-1997 Silicon Graphics, Inc.
@@ -27,9 +25,9 @@
 #define WIN32_LEAN_AND_MEAN
 #define VC_EXTRALEAN
 
+#include "tiffiop.h"
 #include <stdlib.h>
 
-#include "tiffiop.h"
 #ifdef JPEG_SUPPORT
 
 /*
@@ -67,6 +65,10 @@ int TIFFJPEGIsFullStripRequired_12(TIFF* tif);
 # define XMD_H 1
 #endif
 
+/* If we are building for GS, do NOT mess with boolean - we want it to be int on all platforms.
+ */
+#define GS_TIFF_BUILD
+#ifndef GS_TIFF_BUILD
 /*
    The windows RPCNDR.H file defines boolean, but defines it with the
    unsigned char size.  You should compile JPEG library using appropriate
@@ -76,7 +78,7 @@ int TIFFJPEGIsFullStripRequired_12(TIFF* tif);
    "JPEGLib: JPEG parameter struct mismatch: library thinks size is 432,
    caller expects 464"
 
-   For such users we wil fix the problem here. See install.doc file from
+   For such users we will fix the problem here. See install.doc file from
    the JPEG library distribution for details.
 */
 
@@ -86,6 +88,7 @@ int TIFFJPEGIsFullStripRequired_12(TIFF* tif);
    typedef unsigned char boolean;
 # endif
 # define HAVE_BOOLEAN            /* prevent jmorecfg.h from redefining it */
+#endif
 #endif
 
 #include "jpeglib.h"
@@ -292,15 +295,19 @@ TIFFjpeg_create_compress(JPEGState* sp)
 }
 
 static int
-TIFFjpeg_create_decompress(JPEGState* sp)
+TIFFjpeg_create_decompress(JPEGState* sp, TIFF *tif)
 {
 	/* initialize JPEG error handling */
 	sp->cinfo.d.err = jpeg_std_error(&sp->err);
 	sp->err.error_exit = TIFFjpeg_error_exit;
 	sp->err.output_message = TIFFjpeg_output_message;
 
-	/* set client_data to avoid UMR warning from tools like Purify */
-	sp->cinfo.d.client_data = NULL;
+        /* GS extension */
+	if (tif->get_jpeg_mem_ptr)
+		sp->cinfo.d.client_data = tif->get_jpeg_mem_ptr(tif->tif_clientdata);
+	else
+		/* set client_data to avoid UMR warning from tools like Purify */
+		sp->cinfo.d.client_data = NULL;
 
 	return CALLVJPEG(sp, jpeg_create_decompress(&sp->cinfo.d));
 }
@@ -782,12 +789,9 @@ JPEGFixupTagsSubsampling(TIFF* tif)
 	 */
 	static const char module[] = "JPEGFixupTagsSubsampling";
 	struct JPEGFixupTagsSubsamplingData m;
+        uint64 fileoffset = TIFFGetStrileOffset(tif, 0);
 
-        _TIFFFillStriles( tif );
-        
-        if( tif->tif_dir.td_stripbytecount == NULL
-            || tif->tif_dir.td_stripoffset == NULL
-            || tif->tif_dir.td_stripbytecount[0] == 0 )
+        if( fileoffset == 0 )
         {
             /* Do not even try to check if the first strip/tile does not
                yet exist, as occurs when GDAL has created a new NULL file
@@ -806,9 +810,9 @@ JPEGFixupTagsSubsampling(TIFF* tif)
 	}
 	m.buffercurrentbyte=NULL;
 	m.bufferbytesleft=0;
-	m.fileoffset=tif->tif_dir.td_stripoffset[0];
+	m.fileoffset=fileoffset;
 	m.filepositioned=0;
-	m.filebytesleft=tif->tif_dir.td_stripbytecount[0];
+	m.filebytesleft=TIFFGetStrileByteCount(tif, 0);
 	if (!JPEGFixupTagsSubsamplingSec(&m))
 		TIFFWarningExt(tif->tif_clientdata,module,
 		    "Unable to auto-correct subsampling values, likely corrupt JPEG compressed data in first strip/tile; auto-correcting skipped");
@@ -1070,7 +1074,7 @@ int TIFFJPEGIsFullStripRequired(TIFF* tif)
     memset(&state, 0, sizeof(JPEGState));
     state.tif = tif;
 
-    TIFFjpeg_create_decompress(&state);
+    TIFFjpeg_create_decompress(&state, tif);
 
     TIFFjpeg_data_src(&state);
 
@@ -1568,7 +1572,7 @@ JPEGDecodeRaw(TIFF* tif, uint8* buf, tmsize_t cc, uint16 s)
 					JSAMPLE *outptr = (JSAMPLE*)tmpbuf + clumpoffset;
 #else
 					JSAMPLE *outptr = (JSAMPLE*)buf + clumpoffset;
-					if (cc < (tmsize_t) (clumpoffset + samples_per_clump*(clumps_per_line-1) + hsamp)) {
+					if (cc < (tmsize_t)(clumpoffset + (tmsize_t)samples_per_clump*(clumps_per_line-1) + hsamp)) {
 						TIFFErrorExt(tif->tif_clientdata, "JPEGDecodeRaw",
 							     "application buffer not large enough for all data, possible subsampling issue");
 						return 0;
@@ -2128,8 +2132,8 @@ JPEGEncodeRaw(TIFF* tif, uint8* buf, tmsize_t cc, uint16 s)
 	/* data is expected to be supplied in multiples of a clumpline */
 	/* a clumpline is equivalent to v_sampling desubsampled scanlines */
 	/* TODO: the following calculation of bytesperclumpline, should substitute calculation of sp->bytesperline, except that it is per v_sampling lines */
-	bytesperclumpline = (((sp->cinfo.c.image_width+sp->h_sampling-1)/sp->h_sampling)
-			     *(sp->h_sampling*sp->v_sampling+2)*sp->cinfo.c.data_precision+7)
+	bytesperclumpline = ((((tmsize_t)sp->cinfo.c.image_width+sp->h_sampling-1)/sp->h_sampling)
+			     *((tmsize_t)sp->h_sampling*sp->v_sampling+2)*sp->cinfo.c.data_precision+7)
 			    /8;
 
 	nrows = ( cc / bytesperclumpline ) * sp->v_sampling;
@@ -2448,7 +2452,7 @@ static int JPEGInitializeLibJPEG( TIFF * tif, int decompress )
      * Initialize libjpeg.
      */
     if ( decompress ) {
-        if (!TIFFjpeg_create_decompress(sp))
+        if (!TIFFjpeg_create_decompress(sp, tif))
             return (0);
     } else {
         if (!TIFFjpeg_create_compress(sp))

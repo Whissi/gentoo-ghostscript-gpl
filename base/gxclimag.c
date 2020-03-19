@@ -220,7 +220,7 @@ clist_fill_mask(gx_device * dev,
         if (code < 0)
             return code;
         code = cmd_put_drawing_color(cdev, re.pcls, pdcolor, &re,
-                                     devn_not_tile);
+                                     devn_not_tile_fill);
         if (code == gs_error_unregistered)
             return code;
         if (depth > 1 && code >= 0)
@@ -537,7 +537,8 @@ clist_begin_typed_image(gx_device * dev, const gs_gstate * pgs,
             indexed = false;
             num_components = gs_color_space_num_components(pcs);
         }
-        uses_color = pim->CombineWithColor && rop3_uses_T(pgs->log_op);
+        uses_color = pim->CombineWithColor &&
+                    (rop3_uses_T(pgs->log_op) || rop3_uses_S(pgs->log_op));
     }
     code = gx_image_enum_common_init((gx_image_enum_common_t *) pie,
                                      (const gs_data_image_t *) pim,
@@ -755,8 +756,6 @@ clist_begin_typed_image(gx_device * dev, const gs_gstate * pgs,
             goto use_default;
     }
     if (pim->Interpolate) {
-        if (gx_device_is_pattern_clist(dev))
-            goto use_default;
         pie->support.x = pie->support.y = MAX_ISCALE_SUPPORT + 1;
     } else {
         pie->support.x = pie->support.y = 0;
@@ -999,7 +998,9 @@ clist_image_plane_data(gx_image_enum_common_t * info,
     sbox.p.y = (y0 = y_orig) - pie->support.y;
     sbox.q.x = pie->rect.q.x + pie->support.x;
     sbox.q.y = (y1 = pie->y += yh_used) + pie->support.y;
-    gs_bbox_transform(&sbox, &pie->matrix, &dbox);
+    code = gs_bbox_transform(&sbox, &pie->matrix, &dbox);
+    if (code < 0)
+        return code;
     /*
      * In order to keep the band list consistent, we must write out
      * the image data in precisely those bands whose begin_image
@@ -1117,7 +1118,7 @@ clist_image_plane_data(gx_image_enum_common_t * info,
                 re.rect_nbands = ((pie->ymax + re.band_height - 1) / re.band_height) -
                                  ((pie->ymin) / re.band_height);
                 code = cmd_put_drawing_color(cdev, re.pcls, &pie->dcolor,
-                                             &re, devn_not_tile);
+                                             &re, devn_not_tile_fill);
                 if (code < 0)
                     return code;
             }

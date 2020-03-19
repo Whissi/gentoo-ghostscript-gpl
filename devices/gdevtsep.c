@@ -38,6 +38,7 @@
 #include "gsequivc.h"
 #include "gxdht.h"
 #include "gxiodev.h"
+#include "gzht.h"
 #include "stdio_.h"
 #include "ctype_.h"
 #include "gxgetbit.h"
@@ -49,6 +50,9 @@
 #include "gsicc_cache.h"
 #include "gxdevsop.h"
 #include "gsicc.h"
+#ifdef WITH_CAL
+#include "cal.h"
+#endif
 
 /*
  * Some of the code in this module is based upon the gdevtfnx.c module.
@@ -1184,7 +1188,7 @@ tiffsep_put_params(gx_device * pdev, gs_param_list * plist)
     }
     switch (code = param_read_int(plist, (param_name = "MaxSpots"), &max_spots)) {
         case 0:
-            if ((max_spots >= 0) || (max_spots <= GS_CLIENT_COLOR_MAX_COMPONENTS-4)) {
+            if ((max_spots >= 0) && (max_spots <= GS_CLIENT_COLOR_MAX_COMPONENTS-4)) {
                 pdevn->max_spots = max_spots;
                 break;
             }
@@ -1230,9 +1234,7 @@ tiffsep1_put_params(gx_device * pdev, gs_param_list * plist)
 static void build_comp_to_sep_map(tiffsep_device *, short *);
 static int number_output_separations(int, int, int, int);
 static int create_separation_file_name(tiffsep_device *, char *, uint, int, bool);
-static byte * threshold_from_order( gx_ht_order *, int *, int *, gs_memory_t *);
 static int sep1_ht_order_to_thresholds(gx_device *pdev, const gs_gstate *pgs);
-static void sep1_free_thresholds(tiffsep1_device *);
 dev_proc_fill_path(clist_fill_path);
 
 /* Open the tiffsep1 device.  This will now be using planar buffers so that
@@ -1371,10 +1373,6 @@ tiffsep1_prn_close(gx_device * pdev)
             TIFFCleanup(tfdev->tiff[comp_num]);
             tfdev->tiff[comp_num] = NULL;
         }
-    }
-    /* If we have thresholds, free them and clear the pointers */
-    if( tfdev->thresholds[0].dstart != NULL) {
-        sep1_free_thresholds(tfdev);
     }
 
 done:
@@ -1796,6 +1794,9 @@ tiffsep_prn_open(gx_device * pdev)
                 profile_struct->device_profile[0], profile_struct->postren_profile,
                 &rendering_params);
         }
+        if (pdev_sep->icclink == NULL) {
+            return_error(gs_error_VMerror);
+        }
         /* If it is identity, release it now and set link to NULL */
         if (pdev_sep->icclink->is_identity) {
             pdev_sep->icclink->procs.free_link(pdev_sep->icclink);
@@ -2110,10 +2111,11 @@ sep1_ht_order_to_thresholds(gx_device *pdev, const gs_gstate *pgs)
 {
     tiffsep1_device * const tfdev = (tiffsep1_device *)pdev;
     gs_memory_t *mem = pdev->memory;
+    int code;
 
-    /* If we have thresholds, free them and clear the pointers */
+    /* If we have thresholds, clear the pointers */
     if( tfdev->thresholds[0].dstart != NULL) {
-        sep1_free_thresholds(tfdev);
+        tfdev->thresholds[0].dstart = NULL;
     } else {
         int nc, j;
         gx_ht_order *d_order;
@@ -2125,128 +2127,37 @@ sep1_ht_order_to_thresholds(gx_device *pdev, const gs_gstate *pgs)
         }
         nc = pgs->dev_ht->num_comp;
         for( j=0; j<nc; j++ ) {
+            int x, y;
+
             d_order = &(pgs->dev_ht->components[j].corder);
             dptr = &(tfdev->thresholds[j]);
-            dptr->dstart = threshold_from_order( d_order, &(dptr->dwidth), &(dptr->dheight), mem);
-            if( dptr->dstart == NULL ) {
+            /* In order to use the function from gsht.c we need to set the color_info */
+            /* values it uses to reflect the eventual 1-bit output, not contone       */
+            pdev->color_info.dither_grays = pdev->color_info.dither_colors = 2;
+            pdev->color_info.polarity = GX_CINFO_POLARITY_ADDITIVE;
+            code = gx_ht_construct_threshold(d_order, pdev, pgs, j);
+            if( code < 0 ) {
                 emprintf(mem,
                          "sep1_order_to_thresholds: conversion to thresholds failed.\n");
-                return_error(gs_error_rangecheck);      /* error condition */
+                return_error(code);      /* error condition */
             }
+            pdev->color_info.dither_grays = pdev->color_info.dither_colors = 256;
+            pdev->color_info.polarity = GX_CINFO_POLARITY_SUBTRACTIVE;
+            /* Invert the thresholds so we (almost) match pbmraw dithered output */
+            for (y=0; y<d_order->full_height; y++) {
+                byte *s = d_order->threshold;
+                int s_offset = y * d_order->width;
+
+                for (x=0; x<d_order->width; x++) {
+                    s[s_offset + x] = 256 - s[s_offset + x];
+                }
+            }
+            dptr->dstart = d_order->threshold;
+            dptr->dwidth = d_order->width;
+            dptr->dheight = d_order->full_height;
         }
     }
     return 0;
-}
-
-static void
-sep1_free_thresholds(tiffsep1_device *tfdev)
-{
-    int i;
-
-    for (i=0; i < GX_DEVICE_COLOR_MAX_COMPONENTS + 1; i++) {
-        threshold_array_t *dptr = &(tfdev->thresholds[i]);
-
-        if (dptr->dstart != NULL) {
-            gs_free(tfdev->memory, dptr->dstart, dptr->dwidth * dptr->dheight, 1,
-                      "tiffsep1_threshold_array");
-            dptr->dstart = NULL;
-        }
-    }
-}
-
-/************************************************************************/
-/*      This routine generates a threshold matrix for use in            */
-/*      the color dithering routine from the "order" info in            */
-/*      the current graphics state.                                     */
-/*                                                                      */
-/************************************************************************/
-
-static byte*
-threshold_from_order( gx_ht_order *d_order, int *Width, int *Height, gs_memory_t *memory)
-{
-   int i, j, l, prev_l;
-   unsigned char *thresh;
-    int num_repeat, shift;
-
-    /* We can have simple or complete orders.  Simple ones tile the threshold
-       with shifts.   To handle those we simply loop over the number of
-       repeats making sure to shift columns when we set our threshold values */
-    num_repeat = d_order->full_height / d_order->height;
-    shift = d_order->shift;
-
-#ifdef DEBUG
-if ( gs_debug_c('h') ) {
-       dmprintf2(memory, "   width=%d, height=%d,",
-            d_order->width, d_order->height );
-       dmprintf2(memory, " num_levels=%d, raster=%d\n",
-            d_order->num_levels, d_order->raster );
-}
-#endif
-
-   thresh = (byte *)gs_malloc(memory, d_order->width * d_order->full_height, 1,
-                                  "tiffsep1_threshold_array");
-   if( thresh == NULL ) {
-#ifdef DEBUG
-      emprintf(memory, "threshold_from_order, malloc failed\n");
-      emprintf2(memory, "   width=%d, height=%d,",
-                d_order->width, d_order->height );
-      emprintf2(memory, " num_levels=%d, raster=%d\n",
-                d_order->num_levels, d_order->raster );
-#endif
-        return thresh ;         /* error if allocation failed   */
-   }
-   for( i=0; i<d_order->num_bits; i++ )
-      thresh[i] = 1;
-
-   *Width  = d_order->width;
-   *Height = d_order->full_height;
-
-   prev_l = 0;
-   l = 1;
-   while( l < d_order->num_levels ) {
-      if( d_order->levels[l] > d_order->levels[prev_l] ) {
-         int t_level = (256*l)/d_order->num_levels;
-
-#ifdef DEBUG
-         if ( gs_debug_c('h') )
-            dmprintf2(memory, "  level[%3d]=%3d\n", l, d_order->levels[l]);
-#endif
-         for( j=d_order->levels[prev_l]; j<d_order->levels[l]; j++) {
-            gs_int_point col_row = { 0, 0 };
-            int col_kk, row_kk, kk;
-
-            d_order->procs->bit_index(d_order, j, &col_row);
-#ifdef DEBUG
-            if ( gs_debug_c('h') )
-               dmprintf3(memory, "row=%2d, col=%2d, t_level=%3d\n",
-                  col_row.y, col_row.x, t_level);
-#endif
-            if( col_row.x < (int)d_order->width ) {
-                for (kk = 0; kk < num_repeat; kk++) {
-                    row_kk = col_row.y + kk * d_order->height;
-                    col_kk = col_row.x + kk * shift;
-                    col_kk = col_kk % d_order->width;
-                    *(thresh + col_kk + (row_kk * d_order->width)) = t_level;
-                }
-            }
-         }
-         prev_l = l;
-      }
-      l++;
-   }
-
-#ifdef DEBUG
-   if (gs_debug_c('h')) {
-      for( i=0; i<(int)d_order->height; i++ ) {
-         dmprintf1(memory, "threshold array row %3d= ", i);
-         for( j=(int)d_order->width-1; j>=0; j-- )
-            dmprintf1(memory, "%3d ", *(thresh+j+(i*d_order->width)) );
-         dmprintf(memory, "\n");
-      }
-   }
-#endif
-
-   return thresh;
 }
 
  /*
@@ -2365,6 +2276,7 @@ tiffsep_print_page(gx_device_printer * pdev, gp_file * file)
                 "\nUse of the %%d format is required to output more than one page to tiffsep.\n"
                 "See doc/Devices.htm#TIFF for details.\n\n");
        code = gs_note_error(gs_error_ioerror);
+       goto done;
     }
     /* Write the page directory for the CMYK equivalent file. */
     if (!tfdev->comp_file) {
@@ -2679,6 +2591,26 @@ done:
     return code;
 }
 
+#ifdef WITH_CAL
+static void
+ht_callback(cal_halftone_data_t *ht, void *arg)
+{
+    tiffsep1_device *tfdev = (tiffsep1_device *)arg;
+    int num_std_colorants = tfdev->devn_params.num_std_colorant_names;
+    int num_order = tfdev->devn_params.num_separation_order_names;
+    int num_spot = tfdev->devn_params.separations.num_separations;
+    int comp_num;
+    int num_comp = number_output_separations(tfdev->color_info.num_components,
+                                             num_std_colorants, num_order, num_spot);
+    /* Deliberately cast away const, cos tifflib has a bad interface. */
+    unsigned char *data = (unsigned char *)ht->data;
+
+    for (comp_num = 0; comp_num < num_comp; comp_num++) {
+        TIFFWriteScanline(tfdev->tiff[comp_num], &data[ht->raster*comp_num], ht->y, 0);
+    }
+}
+#endif
+
 /*
  * Output the image data for the tiff separation (tiffsep1) device.  The data
  * for the tiffsep1 device is written in separate planes to separate files.
@@ -2726,6 +2658,7 @@ tiffsep1_print_page(gx_device_printer * pdev, gp_file * file)
                 "\nUse of the %%d format is required to output more than one page to tiffsep1.\n"
                 "See doc/Devices.htm#TIFF for details.\n\n");
        code = gs_note_error(gs_error_ioerror);
+       goto done;
     }
     /* If the output file is on disk and the name contains a page #, */
     /* then delete the previous file. */
@@ -2809,8 +2742,41 @@ tiffsep1_print_page(gx_device_printer * pdev, gp_file * file)
         int pixel, y;
         gs_get_bits_params_t params;
         gs_int_rect rect;
+        uint32_t *dithered_line = NULL;
+
+#ifdef WITH_CAL
+        cal_context *cal = pdev->memory->gs_lib_ctx->core->cal_ctx;
+        cal_halftone *cal_ht = NULL;
+        cal_matrix matrix = { 1.0f, 0.0f, 0.0f, 1.0f, 0.0f, 0.0f };
+
+        cal_ht = cal_halftone_init(cal,
+                                   pdev->memory->non_gc_memory,
+                                   pdev->width,
+                                   pdev->height,
+                                   &matrix,
+                                   comp_num,
+                                   NULL,
+                                   0,
+                                   0,
+                                   pdev->width,
+                                   pdev->height,
+                                   0);
+        if (cal_ht != NULL) {
+            for (comp_num = 0; comp_num < num_comp; comp_num++)
+                if (cal_halftone_add_screen(cal,
+                                            pdev->memory->non_gc_memory,
+                                            cal_ht,
+                                            0,
+                                            tfdev->thresholds[comp_num].dwidth,
+                                            tfdev->thresholds[comp_num].dheight,
+                                            0,
+                                            0,
+                                            tfdev->thresholds[comp_num].dstart) < 0)
+                    goto cal_fail;
+        } else
+#endif
         /* the dithered_line is assumed to be 32-bit aligned by the alloc */
-        uint32_t *dithered_line = (uint32_t *)gs_alloc_bytes(pdev->memory, dithered_raster,
+        dithered_line = (uint32_t *)gs_alloc_bytes(pdev->memory, dithered_raster,
                                 "tiffsep1_print_page");
 
         memset(planes, 0, sizeof(*planes) * GS_CLIENT_COLOR_MAX_COMPONENTS);
@@ -2832,7 +2798,11 @@ tiffsep1_print_page(gx_device_printer * pdev, gp_file * file)
             }
         }
 
+#ifdef WITH_CAL
+        if (code < 0 || (cal_ht == NULL && dithered_line == NULL)) {
+#else
         if (code < 0 || dithered_line == NULL) {
+#endif
             code = gs_note_error(gs_error_VMerror);
             goto cleanup;
         }
@@ -2853,6 +2823,16 @@ tiffsep1_print_page(gx_device_printer * pdev, gp_file * file)
             if (code < 0)
                 break;
 
+#ifdef WITH_CAL
+            if(cal_ht != NULL) {
+                if (cal_halftone_process_planar(cal_ht,
+                                                pdev->memory->non_gc_memory,
+                                                (const byte * const *)&params.data[0],
+                                                ht_callback,
+                                                tfdev) < 0)
+                    goto cal_fail;
+            } else
+#endif
             /* Dither the separation and write it out */
             for (comp_num = 0; comp_num < num_comp; comp_num++ ) {
 
@@ -2869,8 +2849,8 @@ tiffsep1_print_page(gx_device_printer * pdev, gp_file * file)
                  */
 #define USE_32_BIT_WRITES
                 byte *thresh_line_base = tfdev->thresholds[comp_num].dstart +
-                                    ((y % tfdev->thresholds[comp_num].dheight) *
-                                        tfdev->thresholds[comp_num].dwidth) ;
+			             ((y % tfdev->thresholds[comp_num].dheight) *
+                                     tfdev->thresholds[comp_num].dwidth) ;
                 byte *thresh_ptr = thresh_line_base;
                 byte *thresh_limit = thresh_ptr + tfdev->thresholds[comp_num].dwidth;
                 byte *src = params.data[comp_num];
@@ -2940,6 +2920,14 @@ tiffsep1_print_page(gx_device_printer * pdev, gp_file * file)
             }
         }
         code = code1;
+
+#ifdef WITH_CAL
+        if(0) {
+cal_fail:
+            code = gs_error_unknownerror;
+        }
+        cal_halftone_fin(cal_ht, pdev->memory->non_gc_memory);
+#endif
 
         /* free any allocations and exit with code */
 cleanup:

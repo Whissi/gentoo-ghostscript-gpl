@@ -250,8 +250,7 @@ static int read_set_bits(command_buf_t *pcb, tile_slot *bits,
 static int read_set_misc2(command_buf_t *pcb, gs_gstate *pgs,
                            segment_notes *pnotes);
 static int read_set_color_space(command_buf_t *pcb, gs_gstate *pgs,
-                                 gs_color_space **ppcs, gx_device_clist_reader *cdev,
-                                 gs_memory_t *mem);
+                                 gx_device_clist_reader *cdev, gs_memory_t *mem);
 static int read_begin_image(command_buf_t *pcb, gs_image_common_t *pic,
                              gs_color_space *pcs);
 static int read_put_params(command_buf_t *pcb, gs_gstate *pgs,
@@ -507,10 +506,12 @@ clist_playback_band(clist_playback_action playback_action,
     struct _cas {
         bool lop_enabled;
         gx_device_color dcolor;
+        gs_fixed_point fa_save;
     } clip_save;
     bool in_clip = false;
     gs_gstate gs_gstate;
-    gx_device_color dev_color;
+    gx_device_color fill_color;
+    gx_device_color stroke_color;
     float dash_pattern[cmd_max_dash];
     gx_fill_params fill_params;
     gx_stroke_params stroke_params;
@@ -608,8 +609,22 @@ in:                             /* Initialize for a new page. */
     }
     if (target != 0)
         (*dev_proc(target, get_clipping_box))(target, &target_box);
+    memset(&gs_gstate, 0, sizeof(gs_gstate));
     GS_STATE_INIT_VALUES_CLIST((&gs_gstate));
     code = gs_gstate_initialize(&gs_gstate, mem);
+    gs_gstate.device = tdev;
+    gs_gstate.view_clip = NULL; /* Avoid issues in pdf14 fill stroke */
+    gs_gstate.clip_path = &clip_path;
+    pcs = gs_cspace_new_DeviceGray(mem);
+    if (pcs == NULL) {
+        code = gs_note_error(gs_error_VMerror);
+        goto out;
+    }
+    pcs->type->install_cspace(pcs, &gs_gstate);
+    gs_gstate.color[0].color_space = pcs;
+    rc_increment_cs(pcs);
+    gs_gstate.color[1].color_space = pcs;
+    rc_increment_cs(pcs);
     /* Remove the ICC link cache and replace with the device link cache
        so that we share the cache across bands */
     rc_decrement(gs_gstate.icc_link_cache,"clist_playback_band");
@@ -629,13 +644,8 @@ in:                             /* Initialize for a new page. */
 #ifdef DEBUG
     halftone_type = ht_type_none;
 #endif
-    pcs = gs_cspace_new_DeviceGray(mem);
-    if (pcs == NULL) {
-        code = gs_note_error(gs_error_VMerror);
-        goto out;
-    }
-    dev_color.ccolor_valid = false;
-    color_unset(&dev_color);
+    fill_color.ccolor_valid = false;
+    color_unset(&fill_color);
     data_bits = gs_alloc_bytes(mem, data_bits_size,
                                "clist_playback_band(data_bits)");
     if (data_bits == 0) {
@@ -1289,9 +1299,15 @@ set_phase:      /*
                                                 &target_box);
                         tdev = (gx_device *)&clip_accum;
                         clip_save.lop_enabled = state.lop_enabled;
-                        clip_save.dcolor = dev_color;
+                        clip_save.dcolor = fill_color;
+                        clip_save.fa_save.x = gs_gstate.fill_adjust.x;
+                        clip_save.fa_save.y = gs_gstate.fill_adjust.y;
+                        /* clip_path should match fill_path, i.e., with fill_adjust applied	*/
+                        /* If we get here with the fill_adjust = [0, 0], set it to [0.5, 0.5]i	*/
+                        if (clip_save.fa_save.x == 0 || clip_save.fa_save.y == 0)
+                            gs_gstate.fill_adjust.x = gs_gstate.fill_adjust.y = fixed_half;
                         /* temporarily set a solid color */
-                        color_set_pure(&dev_color, (gx_color_index)1);
+                        color_set_pure(&fill_color, (gx_color_index)1);
                         state.lop_enabled = false;
                         gs_gstate.log_op = lop_default;
                         break;
@@ -1324,13 +1340,16 @@ set_phase:      /*
                         gs_gstate.log_op =
                             (state.lop_enabled ? state.lop :
                              lop_default);
-                        dev_color = clip_save.dcolor;
+                        fill_color = clip_save.dcolor;
+                        /* restore the fill_adjust if it was changed by begin_clip */
+                        gs_gstate.fill_adjust.x = clip_save.fa_save.x;
+                        gs_gstate.fill_adjust.y = clip_save.fa_save.y;
                         in_clip = false;
                         break;
                     case cmd_opv_set_color_space:
                         cbuf.ptr = cbp;
-                        code = read_set_color_space(&cbuf, &gs_gstate,
-                                                    &pcs, cdev, mem);
+                        code = read_set_color_space(&cbuf, &gs_gstate, cdev, mem);
+                        pcs = gs_gstate.color[0].color_space;
                         cbp = cbuf.ptr;
                         if (code < 0) {
                             if (code == gs_error_rangecheck)
@@ -1343,7 +1362,7 @@ set_phase:      /*
                             gs_fixed_rect rect_hl;
 
                             cbp = cmd_read_rect(op & 0xf0, &state.rect, cbp);
-                            if (dev_color.type != gx_dc_type_devn) {
+                            if (fill_color.type != gx_dc_type_devn) {
                                 if_debug0m('L', mem, "hl rect fill without devn color\n");
                                 code = gs_note_error(gs_error_typecheck);
                                 goto out;
@@ -1357,7 +1376,7 @@ set_phase:      /*
                             rect_hl.q.y = int2fixed(state.rect.height) + rect_hl.p.y;
                             code = dev_proc(tdev, fill_rectangle_hl_color) (tdev,
                                                         &rect_hl, NULL,
-                                                        &dev_color, NULL);
+                                                        &fill_color, NULL);
                         }
                         continue;
                     case cmd_opv_begin_image_rect:
@@ -1396,10 +1415,11 @@ ibegin:                 if_debug0m('L', mem, "\n");
                         {
                             /* Processing an image operation */
                             dev_proc(tdev, set_graphics_type_tag)(tdev, GS_IMAGE_TAG);/* FIXME: what about text bitmaps? */
+                            image.i4.override_in_smask = 0;
                             code = (*dev_proc(tdev, begin_typed_image))
                                 (tdev, &gs_gstate, NULL,
                                  (const gs_image_common_t *)&image,
-                                 &image_rect, &dev_color, pcpath, mem,
+                                 &image_rect, &fill_color, pcpath, mem,
                                  &image_info);
                         }
                         if (code < 0)
@@ -1784,14 +1804,17 @@ idata:                  data_size = 0;
                                      &(state.tile_color_devn[1]),
                                      tile_phase.x, tile_phase.y);
                                 break;
+                            case cmd_opv_ext_put_fill_dcolor:
+                                pdcolor = &fill_color;
+                                goto load_dcolor;
+                            case cmd_opv_ext_put_stroke_dcolor:
+                                pdcolor = &stroke_color;
+                                goto load_dcolor;
                             case cmd_opv_ext_put_tile_devn_color0:
                                 pdcolor = &set_dev_colors[0];
                                 goto load_dcolor;
                             case cmd_opv_ext_put_tile_devn_color1:
                                 pdcolor = &set_dev_colors[1];
-                                goto load_dcolor;
-                            case cmd_opv_ext_put_drawing_color:
-                                pdcolor = &dev_color;
                     load_dcolor:{
                                     uint    color_size;
                                     int left, offset, l;
@@ -1951,10 +1974,38 @@ idata:                  data_size = 0;
                         fill:
                             fill_params.adjust = gs_gstate.fill_adjust;
                             fill_params.flatness = gs_gstate.flatness;
-                            code = gx_fill_path_only(ppath, tdev,
-                                                     &gs_gstate,
-                                                     &fill_params,
-                                                     &dev_color, pcpath);
+                            code = (*dev_proc(tdev, fill_path))(tdev, &gs_gstate, ppath,
+                                                                &fill_params, &fill_color, pcpath);
+                            break;
+                        case cmd_opv_fill_stroke:
+                            fill_params.rule = gx_rule_winding_number;
+                            goto fill_stroke;
+                        case cmd_opv_eofill_stroke:
+                            fill_params.rule = gx_rule_even_odd;
+                        fill_stroke:
+                            fill_params.adjust = gs_gstate.fill_adjust;
+                            fill_params.flatness = gs_gstate.flatness;
+                            stroke_params.flatness = gs_gstate.flatness;
+                            stroke_params.traditional = false;
+                            code = (*dev_proc(tdev, fill_stroke_path))(tdev, &gs_gstate, ppath,
+                                                                &fill_params, &fill_color,
+                                                                &stroke_params, &stroke_color, pcpath);
+                            /* if the color is a pattern, it may have had the "is_locked" flag set	*/
+                            /* clear those now (see do_fill_stroke).					*/
+                            if (gx_dc_is_pattern1_color(&stroke_color)) {
+                                gs_id id = stroke_color.colors.pattern.p_tile->id;
+
+                                code = gx_pattern_cache_entry_set_lock(&gs_gstate, id, false);
+                                if (code < 0)
+                                    return code;	/* unlock failed -- should not happen */
+                            }
+                            if (gx_dc_is_pattern1_color(&fill_color)) {
+                                gs_id id = fill_color.colors.pattern.p_tile->id;
+
+                                code = gx_pattern_cache_entry_set_lock(&gs_gstate, id, false);
+                                if (code < 0)
+                                    return code;	/* unlock failed -- should not happen */
+                            }
                             break;
                         case cmd_opv_stroke:
                             stroke_params.flatness = gs_gstate.flatness;
@@ -1962,10 +2013,10 @@ idata:                  data_size = 0;
                             code = (*dev_proc(tdev, stroke_path))
                                                        (tdev, &gs_gstate,
                                                        ppath, &stroke_params,
-                                                       &dev_color, pcpath);
+                                                       &stroke_color, pcpath);
                             break;
                         case cmd_opv_polyfill:
-                            code = clist_do_polyfill(tdev, ppath, &dev_color,
+                            code = clist_do_polyfill(tdev, ppath, &fill_color,
                                                      gs_gstate.log_op);
                             break;
                         case cmd_opv_fill_trapezoid:
@@ -2108,7 +2159,7 @@ idata:                  data_size = 0;
                                     code = gx_default_fill_trapezoid(ttdev, &left, &right,
                                         max(ybot - y0f, fixed_half),
                                         min(ytop - y0f, int2fixed(wh)), swap_axes,
-                                        &dev_color, gs_gstate.log_op);
+                                        &fill_color, gs_gstate.log_op);
                             }
                            break;
                         default:
@@ -2154,7 +2205,7 @@ idata:                  data_size = 0;
                      * is open pending a proper fix. */
                     code = (dev_proc(tdev, fillpage) == NULL ? 0 :
                             (*dev_proc(tdev, fillpage))(tdev, &gs_gstate,
-                                                        &dev_color));
+                                                        &fill_color));
                     break;
                 }
             case cmd_op_fill_rect_short >> 4:
@@ -2200,7 +2251,7 @@ idata:                  data_size = 0;
             case cmd_op_tile_rect >> 4:
                 if (state.rect.width == 0 && state.rect.height == 0 &&
                     state.rect.x == 0 && state.rect.y == 0) {
-                    code = (*dev_proc(tdev, fillpage))(tdev, &gs_gstate, &dev_color);
+                    code = (*dev_proc(tdev, fillpage))(tdev, &gs_gstate, &fill_color);
                     break;
                 }
             case cmd_op_tile_rect_short >> 4:
@@ -2227,7 +2278,7 @@ idata:                  data_size = 0;
                         (tdev, source, data_x, raster, gx_no_bitmap_id,
                          state.rect.x - x0, state.rect.y - y0,
                          state.rect.width - data_x, state.rect.height,
-                         &dev_color, 1, gs_gstate.log_op, pcpath);
+                         &fill_color, 1, gs_gstate.log_op, pcpath);
                 } else {
                     if (plane_height == 0) {
                         code = (*dev_proc(tdev, copy_mono))
@@ -2255,7 +2306,7 @@ idata:                  data_size = 0;
                             (tdev, source, data_x, raster, gx_no_bitmap_id,
                              state.rect.x - x0, state.rect.y - y0,
                              state.rect.width - data_x, state.rect.height,
-                             &dev_color, depth);
+                             &fill_color, depth);
                     } else {
                         code = (*dev_proc(tdev, copy_alpha))
                             (tdev, source, data_x, raster, gx_no_bitmap_id,
@@ -2296,7 +2347,6 @@ idata:                  data_size = 0;
         if (code == 0)
             code = code1;
     }
-    rc_decrement_cs(pcs, "clist_playback_band");
     gx_cpath_free(&clip_path, "clist_render_band exit");
     gx_path_free(&path, "clist_render_band exit");
     if (gs_gstate.pattern_cache != NULL) {
@@ -2341,6 +2391,7 @@ idata:                  data_size = 0;
         goto in;
     if (pfs.dev != NULL)
         term_patch_fill_state(&pfs);
+    gs_free_object(mem, pcs, "clist_playback_band(pcs)");
     gs_free_object(mem, cbuf_storage, "clist_playback_band(cbuf_storage)");
     gx_cpath_free(&clip_path, "clist_playback_band");
     if (pcpath != &clip_path)
@@ -2681,16 +2732,17 @@ read_set_misc2(command_buf_t *pcb, gs_gstate *pgs, segment_notes *pnotes)
     if (mask & op_bm_tk_known) {
         cb = *cbp++;
         pgs->blend_mode = cb >> 3;
-        pgs->text_knockout = (cb & 4) != 0;
+        pgs->text_knockout = cb & 1;
         /* the following usually have no effect; see gxclpath.c */
-        pgs->overprint_mode = (cb >> 1) & 1;
-        pgs->effective_overprint_mode = pgs->overprint_mode;
+        cb = *cbp++;
+        pgs->overprint_mode = (cb >> 2) & 1;
+        pgs->stroke_overprint = (cb >> 1) & 1;
         pgs->overprint = cb & 1;
         cb = *cbp++;
         pgs->renderingintent = cb;
-        if_debug5m('L', pgs->memory, " BM=%d TK=%d OPM=%d OP=%d RI=%d\n",
+        if_debug6m('L', pgs->memory, " BM=%d TK=%d OPM=%d OP=%d op=%d RI=%d\n",
                    pgs->blend_mode, pgs->text_knockout, pgs->overprint_mode,
-                   pgs->overprint, pgs->renderingintent);
+                   pgs->stroke_overprint, pgs->overprint, pgs->renderingintent);
     }
     if (mask & segment_notes_known) {
         cb = *cbp++;
@@ -2715,8 +2767,7 @@ read_set_misc2(command_buf_t *pcb, gs_gstate *pgs, segment_notes *pnotes)
 
 static int
 read_set_color_space(command_buf_t *pcb, gs_gstate *pgs,
-                     gs_color_space **ppcs, gx_device_clist_reader *cdev,
-                     gs_memory_t *mem)
+                     gx_device_clist_reader *cdev, gs_memory_t *mem)
 {
     const byte *cbp = pcb->ptr;
     byte b = *cbp++;
@@ -2831,8 +2882,9 @@ read_set_color_space(command_buf_t *pcb, gs_gstate *pgs,
     }
 
     /* Release reference to old color space before installing new one. */
-    rc_decrement_only_cs(*ppcs, "read_set_color_space");
-    *ppcs = pcs;
+    if (pgs->color[0].color_space != NULL)
+        rc_decrement_only_cs(pgs->color[0].color_space, "read_set_color_space");
+    pgs->color[0].color_space = pcs;
 out:
     pcb->ptr = cbp;
     return code;

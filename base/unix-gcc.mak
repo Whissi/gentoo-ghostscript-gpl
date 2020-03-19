@@ -178,7 +178,7 @@ GPDL=gpdl
 XE=
 XEAUX=
 
-PCL_XPS_TARGETS=
+PCL_XPS_PDL_TARGETS=
 
 # Define the directories for debugging and profiling binaries, relative to
 # the standard binaries.
@@ -376,9 +376,9 @@ GCFLAGS=  -Wall -Wstrict-prototypes -Wundef -Wmissing-declarations -Wmissing-pro
 # Define the added flags for standard, debugging, profiling
 # and shared object builds.
 
-CFLAGS_STANDARD= -O2
+CFLAGS_STANDARD= -O2 -DNDEBUG
 CFLAGS_DEBUG= -g -O0
-CFLAGS_PROFILE=-pg  -O2
+CFLAGS_PROFILE=-pg  -O2 -DNDEBUG
 CFLAGS_SO=-fPIC
 
 # Define the other compilation flags.  Add at most one of the following:
@@ -521,7 +521,7 @@ FEATURE_DEVS=$(GLD)pipe.dev $(GLD)gsnogc.dev $(GLD)htxlib.dev $(GLD)psl3lib.dev 
 	     $(GLD)seprlib.dev $(GLD)translib.dev $(GLD)cidlib.dev $(GLD)psf0lib.dev $(GLD)psf1lib.dev\
              $(GLD)psf2lib.dev $(GLD)lzwd.dev $(GLD)sicclib.dev \
              $(GLD)sjbig2.dev $(GLD)sjpx.dev $(GLD)ramfs.dev \
-             $(GLD)pwgd.dev
+             $(GLD)pwgd.dev $(GLD)urfd.dev
 
 
 

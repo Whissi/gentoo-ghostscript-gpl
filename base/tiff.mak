@@ -42,7 +42,7 @@ tiff_1=$(TIFFOBJ)tif_aux.$(OBJ) $(TIFFOBJ)tif_close.$(OBJ) $(TIFFOBJ)tif_codec.$
 tiff_2=$(TIFFOBJ)tif_compress.$(OBJ) $(TIFFOBJ)tif_dir.$(OBJ) $(TIFFOBJ)tif_dirinfo.$(OBJ) $(TIFFOBJ)tif_dirread.$(OBJ)
 tiff_3=$(TIFFOBJ)tif_dirwrite.$(OBJ) $(TIFFOBJ)tif_dumpmode.$(OBJ) $(TIFFOBJ)tif_error.$(OBJ) $(TIFFOBJ)tif_extension.$(OBJ)
 tiff_4=$(TIFFOBJ)tif_fax3.$(OBJ) $(TIFFOBJ)tif_fax3sm.$(OBJ) $(TIFFOBJ)tif_flush.$(OBJ) $(TIFFOBJ)tif_getimage.$(OBJ)
-tiff_5=$(TIFFOBJ)tif_jbig.$(OBJ) $(TIFFOBJ)tif_jpeg.$(OBJ) $(TIFFOBJ)tif_luv.$(OBJ) $(TIFFOBJ)tif_lzw.$(OBJ)
+tiff_5=$(TIFFOBJ)tif_jbig.$(OBJ) $(TIFFOBJ)tif_jpeg.$(OBJ) $(TIFFOBJ)tif_jpeg_12.$(OBJ) $(TIFFOBJ)tif_luv.$(OBJ) $(TIFFOBJ)tif_lzw.$(OBJ) $(TIFFOBJ)tif_webp.$(OBJ)
 tiff_6=$(TIFFOBJ)tif_next.$(OBJ) $(TIFFOBJ)tif_ojpeg.$(OBJ) $(TIFFOBJ)tif_open.$(OBJ) $(TIFFOBJ)tif_packbits.$(OBJ)
 tiff_7=$(TIFFOBJ)tif_pixarlog.$(OBJ) $(TIFFOBJ)tif_predict.$(OBJ) $(TIFFOBJ)tif_print.$(OBJ) $(TIFFOBJ)tif_read.$(OBJ)
 tiff_8=$(TIFFOBJ)tif_strip.$(OBJ) $(TIFFOBJ)tif_swab.$(OBJ) $(TIFFOBJ)tif_thunder.$(OBJ) $(TIFFOBJ)tif_tile.$(OBJ)
@@ -110,6 +110,9 @@ $(TIFFOBJ)tif_getimage.$(OBJ) : $(TIFFSRC)/libtiff/tif_getimage.c $(TIFFDEP)
 $(TIFFOBJ)tif_jbig.$(OBJ) : $(TIFFSRC)/libtiff/tif_jbig.c $(TIFFDEP)
 	$(TIFFCC) $(TIFFO_)tif_jbig.$(OBJ) $(C_) $(TIFFSRC)/libtiff/tif_jbig.c
 
+$(TIFFOBJ)tif_jpeg_12.$(OBJ) : $(TIFFSRC)/libtiff/tif_jpeg_12.c $(TIFFDEP) $(JGENDIR)/jconfig.h
+	$(TIFFCC) $(TIFFO_)tif_jpeg_12.$(OBJ) $(C_) $(TIFFSRC)/libtiff/tif_jpeg_12.c
+
 $(TIFFOBJ)tif_jpeg.$(OBJ) : $(TIFFSRC)/libtiff/tif_jpeg.c $(TIFFDEP) $(JGENDIR)/jconfig.h
 	$(TIFFCC) $(TIFFO_)tif_jpeg.$(OBJ) $(C_) $(TIFFSRC)/libtiff/tif_jpeg.c
 
@@ -119,11 +122,14 @@ $(TIFFOBJ)tif_luv.$(OBJ) : $(TIFFSRC)/libtiff/tif_luv.c $(TIFFDEP)
 $(TIFFOBJ)tif_lzw.$(OBJ) : $(TIFFSRC)/libtiff/tif_lzw.c $(TIFFDEP)
 	$(TIFFCC) $(TIFFO_)tif_lzw.$(OBJ) $(C_) $(TIFFSRC)/libtiff/tif_lzw.c
 
+$(TIFFOBJ)tif_webp.$(OBJ) : $(TIFFSRC)/libtiff/tif_webp.c $(TIFFDEP)
+	$(TIFFCC) $(TIFFO_)tif_webp.$(OBJ) $(C_) $(TIFFSRC)/libtiff/tif_webp.c
+
 $(TIFFOBJ)tif_next.$(OBJ) : $(TIFFSRC)/libtiff/tif_next.c $(TIFFDEP)
 	$(TIFFCC) $(TIFFO_)tif_next.$(OBJ) $(C_) $(TIFFSRC)/libtiff/tif_next.c
 
 $(TIFFOBJ)tif_ojpeg.$(OBJ) : $(TIFFSRC)/libtiff/tif_ojpeg.c $(jconfig_h) $(TIFFDEP)
-	$(TIFFCC) $(TIFFO_)tif_ojpeg.$(OBJ) $(C_) $(TIFFSRC)/libtiff/tif_ojpeg.c
+	$(TIFFCC) $(I_)$(GLI_) $(TIFFO_)tif_ojpeg.$(OBJ) $(C_) $(TIFFSRC)/libtiff/tif_ojpeg.c
 
 $(TIFFOBJ)tif_open.$(OBJ) : $(TIFFSRC)/libtiff/tif_open.c $(TIFFDEP)
 	$(TIFFCC) $(TIFFO_)tif_open.$(OBJ) $(C_) $(TIFFSRC)/libtiff/tif_open.c
@@ -241,113 +247,114 @@ $(GLSRC)gstiffio.h:$(GLSRC)gxclthrd.h
 $(GLSRC)gstiffio.h:$(GLSRC)gxclpage.h
 $(GLSRC)gstiffio.h:$(GLSRC)gxclist.h
 $(GLSRC)gstiffio.h:$(GLSRC)gxgstate.h
-$(GLSRC)gstiffio.h:$(GLSRC)gstrans.h
 $(GLSRC)gstiffio.h:$(GLSRC)gxline.h
+$(GLSRC)gstiffio.h:$(GLSRC)gstrans.h
 $(GLSRC)gstiffio.h:$(GLSRC)gsht1.h
-$(GLSRC)gstiffio.h:$(GLSRC)gxcomp.h
 $(GLSRC)gstiffio.h:$(GLSRC)math_.h
 $(GLSRC)gstiffio.h:$(GLSRC)gdevp14.h
 $(GLSRC)gstiffio.h:$(GLSRC)gxcolor2.h
 $(GLSRC)gstiffio.h:$(GLSRC)gxpcolor.h
-$(GLSRC)gstiffio.h:$(GLSRC)gx.h
 $(GLSRC)gstiffio.h:$(GLSRC)gdevdevn.h
+$(GLSRC)gstiffio.h:$(GLSRC)gsequivc.h
+$(GLSRC)gstiffio.h:$(GLSRC)gx.h
 $(GLSRC)gstiffio.h:$(GLSRC)gxblend.h
+$(GLSRC)gstiffio.h:$(GLSRC)gxclipsr.h
+$(GLSRC)gstiffio.h:$(GLSRC)gxcomp.h
+$(GLSRC)gstiffio.h:$(GLSRC)gxdcolor.h
 $(GLSRC)gstiffio.h:$(GLSRC)gdebug.h
 $(GLSRC)gstiffio.h:$(GLSRC)gxmatrix.h
+$(GLSRC)gstiffio.h:$(GLSRC)gxbitfmt.h
 $(GLSRC)gstiffio.h:$(GLSRC)gxdevbuf.h
 $(GLSRC)gstiffio.h:$(GLSRC)gxband.h
-$(GLSRC)gstiffio.h:$(GLSRC)gxbitfmt.h
-$(GLSRC)gstiffio.h:$(GLSRC)gsequivc.h
-$(GLSRC)gstiffio.h:$(GLSRC)gxclipsr.h
 $(GLSRC)gstiffio.h:$(GLSRC)gscolor2.h
-$(GLSRC)gstiffio.h:$(GLSRC)gxdevice.h
-$(GLSRC)gstiffio.h:$(GLSRC)gxcpath.h
-$(GLSRC)gstiffio.h:$(GLSRC)gsht.h
-$(GLSRC)gstiffio.h:$(GLSRC)gxdevmem.h
-$(GLSRC)gstiffio.h:$(GLSRC)gxpcache.h
 $(GLSRC)gstiffio.h:$(GLSRC)gscindex.h
-$(GLSRC)gstiffio.h:$(GLSRC)gsptype1.h
+$(GLSRC)gstiffio.h:$(GLSRC)gxdevice.h
+$(GLSRC)gstiffio.h:$(GLSRC)gsht.h
+$(GLSRC)gstiffio.h:$(GLSRC)gxcpath.h
+$(GLSRC)gstiffio.h:$(GLSRC)gxdevmem.h
 $(GLSRC)gstiffio.h:$(GLSRC)gxdevcli.h
+$(GLSRC)gstiffio.h:$(GLSRC)gxpcache.h
+$(GLSRC)gstiffio.h:$(GLSRC)gsptype1.h
 $(GLSRC)gstiffio.h:$(GLSRC)gxtext.h
-$(GLSRC)gstiffio.h:$(GLSRC)gspcolor.h
-$(GLSRC)gstiffio.h:$(GLSRC)gstext.h
-$(GLSRC)gstiffio.h:$(GLSRC)gxdcolor.h
-$(GLSRC)gstiffio.h:$(GLSRC)gstparam.h
 $(GLSRC)gstiffio.h:$(GLSRC)gscie.h
+$(GLSRC)gstiffio.h:$(GLSRC)gstext.h
+$(GLSRC)gstiffio.h:$(GLSRC)gsnamecl.h
+$(GLSRC)gstiffio.h:$(GLSRC)gstparam.h
 $(GLSRC)gstiffio.h:$(GLSRC)gxstate.h
-$(GLSRC)gstiffio.h:$(GLSRC)gxcmap.h
-$(GLSRC)gstiffio.h:$(GLSRC)gsmalloc.h
+$(GLSRC)gstiffio.h:$(GLSRC)gspcolor.h
+$(GLSRC)gstiffio.h:$(GLSRC)gxfcache.h
+$(GLSRC)gstiffio.h:$(GLSRC)gxcspace.h
 $(GLSRC)gstiffio.h:$(GLSRC)gsropt.h
 $(GLSRC)gstiffio.h:$(GLSRC)gsfunc.h
-$(GLSRC)gstiffio.h:$(GLSRC)gxctable.h
-$(GLSRC)gstiffio.h:$(GLSRC)gsnamecl.h
+$(GLSRC)gstiffio.h:$(GLSRC)gsmalloc.h
 $(GLSRC)gstiffio.h:$(GLSRC)gxrplane.h
-$(GLSRC)gstiffio.h:$(GLSRC)gxcspace.h
-$(GLSRC)gstiffio.h:$(GLSRC)gxiclass.h
-$(GLSRC)gstiffio.h:$(GLSRC)gxclio.h
-$(GLSRC)gstiffio.h:$(GLSRC)gxfcache.h
+$(GLSRC)gstiffio.h:$(GLSRC)gxctable.h
+$(GLSRC)gstiffio.h:$(GLSRC)gsuid.h
+$(GLSRC)gstiffio.h:$(GLSRC)gxcmap.h
+$(GLSRC)gstiffio.h:$(GLSRC)gsimage.h
+$(GLSRC)gstiffio.h:$(GLSRC)gsdcolor.h
+$(GLSRC)gstiffio.h:$(GLSRC)gxdda.h
+$(GLSRC)gstiffio.h:$(GLSRC)gxcvalue.h
 $(GLSRC)gstiffio.h:$(GLSRC)gsfont.h
 $(GLSRC)gstiffio.h:$(GLSRC)gxfmap.h
-$(GLSRC)gstiffio.h:$(GLSRC)gxcvalue.h
-$(GLSRC)gstiffio.h:$(GLSRC)gxpath.h
-$(GLSRC)gstiffio.h:$(GLSRC)gspenum.h
-$(GLSRC)gstiffio.h:$(GLSRC)gxtmap.h
-$(GLSRC)gstiffio.h:$(GLSRC)gsimage.h
-$(GLSRC)gstiffio.h:$(GLSRC)gxfrac.h
-$(GLSRC)gstiffio.h:$(GLSRC)gxdda.h
-$(GLSRC)gstiffio.h:$(GLSRC)gslparam.h
-$(GLSRC)gstiffio.h:$(GLSRC)gxbcache.h
-$(GLSRC)gstiffio.h:$(GLSRC)gsdcolor.h
-$(GLSRC)gstiffio.h:$(GLSRC)gsrect.h
-$(GLSRC)gstiffio.h:$(GLSRC)gscms.h
+$(GLSRC)gstiffio.h:$(GLSRC)gxiclass.h
 $(GLSRC)gstiffio.h:$(GLSRC)gxftype.h
-$(GLSRC)gstiffio.h:$(GLSRC)gsdevice.h
+$(GLSRC)gstiffio.h:$(GLSRC)gxfrac.h
+$(GLSRC)gstiffio.h:$(GLSRC)gscms.h
 $(GLSRC)gstiffio.h:$(GLSRC)gscspace.h
-$(GLSRC)gstiffio.h:$(GLSRC)gsuid.h
+$(GLSRC)gstiffio.h:$(GLSRC)gxpath.h
+$(GLSRC)gstiffio.h:$(GLSRC)gxbcache.h
+$(GLSRC)gstiffio.h:$(GLSRC)gsdevice.h
 $(GLSRC)gstiffio.h:$(GLSRC)gxarith.h
-$(GLSRC)gstiffio.h:$(GLSRC)gsdsrc.h
 $(GLSRC)gstiffio.h:$(GLSRC)gxstdio.h
+$(GLSRC)gstiffio.h:$(GLSRC)gspenum.h
+$(GLSRC)gstiffio.h:$(GLSRC)gxhttile.h
+$(GLSRC)gstiffio.h:$(GLSRC)gsrect.h
+$(GLSRC)gstiffio.h:$(GLSRC)gslparam.h
 $(GLSRC)gstiffio.h:$(GLSRC)gsxfont.h
+$(GLSRC)gstiffio.h:$(GLSRC)gxclio.h
+$(GLSRC)gstiffio.h:$(GLSRC)gsiparam.h
+$(GLSRC)gstiffio.h:$(GLSRC)gsdsrc.h
+$(GLSRC)gstiffio.h:$(GLSRC)gsio.h
+$(GLSRC)gstiffio.h:$(GLSRC)gxbitmap.h
+$(GLSRC)gstiffio.h:$(GLSRC)gsmatrix.h
+$(GLSRC)gstiffio.h:$(GLSRC)gscpm.h
 $(GLSRC)gstiffio.h:$(GLSRC)gxfixed.h
 $(GLSRC)gstiffio.h:$(GLSRC)gsrefct.h
-$(GLSRC)gstiffio.h:$(GLSRC)gscpm.h
-$(GLSRC)gstiffio.h:$(GLSRC)gsiparam.h
-$(GLSRC)gstiffio.h:$(GLSRC)gxhttile.h
-$(GLSRC)gstiffio.h:$(GLSRC)gsio.h
-$(GLSRC)gstiffio.h:$(GLSRC)gp.h
-$(GLSRC)gstiffio.h:$(GLSRC)memento.h
 $(GLSRC)gstiffio.h:$(GLSRC)gsparam.h
-$(GLSRC)gstiffio.h:$(GLSRC)gsmatrix.h
-$(GLSRC)gstiffio.h:$(GLSRC)gxbitmap.h
+$(GLSRC)gstiffio.h:$(GLSRC)gp.h
+$(GLSRC)gstiffio.h:$(GLSRC)gsccolor.h
+$(GLSRC)gstiffio.h:$(GLSRC)gsstruct.h
+$(GLSRC)gstiffio.h:$(GLSRC)gxsync.h
 $(GLSRC)gstiffio.h:$(GLSRC)gsutil.h
 $(GLSRC)gstiffio.h:$(GLSRC)gsstrl.h
 $(GLSRC)gstiffio.h:$(GLSRC)gdbflags.h
 $(GLSRC)gstiffio.h:$(GLSRC)srdline.h
-$(GLSRC)gstiffio.h:$(GLSRC)gsstruct.h
 $(GLSRC)gstiffio.h:$(GLSRC)gserrors.h
-$(GLSRC)gstiffio.h:$(GLSRC)gxsync.h
+$(GLSRC)gstiffio.h:$(GLSRC)scommon.h
+$(GLSRC)gstiffio.h:$(GLSRC)memento.h
 $(GLSRC)gstiffio.h:$(GLSRC)vmsmath.h
 $(GLSRC)gstiffio.h:$(GLSRC)gscsel.h
-$(GLSRC)gstiffio.h:$(GLSRC)scommon.h
 $(GLSRC)gstiffio.h:$(GLSRC)gsbitmap.h
 $(GLSRC)gstiffio.h:$(GLSRC)gsfname.h
-$(GLSRC)gstiffio.h:$(GLSRC)gsccolor.h
 $(GLSRC)gstiffio.h:$(GLSRC)gsstype.h
+$(GLSRC)gstiffio.h:$(GLSRC)stat_.h
+$(GLSRC)gstiffio.h:$(GLSRC)gxtmap.h
 $(GLSRC)gstiffio.h:$(GLSRC)gsmemory.h
 $(GLSRC)gstiffio.h:$(GLSRC)gpsync.h
-$(GLSRC)gstiffio.h:$(GLSRC)gpgetenv.h
 $(GLSRC)gstiffio.h:$(GLSRC)memory_.h
+$(GLSRC)gstiffio.h:$(GLSRC)gpgetenv.h
 $(GLSRC)gstiffio.h:$(GLSRC)gslibctx.h
 $(GLSRC)gstiffio.h:$(GLSRC)gscdefs.h
-$(GLSRC)gstiffio.h:$(GLSRC)gscompt.h
-$(GLSRC)gstiffio.h:$(GLSRC)gxcindex.h
-$(GLSRC)gstiffio.h:$(GLSRC)stdint_.h
-$(GLSRC)gstiffio.h:$(GLSRC)gsgstate.h
-$(GLSRC)gstiffio.h:$(GLSRC)gsccode.h
 $(GLSRC)gstiffio.h:$(GLSRC)gs_dll_call.h
 $(GLSRC)gstiffio.h:$(GLSRC)stdio_.h
-$(GLSRC)gstiffio.h:$(GLSRC)gstypes.h
+$(GLSRC)gstiffio.h:$(GLSRC)gscompt.h
+$(GLSRC)gstiffio.h:$(GLSRC)gxcindex.h
+$(GLSRC)gstiffio.h:$(GLSRC)gsgstate.h
+$(GLSRC)gstiffio.h:$(GLSRC)stdint_.h
+$(GLSRC)gstiffio.h:$(GLSRC)gssprintf.h
+$(GLSRC)gstiffio.h:$(GLSRC)gsccode.h
 $(GLSRC)gstiffio.h:$(GLSRC)std.h
+$(GLSRC)gstiffio.h:$(GLSRC)gstypes.h
 $(GLSRC)gstiffio.h:$(GLSRC)stdpre.h
 $(GLSRC)gstiffio.h:$(GLGEN)arch.h
-$(GLSRC)gstiffio.h:$(GLSRC)gssprintf.h

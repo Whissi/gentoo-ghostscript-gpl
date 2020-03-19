@@ -271,6 +271,10 @@ static int gdev_pdf_image_begin_page(gx_device_pdf_image *pdf_dev,
                     profile_struct->device_profile[0], profile_struct->postren_profile,
                     &rendering_params);
             }
+            if (pdf_dev->icclink == NULL) {
+                gs_free_object(pdf_dev->memory->non_gc_memory, page, "pdfimage create new page");
+                return_error(gs_error_VMerror);
+            }
             /* If it is identity, release it now and set link to NULL */
             if (pdf_dev->icclink->is_identity) {
                 pdf_dev->icclink->procs.free_link(pdf_dev->icclink);
@@ -281,8 +285,10 @@ static int gdev_pdf_image_begin_page(gx_device_pdf_image *pdf_dev,
 
         /* Set up the stream and insert the file header */
         pdf_dev->strm = s_alloc(pdf_dev->memory->non_gc_memory, "pdfimage_open_temp_stream(strm)");
-        if (pdf_dev->strm == 0)
+        if (pdf_dev->strm == 0) {
+            gs_free_object(pdf_dev->memory->non_gc_memory, page, "pdfimage create new page");
             return_error(gs_error_VMerror);
+        }
         pdf_dev->strm_buf = gs_alloc_bytes(pdf_dev->memory->non_gc_memory, pdf_dev->width * (pdf_dev->color_info.depth / 8),
                                        "pdfimage_open_temp_stream(strm_buf)");
         if (pdf_dev->strm_buf == 0) {
@@ -290,6 +296,7 @@ static int gdev_pdf_image_begin_page(gx_device_pdf_image *pdf_dev,
             gs_free_object(pdf_dev->memory->non_gc_memory, pdf_dev->strm,
                            "pdfimage_open_temp_stream(strm)");
             pdf_dev->strm = 0;
+            gs_free_object(pdf_dev->memory->non_gc_memory, page, "pdfimage create new page");
             return_error(gs_error_VMerror);
         }
         swrite_file(pdf_dev->strm, pdf_dev->file, pdf_dev->strm_buf, pdf_dev->width * (pdf_dev->color_info.depth / 8));
@@ -654,7 +661,14 @@ pdf_compute_fileID(gx_device_pdf_image * pdev, byte fileID[16], char *CreationDa
     gp_get_realtime(secs_ns);
 #endif
     sputs(s, (byte *)secs_ns, sizeof(secs_ns), &ignore);
+#ifdef CLUSTER
+    /* Don't have the ID's vary by filename output in the cluster testing.
+     * This prevents us comparing gs to gpdl results, and makes it harder
+     * to manually reproduce results. */
+    sputs(s, (const byte *)"ClusterTest.pdf", strlen("ClusterTest.pdf"), &ignore);
+#else
     sputs(s, (const byte *)pdev->fname, strlen(pdev->fname), &ignore);
+#endif
 
     stream_puts(s, "/ModDate ");
     stream_puts(s, CreationDate);
@@ -723,6 +737,12 @@ static int pdf_image_finish_file(gx_device_pdf_image *pdf_dev, int PCLm)
 
         stream_puts(pdf_dev->strm, "]\n/Type /Pages\n>>\nendobj\n");
 
+#ifdef CLUSTER
+        memset(&t, 0, sizeof(t));
+        memset(&tms, 0, sizeof(tms));
+        timesign = 'Z';
+        timeoffset = 0;
+#else
         time(&t);
         tms = *gmtime(&t);
         tms.tm_isdst = -1;
@@ -730,6 +750,7 @@ static int pdf_image_finish_file(gx_device_pdf_image *pdf_dev, int PCLm)
         timesign = (timeoffset == 0 ? 'Z' : timeoffset < 0 ? '-' : '+');
         timeoffset = any_abs(timeoffset) / 60;
         tms = *localtime(&t);
+#endif
 
         gs_sprintf(CreationDate, "(D:%04d%02d%02d%02d%02d%02d%c%02d\'%02d\')",
             tms.tm_year + 1900, tms.tm_mon + 1, tms.tm_mday,
@@ -1262,6 +1283,10 @@ static int gdev_PCLm_begin_page(gx_device_pdf_image *pdf_dev,
                     profile_struct->device_profile[0], profile_struct->postren_profile,
                     &rendering_params);
             }
+            if (pdf_dev->icclink == NULL) {
+                gs_free_object(pdf_dev->memory->non_gc_memory, page, "pdfimage create new page");
+                return_error(gs_error_VMerror);
+            }
             /* If it is identity, release it now and set link to NULL */
             if (pdf_dev->icclink->is_identity) {
                 pdf_dev->icclink->procs.free_link(pdf_dev->icclink);
@@ -1272,8 +1297,10 @@ static int gdev_PCLm_begin_page(gx_device_pdf_image *pdf_dev,
 
         /* Set up the stream and insert the file header */
         pdf_dev->strm = s_alloc(pdf_dev->memory->non_gc_memory, "pdfimage_open_temp_stream(strm)");
-        if (pdf_dev->strm == 0)
+        if (pdf_dev->strm == 0) {
+            gs_free_object(pdf_dev->memory->non_gc_memory, page, "pdfimage create new page");
             return_error(gs_error_VMerror);
+        }
         pdf_dev->strm_buf = gs_alloc_bytes(pdf_dev->memory->non_gc_memory, 512,
                                        "pdfimage_open_temp_stream(strm_buf)");
         if (pdf_dev->strm_buf == 0) {
@@ -1281,6 +1308,7 @@ static int gdev_PCLm_begin_page(gx_device_pdf_image *pdf_dev,
             gs_free_object(pdf_dev->memory->non_gc_memory, pdf_dev->strm,
                            "pdfimage_open_temp_stream(strm)");
             pdf_dev->strm = 0;
+            gs_free_object(pdf_dev->memory->non_gc_memory, page, "pdfimage create new page");
             return_error(gs_error_VMerror);
         }
         swrite_file(pdf_dev->strm, pdf_dev->file, pdf_dev->strm_buf, 512);

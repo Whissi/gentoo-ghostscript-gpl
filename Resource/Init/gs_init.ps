@@ -34,7 +34,7 @@
 % Interpreter library version number
 % NOTE: the interpreter code requires that the first non-comment token
 % in this file be an integer, and that it match the compiled-in version!
-950
+952
 
 % Check the interpreter revision.
 dup revision ne
@@ -197,6 +197,11 @@ currentdict /NOSAFERERRORS known
   currentdict /SAFERERRORS known
 } ifelse def
 
+currentdict /ALLOWPSTRANSPARENCY known not
+{
+  /ALLOWPSTRANSPARENCY //false def
+} if
+
 currentdict /SHORTERRORS known   /SHORTERRORS exch def
 currentdict /TTYPAUSE known   /TTYPAUSE exch def
 currentdict /WRITESYSTEMDICT known   /WRITESYSTEMDICT exch def
@@ -315,7 +320,7 @@ DELAYBIND
        (               have selected DELAYBIND. Unless you use this option with\n) print
        (               care \(and specifically, remember to call .bindnow\) it is\n) print
        (               possible that malicious code may be able to evade the\n) print
-       (               limited security offered by the SAFER option.\n) print
+       (               limited security offered by the SAFER option.\n) print flush
    } if
    .currentglobal //false .setglobal
    systemdict /.delaybind 2000 array .forceput
@@ -331,7 +336,7 @@ DELAYBIND
        { pop /.bind cvx exec
        }
       ifelse
-    } .bind def
+    } .bind odef
 } executeonly if
 
 .currentglobal //true .setglobal
@@ -2201,6 +2206,18 @@ systemdict /EPSBoundingBoxInit .forceundef
 readonly def
 .setglobal
 
+/SAFERUndefinePostScriptOperators {
+  [
+  % Used by our own test suite files
+  /.setdotlength             % Bug687720.ps
+  /.sort /.setdebug /.mementolistnewblocks /getenv
+  /unread
+  ]
+  {systemdict exch .forceundef} forall
+
+  //systemdict /SAFERUndefinePostScriptOperators .forceundef
+} .bind executeonly def % must be bound and hidden for .forceundef
+
 /tempfilepaths
 [
   (TMPDIR) getenv not
@@ -2380,25 +2397,6 @@ SAFER { .setsafeglobal } if
 currentdict /.locksafe_userparams .undef
 currentdict /.setsafeglobal .undef
 currentdict /.locksafeglobal .undef
-
-SAFER {
-/SAFERUndefinePostScriptOperators {
-  [
-  % Used by our own test suite files
-  /.pushpdf14devicefilter    % transparency-example.ps
-  /.poppdf14devicefilter     % transparency-example.ps
-  /.setopacityalpha          % transparency-example.ps
-  /.setshapealpha            % transparency-example.ps
-  /.endtransparencygroup     % transparency-example.ps
-  /.setdotlength             % Bug687720.ps
-  /.sort /.setdebug /.mementolistnewblocks /getenv
-  /unread
-  ]
-  {systemdict exch .forceundef} forall
-
-  //systemdict /SAFERUndefinePostScriptOperators .forceundef
-} .bind executeonly def % must be bound and hidden for .forceundef
-} if
 
 %% ---------------- SAFER stuff END -------------------%%
 
@@ -2648,9 +2646,6 @@ FontDirectory readonly pop
 % If we are using DELAYBIND we have to defer the undefinition
 % until .bindnow.
 DELAYBIND not {
-  SAFER {
-    //systemdict /SAFERUndefinePostScriptOperators get exec
-  } if
   //systemdict /UndefinePostScriptOperators get exec
 } if
 end
@@ -2694,7 +2689,7 @@ WRITESYSTEMDICT {
        (               care and specifically, remember to execute code like:\n) print
        (                      "systemdict readonly pop"\n) print
        (               it is possible that malicious code may be able to evade the\n) print
-       (               limited security offered by the SAFER option.\n) print
+       (               limited security offered by the SAFER option.\n) print flush
    }if
 }
 {

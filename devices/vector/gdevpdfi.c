@@ -1511,7 +1511,7 @@ pdf_begin_typed_image(gx_device_pdf *pdev, const gs_gstate * pgs,
         image[0].pixel.ColorSpace = pcs_orig;
         image[0].pixel.BitsPerComponent = pim->BitsPerComponent;
         code = psdf_setup_image_colors_filter(&pie->writer.binary[0],
-                    (gx_device_psdf *)pdev, &image[0].pixel, pgs);
+                                              (gx_device_psdf *)pdev, pim, &image[0].pixel, pgs);
         if (code < 0)
             goto fail_and_fallback;
         image[0].pixel.ColorSpace = pcs_device;
@@ -1556,8 +1556,9 @@ pdf_begin_typed_image(gx_device_pdf *pdev, const gs_gstate * pgs,
             goto fail_and_fallback;
         } else if (convert_to_process_colors) {
             image[1].pixel.ColorSpace = pcs_orig;
+            image[1].pixel.BitsPerComponent = pim->BitsPerComponent;
             code = psdf_setup_image_colors_filter(&pie->writer.binary[1],
-                    (gx_device_psdf *)pdev, &image[1].pixel, pgs);
+                                              (gx_device_psdf *)pdev, pim, &image[1].pixel, pgs);
             if (code < 0) {
                 goto fail_and_fallback;
             }
@@ -1595,9 +1596,13 @@ pdf_begin_typed_image(gx_device_pdf *pdev, const gs_gstate * pgs,
                                   pmat, pgs, force_lossless, in_line);
         if (code < 0)
             goto fail_and_fallback;
+        /* Bug701972 -- added input_width arg here.  For this case, just passing in the same
+         * width as before, so nothing changes.  This is an obscure case that isn't tested
+         * on the cluster (note that it requires CompatibilityLevel < 1.3).
+         */
         psdf_setup_image_to_mask_filter(&pie->writer.binary[i],
-             (gx_device_psdf *)pdev, pim->Width, pim->Height,
-             num_components, pim->BitsPerComponent, image[i].type4.MaskColor);
+                                        (gx_device_psdf *)pdev, pim->Width, pim->Height, pim->Width,
+                                        num_components, pim->BitsPerComponent, image[i].type4.MaskColor);
         code = pdf_begin_image_data_decoded(pdev, num_components, pranges, i,
                              &image[i].pixel, &cs_value, pie);
         if (code < 0)
@@ -1878,7 +1883,7 @@ pdf_image_end_image_data(gx_image_enum_common_t * info, bool draw_last,
     pdf_image_enum *pie = (pdf_image_enum *)info;
     int height = pie->writer.height;
     int data_height = height - pie->rows_left;
-    int code = 0;
+    int code = 0, ecode;
 
     if (pie->writer.pres)
         ((pdf_x_object_t *)pie->writer.pres)->data_height = data_height;
@@ -1919,6 +1924,12 @@ pdf_image_end_image_data(gx_image_enum_common_t * info, bool draw_last,
     }
     if (pie->initial_colorspace != pdev->pcm_color_info_index)
         pdf_set_process_color_model(pdev, pie->initial_colorspace);
+
+    /* Clean up any outstanding streams before freeing the enumerator */
+    while (pie->writer.alt_writer_count-- > 0) {
+        ecode = psdf_end_binary(&(pie->writer.binary[pie->writer.alt_writer_count]));
+        if (ecode < 0 && code >= 0) code  = ecode;
+    }
 
     gx_image_free_enum(&info);
     return code;

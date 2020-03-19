@@ -1,4 +1,4 @@
-# Copyright (C) 2001-2019 Artifex Software, Inc.
+# Copyright (C) 2001-2020 Artifex Software, Inc.
 # All Rights Reserved.
 #
 # This software is provided AS-IS with no warranty, either express or
@@ -58,6 +58,10 @@ XPSOBJDIR=./$(BUILDDIRPREFIX)@OBJDIR_BSDMAKE_WORKAROUND@
 GPDLSRCDIR=@srcdir@/gpdl
 GPDLGENDIR=./$(BUILDDIRPREFIX)@OBJDIR_BSDMAKE_WORKAROUND@
 GPDLOBJDIR=./$(BUILDDIRPREFIX)@OBJDIR_BSDMAKE_WORKAROUND@
+
+URFSRCDIR=@srcdir@/urf
+URFGENDIR=./$(BUILDDIRPREFIX)@OBJDIR_BSDMAKE_WORKAROUND@
+URFOBJDIR=./$(BUILDDIRPREFIX)@OBJDIR_BSDMAKE_WORKAROUND@
 
 CONTRIBDIR=@srcdir@/contrib
 
@@ -172,24 +176,36 @@ CAPOPT= @HAVE_MKSTEMP@ @HAVE_FILE64@ @HAVE_FSEEKO@ @HAVE_MKSTEMP64@ @HAVE_FONTCO
 
 GS=@GS@
 GS_SO_BASE=@GS@
+GS_SONAME=@GS_SONAME@
+GS_SONAME_MAJOR=@GS_SONAME_MAJOR@
+GS_SONAME_MAJOR_MINOR=@GS_SONAME_MAJOR_MINOR@
 
 PCL=@PCL@
 PCL_SO_BASE=@PCL@
+PCL_SONAME=@PCL_SONAME@
+PCL_SONAME_MAJOR=@PCL_SONAME_MAJOR@
+PCL_SONAME_MAJOR_MINOR=@PCL_SONAME_MAJOR_MINOR@
 
 XPS=@XPS@
 XPS_SO_BASE=@XPS@
+XPS_SONAME=@XPS_SONAME@
+XPS_SONAME_MAJOR=@XPS_SONAME_MAJOR@
+XPS_SONAME_MAJOR_MINOR=@XPS_SONAME_MAJOR_MINOR@
 
 GPDL=@GPDL@
 GPDL_SO_BASE=@GPDL@
+GPDL_SONAME=@GPDL_SONAME@
+GPDL_SONAME_MAJOR=@GPDL_SONAME_MAJOR@
+GPDL_SONAME_MAJOR_MINOR=@GPDL_SONAME_MAJOR_MINOR@
 
 XE=@EXEEXT@
-XEAUX=@EXEEXT@
+XEAUX=@AUXEXEEXT@
 
 PCL_TARGET=@PCL_TARGET@
 XPS_TARGET=@XPS_TARGET@
 GPDL_TARGET=@GPDL_TARGET@
 
-PCL_XPS_TARGETS=$(PCL_TARGET) $(XPS_TARGET) @GPDL_TARGET_VAR@
+PCL_XPS_PDL_TARGETS=$(PCL_TARGET) $(XPS_TARGET) $(GPDL_TARGET)
 
 # Define the directories for debugging and profiling binaries, relative to
 # the standard binaries.
@@ -270,6 +286,7 @@ TIFFPLATFORM=unix
 TIFFCONFIG_SUFFIX=
 LIBTIFF_NAME=tiff
 TIFF_CFLAGS=@TIFFCFLAGS@
+ENABLE_TIFF=@ENABLETIFF@
 
 # Define the directory where the zlib sources are stored.
 # See zlib.mak for more information.
@@ -328,6 +345,12 @@ LCMS2_CFLAGS=-DSHARE_LCMS=$(SHARE_LCMS) @LCMS2_ENDIAN@ @SQRTF_SUBST@  @LCMS2_PTR
 # Options are currently lcms or lcms2
 WHICH_CMS=@WHICHLCMS@
 
+# Do we have URF support?
+ENABLE_URF=@ENABLEURF@
+GPDL_URF_TOP_OBJ=@GPDL_URF_TOP_OBJ@
+URF_INCLUDE=@URF_INCLUDE@
+URF_DEV=@URF_DEV@
+SURFX_H=@SURFX_H@
 
 EXPATSRCDIR=@EXPATDIR@
 EXPAT_CFLAGS=@EXPAT_CFLAGS@
@@ -538,6 +561,9 @@ SO_LIB_VERSION_SEPARATOR=@SO_LIB_VERSION_SEPARATOR@
 #CAIRO_CFLAGS	=	@CAIRO_CFLAGS@
 #CAIRO_LIBS	=	@CAIRO_LIBS@
 
+# AUX Tools flags
+MKROMFS_FLAGS=@MKROMFS_FLAGS@
+
 # ------ Devices and features ------ #
 
 # Choose the language feature(s) to include.  See gs.mak for details.
@@ -558,7 +584,7 @@ FEATURE_DEVS=$(GLD)pipe.dev $(GLD)gsnogc.dev $(GLD)htxlib.dev $(GLD)psl3lib.dev 
 	     $(GLD)seprlib.dev $(GLD)translib.dev $(GLD)cidlib.dev $(GLD)psf0lib.dev $(GLD)psf1lib.dev\
              $(GLD)psf2lib.dev $(GLD)lzwd.dev $(GLD)sicclib.dev \
              $(GLD)sjbig2.dev $(GLD)sjpx.dev $(GLD)ramfs.dev \
-             $(GLD)pwgd.dev $(GLD)siscale.dev
+             $(GLD)pwgd.dev $(GLD)siscale.dev $(URF_DEV)
 
 #FEATURE_DEVS=$(PSD)psl3.dev $(PSD)pdf.dev
 #FEATURE_DEVS=$(PSD)psl3.dev $(PSD)pdf.dev $(PSD)ttfont.dev $(GLD)pipe.dev
@@ -748,7 +774,7 @@ include $(GLSRCDIR)/unixinst.mak
 distclean : clean config-clean soclean pgclean debugclean mementoclean
 	-$(RM_) -r $(BINDIR) $(GLOBJDIR) $(PSOBJDIR) $(AUXDIR)
 	-$(RM_) -r autom4te.cache
-	-$(RM_) config.log config.status
+	-$(RM_) config.log config.status configaux.log @ARCH_AUTOCONF_HEADER@
 	-$(RM_) -r $(TIFFCONFDIR)
 	-$(RM_) Makefile
 

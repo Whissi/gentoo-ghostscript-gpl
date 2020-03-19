@@ -47,26 +47,36 @@ cif_print_page(gx_device_printer *pdev, gp_file *prn_stream)
         int lnum;
         byte *in = (byte *)gs_malloc(pdev->memory, line_size, 1, "cif_print_page(in)");
         char *s;
+        const char *fname;
         int scanline, scanbyte;
         int length, start; /* length is the number of successive 1 bits, */
                            /* start is the set of 1 bit start position */
+        int code = 0;
 
         if (in == 0)
                 return_error(gs_error_VMerror);
 
-        if ((s = strchr(pdev->fname, '.')) == NULL)
-                length = strlen(pdev->fname) + 1;
+#ifdef CLUSTER
+        fname = "clusterout";
+#else
+        fname = (const char *)(pdev->fname);
+#endif
+        if ((s = strchr(fname, '.')) == NULL)
+                length = strlen(fname) + 1;
         else
-                length = s - pdev->fname;
-        s = (char *)gs_malloc(pdev->memory, length, sizeof(char), "cif_print_page(s)");
-
-        strncpy(s, pdev->fname, length);
+                length = s - fname;
+        s = (char *)gs_malloc(pdev->memory, length+1, sizeof(char), "cif_print_page(s)");
+        if (s == NULL)
+            return_error(gs_error_VMerror);
+        strncpy(s, fname, length);
         *(s + length) = '\0';
         gp_fprintf(prn_stream, "DS1 25 1;\n9 %s;\nLCP;\n", s);
-        gs_free(pdev->memory, s, length, 1, "cif_print_page(s)");
+        gs_free(pdev->memory, s, length+1, 1, "cif_print_page(s)");
 
    for (lnum = 0; lnum < pdev->height; lnum++) {
-      gdev_prn_copy_scan_lines(pdev, lnum, in, line_size);
+      code = gdev_prn_copy_scan_lines(pdev, lnum, in, line_size);
+      if (code < 0)
+          goto xit;
       length = 0;
       for (scanline = 0; scanline < line_size; scanline++)
 #ifdef TILE			/* original, simple, inefficient algorithm */
@@ -92,6 +102,7 @@ cif_print_page(gx_device_printer *pdev, gp_file *prn_stream)
 #endif
    }
         gp_fprintf(prn_stream, "DF;\nC1;\nE\n");
+xit:
         gs_free(pdev->memory, in, line_size, 1, "cif_print_page(in)");
-        return 0;
+        return code;
 }

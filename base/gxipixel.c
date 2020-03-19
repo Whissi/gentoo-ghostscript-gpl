@@ -282,7 +282,8 @@ gx_image_enum_begin(gx_device * dev, const gs_gstate * pgs,
     bool device_color = true;
     gs_fixed_rect obox, cbox;
     bool gridfitimages = 0;
-    bool in_pattern_accumulator = 0;
+    bool in_pattern_accumulator;
+    bool in_smask;
     int orthogonal;
     int force_interpolation = 0;
 
@@ -332,9 +333,11 @@ gx_image_enum_begin(gx_device * dev, const gs_gstate * pgs,
     /* If we are in a pattern accumulator, we choose to always grid fit
      * orthogonal images. We do this by asking the device whether we
      * should grid fit. This allows us to avoid nasty blank lines around
-     * the edges of cells.
+     * the edges of cells. Similarly, for smasks.
      */
-    gridfitimages = in_pattern_accumulator && orthogonal;
+    in_smask = (pim->override_in_smask ||
+                (dev_proc(dev, dev_spec_op)(dev, gxdso_in_smask, NULL, 0)) > 0);
+    gridfitimages = (in_smask || in_pattern_accumulator) && orthogonal;
 
     if (pgs != NULL && pgs->show_gstate != NULL) {
         /* If we're a graphics state, and we're in a text object, then we
@@ -970,7 +973,7 @@ gx_image_enum_begin(gx_device * dev, const gs_gstate * pgs,
         code = gx_alloc_rop_texture_device(&rtdev, mem,
                                            "image RasterOp");
         if (code < 0)
-            return code;
+            goto fail;
         /* The 'target' must not be NULL for gx_make_rop_texture_device */
         if (!penum->clip_dev && !dev)
             return_error(gs_error_undefined);
@@ -1036,6 +1039,7 @@ gx_image_enum_begin(gx_device * dev, const gs_gstate * pgs,
 fail:
     gs_free_object(mem, buffer, "image buffer");
     gs_free_object(mem, penum->clues, "gx_image_enum_begin");
+    gs_free_object(mem, penum->clip_dev, "image clipper");
     gs_free_object(mem, penum, "gx_begin_image1");
     return code;
 }

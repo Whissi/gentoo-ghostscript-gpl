@@ -5766,10 +5766,6 @@
 				>
 			</File>
 			<File
-				RelativePath="..\devices\gdevgprf.c"
-				>
-			</File>
-			<File
 				RelativePath="..\devices\gdevhl7x.c"
 				>
 			</File>
@@ -6937,6 +6933,10 @@
 			</File>
 			<File
 				RelativePath="..\jbig2dec\jbig2_huffman.h"
+				>
+			</File>
+			<File
+				RelativePath="..\jbig2dec\jbig2_hufftab.c"
 				>
 			</File>
 			<File
@@ -9621,6 +9621,26 @@
 			</File>
 			<File
 				RelativePath="..\jpegxr\x_strip.c"
+				>
+			</File>
+		</Filter>
+		<Filter
+			Name="urf"
+			>
+			<File
+				RelativePath="..\urf\gdevurf.c"
+				>
+			</File>
+			<File
+				RelativePath="..\urf\surfd.c"
+				>
+			</File>
+			<File
+				RelativePath="..\urf\surfx.h"
+				>
+			</File>
+			<File
+				RelativePath="..\urf\urffilter.c"
 				>
 			</File>
 		</Filter>

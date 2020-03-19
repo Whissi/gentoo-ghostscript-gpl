@@ -220,7 +220,8 @@ const gx_device_bjc_printer gs_bjcmono_device =
 bjc_device(bjcmono_procs, "bjcmono",
            DEFAULT_WIDTH_10THS, DEFAULT_HEIGHT_10THS,
            X_DPI, Y_DPI,
-           (3.4 / 25.4), (7.0 / 25.4), (3.4 / 25.4), (3.0 / 25.4),
+           (float)(3.4 / 25.4), (float)(7.0 / 25.4),
+           (float)(3.4 / 25.4), (float)(3.0 / 25.4),
            1,                   /* num components */
            1,                   /* depth  */
            1,                   /* max gray */
@@ -242,7 +243,8 @@ const gx_device_bjc_printer gs_bjcgray_device =
 bjc_device(bjcgray_procs, "bjcgray",
            DEFAULT_WIDTH_10THS, DEFAULT_HEIGHT_10THS,
            X_DPI, Y_DPI,
-           (3.4 / 25.4), (7.0 / 25.4), (3.4 / 25.4), (3.0 / 25.4),
+           (float)(3.4 / 25.4), (float)(7.0 / 25.4),
+           (float)(3.4 / 25.4), (float)(3.0 / 25.4),
            1,                   /* num components */
            8,                   /* depth  */
            255,                 /* max gray */
@@ -264,7 +266,8 @@ const gx_device_bjc_printer gs_bjccmyk_device =
 bjc_device(bjc_cmykcolor_procs, "bjccmyk",
            DEFAULT_WIDTH_10THS, DEFAULT_HEIGHT_10THS,
            X_DPI, Y_DPI,
-           (3.4 / 25.4), (7.0 / 25.4), (3.4 / 25.4), (3.0 / 25.4),
+           (float)(3.4 / 25.4), (float)(7.0 / 25.4),
+           (float)(3.4 / 25.4), (float)(3.0 / 25.4),
            4,                   /* num components */
            4,                   /* depth  */
            1,                   /* max gray */
@@ -286,7 +289,8 @@ const gx_device_bjc_printer gs_bjccolor_device =
 bjc_device(bjc_truecolor_procs, "bjccolor",
            DEFAULT_WIDTH_10THS, DEFAULT_HEIGHT_10THS,
            X_DPI, Y_DPI,
-           (3.4 / 25.4), (7.0 / 25.4), (3.4 / 25.4), (3.0 / 25.4),
+           (float)(3.4 / 25.4), (float)(7.0 / 25.4),
+           (float)(3.4 / 25.4), (float)(3.0 / 25.4),
            4,                   /* num components */
            32,                  /* depth  */
            255,                 /* max gray */
@@ -386,8 +390,9 @@ gdev_bjc_get_params(gx_device * pdev, gs_param_list * plist)
 {
     const gx_device_bjc_printer * ppdev = (gx_device_bjc_printer *)pdev;
 
-    int code = gdev_prn_get_params(pdev, plist);
-    if (code < 0 ||
+    int code;
+    (void) (
+        (code = gdev_prn_get_params(pdev, plist)) < 0 ||
         (code = param_write_string(plist, "PrinterType",
                  &paramValueToParam(strPrinterType, ppdev->printerType)->p_string)) < 0 ||
         (code = param_write_string(plist, "Feeder",
@@ -413,8 +418,8 @@ gdev_bjc_get_params(gx_device * pdev, gs_param_list * plist)
         (code = param_write_float(plist, "Gamma", &ppdev->gamma)) < 0 ||
         (code = param_write_float(plist, "RedGamma", &ppdev->redGamma)) < 0 ||
         (code = param_write_float(plist, "GreenGamma", &ppdev->greenGamma)) < 0 ||
-        (code = param_write_float(plist, "BlueGamma", &ppdev->blueGamma)) < 0)
-        return code;
+        (code = param_write_float(plist, "BlueGamma", &ppdev->blueGamma)) < 0
+        );
     return code;
 
 }
@@ -570,8 +575,8 @@ bjc_print_page_mono(gx_device_printer * pdev, gp_file * file)
                   ((ppdev->ink & INK_K) ? 0x11: 0x10)); /* black or color */
     char ink   = 0x01; /* regular ink type */
     char compress = (ppdev->compress == true ? 0x01 : 0x00); /* compression or not */
-    int x_resolution = pdev->HWResolution[0];
-    int y_resolution = pdev->HWResolution[1];
+    int x_resolution = (int)pdev->HWResolution[0];
+    int y_resolution = (int)pdev->HWResolution[1];
     int length = 0/*x71*/, lm = 0/*x01*/, rm = 0/*x01*/, top = 0/*x50*/;
     byte inkc = ppdev->ink;
     byte mask_array[] = { 0xff, 0x80, 0xc0, 0xe0, 0xf0, 0xf8, 0xfc, 0xfe };
@@ -643,8 +648,8 @@ bjc_print_page_gray(gx_device_printer * pdev, gp_file * file)
                   ((ppdev->ink & INK_K) ? 0x11: 0x10)); /* black or color */
     char ink   = 0x01; /* regular ink type */
     char compress = (ppdev->compress == true ? 0x01 : 0x00); /* compression or not */
-    int x_resolution = pdev->HWResolution[0];
-    int y_resolution = pdev->HWResolution[1];
+    int x_resolution = (int)pdev->HWResolution[0];
+    int y_resolution = (int)pdev->HWResolution[1];
     int length = 0/*x71*/, lm = 0/*x01*/, rm = 0/*x01*/, top = 0/*x50*/;
     byte inkc = ppdev->ink;
     byte mask_array[] = { 0xff, 0x80, 0xc0, 0xe0, 0xf0, 0xf8, 0xfc, 0xfe };
@@ -730,8 +735,8 @@ bjc_print_page_cmyk(gx_device_printer * pdev, gp_file * file)
     char color = 0x10; /* color */
     char ink   = 0x01; /* regular ink type */
     char compress = (ppdev->compress == true ? 0x01 : 0x00); /* compression or not */
-    int x_resolution = pdev->HWResolution[0];
-    int y_resolution = pdev->HWResolution[1];
+    int x_resolution = (int)pdev->HWResolution[0];
+    int y_resolution = (int)pdev->HWResolution[1];
     int length = 0/*x71*/, lm = 0/*x01*/, rm = 0/*x01*/, top = 0/*x50*/;
     int plane;
     byte mask_array[] = { 0xff, 0x80, 0xc0, 0xe0, 0xf0, 0xf8, 0xfc, 0xfe };
@@ -851,8 +856,8 @@ bjc_print_page_color(gx_device_printer * pdev, gp_file * file)
     char color = 0x10; /* color */
     char ink   = 0x01; /* regular ink type */
     char compress = (ppdev->compress == true ? 0x01 : 0x00); /* compression or not */
-    int x_resolution = pdev->HWResolution[0];
-    int y_resolution = pdev->HWResolution[1];
+    int x_resolution = (int)pdev->HWResolution[0];
+    int y_resolution = (int)pdev->HWResolution[1];
     int length = 0/*x71*/, lm = 0/*x01*/, rm = 0/*x01*/, top = 0/*x50*/;
     byte mask_array[] = { 0xff, 0x80, 0xc0, 0xe0, 0xf0, 0xf8, 0xfc, 0xfe };
     byte lastmask = mask_array[pdev->width % 8];

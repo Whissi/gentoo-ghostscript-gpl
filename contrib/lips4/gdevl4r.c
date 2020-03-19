@@ -56,9 +56,9 @@ static dev_proc_image_out(lips4_image_out);
           (int)((long)(DEFAULT_WIDTH_10THS) * (xdpi) / 10),\
           (int)((long)(DEFAULT_HEIGHT_10THS) * (ydpi) / 10),\
           xdpi, ydpi, color_bits,\
-          -(lm) * (xdpi), -(tm) * (ydpi),\
-          (lm) * 72.0, (bm) * 72.0,\
-          (rm) * 72.0, (tm) * 72.0\
+          (float)(-(lm) * (xdpi)), (float)(-(tm) * (ydpi)),\
+          (float)((lm) * 72.0), (float)((bm) * 72.0f),\
+          (float)((rm) * 72.0), (float)((tm) * 72.0f)\
         ),\
        lp_device_body_rest_(print_page_copies, image_out),\
            cassetFeed, username, LIPS_PJL_DEFAULT,\
@@ -71,9 +71,9 @@ static dev_proc_image_out(lips4_image_out);
           (int)((long)(DEFAULT_WIDTH_10THS) * (xdpi) / 10),\
           (int)((long)(DEFAULT_HEIGHT_10THS) * (ydpi) / 10),\
           xdpi, ydpi, color_bits,\
-          -(lm) * (xdpi), -(tm) * (ydpi),\
-          (lm) * 72.0, (bm) * 72.0,\
-          (rm) * 72.0, (tm) * 72.0\
+          (float)(-(lm) * (xdpi)), (float)(-(tm) * (ydpi)),\
+          (float)((lm) * 72.0), (float)((bm) * 72.0),\
+          (float)((rm) * 72.0), (float)((tm) * 72.0)\
         ),\
        lp_duplex_device_body_rest_(print_page_copies, image_out),\
   cassetFeed,\
@@ -214,10 +214,10 @@ lips4_open(gx_device * pdev)
 static int
 lips_open(gx_device * pdev, lips_printer_type ptype)
 {
-    int width = pdev->MediaSize[0];
-    int height = pdev->MediaSize[1];
-    int xdpi = pdev->x_pixels_per_inch;
-    int ydpi = pdev->y_pixels_per_inch;
+    int width = (int)pdev->MediaSize[0];
+    int height = (int)pdev->MediaSize[1];
+    int xdpi = (int)pdev->x_pixels_per_inch;
+    int ydpi = (int)pdev->y_pixels_per_inch;
 
     /* Paper Size Check */
     if (width <= height) {	/* portrait */
@@ -437,6 +437,7 @@ lips_put_params(gx_device * pdev, gs_param_list * plist)
         default:
             ecode = code;
           userne:param_signal_error(plist, param_name, ecode);
+          /* Fall through. */
         case 1:
             usern.data = 0;
             break;
@@ -502,7 +503,7 @@ lips4_put_params(gx_device * pdev, gs_param_list * plist)
                                      (param_name = LIPS_OPTION_MEDIATYPE),
                                      &pmedia)) {
         case 0:
-            if (pmedia.size > LIPS_MEDIACHAR_MAX) {
+            if (pmedia.size >= LIPS_MEDIACHAR_MAX) {
                 ecode = gs_error_limitcheck;
                 goto pmediae;
             } else {   /* Check the validity of ``MediaType'' characters */
@@ -520,6 +521,7 @@ lips4_put_params(gx_device * pdev, gs_param_list * plist)
         default:
             ecode = code;
           pmediae:param_signal_error(plist, param_name, ecode);
+          /* Fall through. */
         case 1:
             pmedia.data = 0;
             break;
@@ -645,12 +647,15 @@ lips4type_print_page_copies(gx_device_printer * pdev, gp_file * prn_stream, int 
       {
         if (!(lprn->CompBuf = gs_malloc(pdev->memory->non_gc_memory, bpl * 3 / 2 + 1, maxY, "(CompBuf)")))
           return_error(gs_error_VMerror);
-        if (!(lprn->CompBuf2 = gs_malloc(pdev->memory->non_gc_memory, bpl * 3 / 2 + 1, maxY, "(CompBuf2)")))
+        
+        /* This buffer is used by lips_rle_encode(), which can require double
+        input size plus 2 bytes. */
+        if (!(lprn->CompBuf2 = gs_malloc(pdev->memory->non_gc_memory, bpl * 2 + 2, maxY, "(CompBuf2)")))
           return_error(gs_error_VMerror);
 
         if (lprn->NegativePrint) {
-          int rm = pdev->width - (dev_l_margin(pdev) + dev_r_margin(pdev)) * pdev->x_pixels_per_inch;
-          int bm = pdev->height - (dev_t_margin(pdev) + dev_b_margin(pdev)) * pdev->y_pixels_per_inch;
+          int rm = (int)(pdev->width - (dev_l_margin(pdev) + dev_r_margin(pdev)) * pdev->x_pixels_per_inch);
+          int bm = (int)(pdev->height - (dev_t_margin(pdev) + dev_b_margin(pdev)) * pdev->y_pixels_per_inch);
           /* Draw black rectangle */
           gp_fprintf(prn_stream,
                      "%c{%c%da%c%de%c;;;3}",
@@ -822,11 +827,13 @@ lips4_image_out(gx_device_printer * pdev, gp_file * prn_stream, int x, int y, in
             gp_fwrite(lprn->TmpBuf, 1, width / 8 * height, prn_stream);
         }
     } else {
+        /* 2019-11-28: changed two occurrencies of 'Len' to 'Len_rle' here, but
+        unable to test. */
         gs_sprintf(comp_str, "%c%d;%d;%d;10;%d.r", LIPS_CSI,
-                Len, width / 8, (int)pdev->x_pixels_per_inch, height);
+                Len_rle, width / 8, (int)pdev->x_pixels_per_inch, height);
         if (Len_rle < width / 8 * height - strlen(comp_str) + strlen(raw_str)) {
             gp_fprintf(prn_stream, "%s", comp_str);
-            gp_fwrite(lprn->CompBuf2, 1, Len, prn_stream);
+            gp_fwrite(lprn->CompBuf2, 1, Len_rle, prn_stream);
         } else {
             /* compression result is bad. */
             gp_fprintf(prn_stream, "%s", raw_str);
@@ -941,8 +948,8 @@ lips_job_start(gx_device_printer * pdev, lips_printer_type ptype, gp_file * prn_
     gx_device_lips *const lips = (gx_device_lips *) pdev;
     gx_device_lips4 *const lips4 = (gx_device_lips4 *) pdev;
     int prev_paper_size, prev_paper_width, prev_paper_height, paper_size;
-    int width = pdev->MediaSize[0];
-    int height = pdev->MediaSize[1];
+    int width = (int)pdev->MediaSize[0];
+    int height = (int)pdev->MediaSize[1];
     int tm, lm, rm, bm;
 
     if (pdev->PageCount == 0) {
@@ -1168,14 +1175,14 @@ lips_job_start(gx_device_printer * pdev, lips_printer_type ptype, gp_file * prn_
     }
     if (prev_paper_size != paper_size) {
         /* Top Margin: 63/300 inch + 5 mm */
-        tm = (63. / 300. + 5. / MMETER_PER_INCH - dev_t_margin(pdev)) * pdev->x_pixels_per_inch;
+        tm = (int)((63. / 300. + 5. / MMETER_PER_INCH - dev_t_margin(pdev)) * pdev->x_pixels_per_inch);
         if (tm > 0)
             gp_fprintf(prn_stream, "%c%dk", LIPS_CSI, tm);
         if (tm < 0)
             gp_fprintf(prn_stream, "%c%de", LIPS_CSI, -tm);
 
         /* Left Margin: 5 mm left */
-        lm = (5. / MMETER_PER_INCH - dev_l_margin(pdev)) * pdev->x_pixels_per_inch;
+        lm = (int)((5. / MMETER_PER_INCH - dev_l_margin(pdev)) * pdev->x_pixels_per_inch);
         if (lm > 0)
             gp_fprintf(prn_stream, "%c%dj", LIPS_CSI, lm);
         if (lm < 0)
@@ -1185,10 +1192,10 @@ lips_job_start(gx_device_printer * pdev, lips_printer_type ptype, gp_file * prn_
         gp_fprintf(prn_stream, "%c0;2t", LIPS_CSI);
 
         /* Bottom Margin: height */
-        bm = pdev->height - (dev_t_margin(pdev) + dev_b_margin(pdev)) * pdev->y_pixels_per_inch;
+        bm = (int)(pdev->height - (dev_t_margin(pdev) + dev_b_margin(pdev)) * pdev->y_pixels_per_inch);
         gp_fprintf(prn_stream, "%c%de", LIPS_CSI, bm);
         /* Right Margin: width */
-        rm = pdev->width - (dev_l_margin(pdev) + dev_r_margin(pdev)) * pdev->x_pixels_per_inch;
+        rm = (int)(pdev->width - (dev_l_margin(pdev) + dev_r_margin(pdev)) * pdev->x_pixels_per_inch);
         gp_fprintf(prn_stream, "%c%da", LIPS_CSI, rm);
         gp_fprintf(prn_stream, "%c1;3t", LIPS_CSI);
 

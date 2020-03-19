@@ -572,18 +572,10 @@ lips4v_copy_text_char(gx_device * dev, const byte * data,
         }
     }
     /* 文字セット・アサイン番号選択命令2 */
-    if (download) {
-        if (pdev->current_font != ccode / 128) {
-            gs_sprintf(cset_number, "%c%d%%v", LIPS_CSI, ccode / 128);
-            lputs(s, cset_number);
-            pdev->current_font = ccode / 128;
-        }
-    } else {
-        if (pdev->current_font != ccode / 128) {
-            gs_sprintf(cset_number, "%c%d%%v", LIPS_CSI, ccode / 128);
-            lputs(s, cset_number);
-            pdev->current_font = ccode / 128;
-        }
+    if (pdev->current_font != ccode / 128) {
+        gs_sprintf(cset_number, "%c%d%%v", LIPS_CSI, ccode / 128);
+        lputs(s, cset_number);
+        pdev->current_font = ccode / 128;
     }
 
     /* カラー */
@@ -1313,9 +1305,10 @@ lips4v_beginpath(gx_device_vector * vdev, gx_path_type_t type)
     if (type & gx_path_type_clip) {
         lputs(s, "P(10");
         sputc(s, LIPS_IS2);
-    } else
+    } else {
         lputs(s, "P(00");
         sputc(s, LIPS_IS2);
+    }
 
     return 0;
 }
@@ -1396,11 +1389,11 @@ lips4v_endpath(gx_device_vector * vdev, gx_path_type_t type)
     lputs(s, "P)");
     sputc(s, LIPS_IS2);
     if (type & gx_path_type_rule) {
-        if (type & gx_path_type_winding_number) {
-            lputs(s, "}I1");
+        if (type & gx_path_type_even_odd) {
+            lputs(s, "}I0");
             sputc(s, LIPS_IS2);
         } else {
-            lputs(s, "}I0");
+            lputs(s, "}I1");
             sputc(s, LIPS_IS2);
         }
     }
@@ -1640,6 +1633,7 @@ lips4v_put_params(gx_device * dev, gs_param_list * plist)
         default:
         ecode = code;
       casse:param_signal_error(plist, param_name, ecode);
+        /* Fall through. */
         case 1:
         break;
     }
@@ -1665,6 +1659,7 @@ lips4v_put_params(gx_device * dev, gs_param_list * plist)
         default:
         ecode = code;
       pmediae:param_signal_error(plist, param_name, ecode);
+        /* Fall through. */
         case 1:
         pmedia.data = 0;
         break;
@@ -1695,6 +1690,7 @@ lips4v_put_params(gx_device * dev, gs_param_list * plist)
         default:
         ecode = code;
       userne:param_signal_error(plist, param_name, ecode);
+        /* Fall through. */
         case 1:
         usern.data = 0;
         break;
@@ -1716,6 +1712,7 @@ lips4v_put_params(gx_device * dev, gs_param_list * plist)
         default:
         ecode = code;
       nupe:param_signal_error(plist, param_name, ecode);
+        /* Fall through. */
         case 1:
         break;
     }
@@ -1736,6 +1733,7 @@ lips4v_put_params(gx_device * dev, gs_param_list * plist)
         default:
         ecode = code;
       tden:param_signal_error(plist, param_name, ecode);
+        /* Fall through. */
         case 1:
         break;
     }
@@ -1771,6 +1769,7 @@ lips4v_put_params(gx_device * dev, gs_param_list * plist)
             }
             ecode = code;
             param_signal_error(plist, param_name, ecode);
+            /* Fall through. */
             case 1:
             break;
         }
@@ -1795,6 +1794,7 @@ lips4v_put_params(gx_device * dev, gs_param_list * plist)
         default:
         ecode = code;
       bppe:param_signal_error(plist, param_name, ecode);
+        /* Fall through. */
         case 1:
         break;
     }
@@ -2469,9 +2469,10 @@ lips4v_image_end_image(gx_image_enum_common_t * info, bool draw_last)
 
     if (pdev->OneBitMask)
         pdev->OneBitMask = false;
-    else
+    else {
         lputs(s, "}Q1100");
         sputc(s, LIPS_IS2);	/* End of Image */
+    }
 
     pdev->MaskReverse = -1;
 

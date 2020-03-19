@@ -34,6 +34,12 @@ typedef enum {
     PDF14_DeviceCustom = 4
 } pdf14_default_colorspace_t;
 
+typedef enum {
+    PDF14_OP_STATE_NONE = 0,
+    PDF14_OP_STATE_FILL = 1,
+    PDF14_OP_STATE_STROKE = 2,
+} PDF14_OP_FS_STATE;
+
 /*
  * This structure contains procedures for processing routine which differ
  * between the different blending color spaces.
@@ -205,16 +211,49 @@ typedef struct pdf14_device_s {
     float opacity;
     float shape;
     float alpha; /* alpha = opacity * shape */
+    float fillconstantalpha;
+    float strokeconstantalpha;
     gs_blend_mode_t blend_mode;
     bool text_knockout;
     bool overprint;
     bool effective_overprint_mode;
+    bool stroke_effective_op_mode;
+    bool stroke_overprint;
     int text_group;
     gx_color_index drawn_comps;		/* Used for overprinting.  Passed from overprint compositor */
+    gx_color_index drawn_comps_fill;		/* selected by color_is_fill */
+    gx_color_index drawn_comps_stroke;
+    PDF14_OP_FS_STATE op_state;
     gx_device * pclist_device;
     bool free_devicen;              /* Used to avoid freeing a deviceN parameter from target clist device */
     bool sep_device;
     bool using_blend_cs;
+
+    /* We now have some variables to help us determine whether
+     * we are in an SMask or not. Firstly, we have in_smask_construction,
+     * initially 0, incremented whenever we begin smask in the compositor,
+     * and decremented whenever we finish one. Thus this being non-zero
+     * implies we are in the 'construction' phase of at least one smask.
+     */
+    int in_smask_construction;
+    /* Next, we have smask_constructed. Again, initially 0. This is set
+     * to 1 whenever in_smask_construction returns to 0. It is reset to
+     * 0 on the next transparency group push (which takes possession of
+     * the smask that was just created. Thus this being 1 implies
+     * we have just constructed an smask, but not used it yet. */
+    int smask_constructed;
+    /* Finally, then we have depth_within_smask. This is used to keep the
+     * count of how many times we need to pop a transparency group to
+     * finish being governed by an smask. To keep this figure, we watch
+     * pushes of new transparency groups. On each such push, if
+     * smask_constructed is true, or depth_within_smask is already non-zero,
+     * we increment depth_within_smask. (i.e. whenever we start a group
+     * that will be governed by (and take possession of) an smask, or whenever
+     * we are already being governed by an smask, we know that we've just
+     * increased our nested depth by 1). Whenever we pop a group and it is
+     * non zero, we decrement it.
+     */
+    int depth_within_smask;
     const gx_color_map_procs *(*save_get_cmap_procs)(const gs_gstate *,
                                                      const gx_device *);
     gx_device_color_info saved_target_color_info;

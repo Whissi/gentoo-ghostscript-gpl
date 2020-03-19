@@ -326,6 +326,7 @@ typedef struct pdf_page_s {
     pdf_page_dsc_info_t dsc_info;
     bool NumCopies_set; /* ps2write only. */
     int NumCopies;      /* ps2write only. */
+    float UserUnit;     /* pdfwrite only */
 } pdf_page_t;
 #define private_st_pdf_page()        /* in gdevpdf.c */\
   gs_private_st_ptrs2(st_pdf_page, pdf_page_t, "pdf_page_t",\
@@ -479,8 +480,9 @@ struct pdf_font_cache_elem_s {
 typedef struct pdf_viewer_state_s {
     int transfer_not_identity;        /* bitmask */
     gs_id transfer_ids[4];
-    float opacity_alpha; /* state.opacity.alpha */
-    float shape_alpha; /* state.shape.alpha */
+    float strokeconstantalpha;
+    float fillconstantalpha;
+    bool alphaisshape;
     gs_blend_mode_t blend_mode; /* state.blend_mode */
     gs_id halftone_id;
     gs_id black_generation_id;
@@ -618,8 +620,8 @@ struct gx_device_pdf_s {
     pdf_page_dsc_info_t page_dsc_info; /* current page */
     /* Additional graphics state */
     bool fill_overprint, stroke_overprint;
+    int rendering_intent;
     bool remap_fill_color, remap_stroke_color;
-    int overprint_mode;
     gs_id halftone_id;
     gs_id transfer_ids[4];
     int transfer_not_identity;        /* bitmask */
@@ -900,6 +902,7 @@ struct gx_device_pdf_s {
                                      * doing JPEG pass through we write the JPEG data here, and don't write
                                      * anything in the image processing routines.
                                      */
+    float UserUnit;
 };
 
 #define is_in_page(pdev)\
@@ -960,6 +963,7 @@ extern const gx_device_vector_procs pdf_vector_procs;
 dev_proc_fill_rectangle(gdev_pdf_fill_rectangle);
 dev_proc_fill_path(gdev_pdf_fill_path);
 dev_proc_stroke_path(gdev_pdf_stroke_path);
+dev_proc_fill_stroke_path(gdev_pdf_fill_stroke_path);
 dev_proc_fillpage(gdev_pdf_fillpage);
     /* In gdevpdfi.c */
 dev_proc_begin_typed_image(gdev_pdf_begin_typed_image);

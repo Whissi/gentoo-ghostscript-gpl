@@ -1,26 +1,24 @@
-/* $Id: tiffiop.h,v 1.95 2017-09-07 14:02:52 erouault Exp $ */
-
 /*
  * Copyright (c) 1988-1997 Sam Leffler
  * Copyright (c) 1991-1997 Silicon Graphics, Inc.
  *
- * Permission to use, copy, modify, distribute, and sell this software and 
+ * Permission to use, copy, modify, distribute, and sell this software and
  * its documentation for any purpose is hereby granted without fee, provided
  * that (i) the above copyright notices and this permission notice appear in
  * all copies of the software and related documentation, and (ii) the names of
  * Sam Leffler and Silicon Graphics may not be used in any advertising or
  * publicity relating to the software without the specific, prior written
  * permission of Sam Leffler and Silicon Graphics.
- * 
- * THE SOFTWARE IS PROVIDED "AS-IS" AND WITHOUT WARRANTY OF ANY KIND, 
- * EXPRESS, IMPLIED OR OTHERWISE, INCLUDING WITHOUT LIMITATION, ANY 
- * WARRANTY OF MERCHANTABILITY OR FITNESS FOR A PARTICULAR PURPOSE.  
- * 
+ *
+ * THE SOFTWARE IS PROVIDED "AS-IS" AND WITHOUT WARRANTY OF ANY KIND,
+ * EXPRESS, IMPLIED OR OTHERWISE, INCLUDING WITHOUT LIMITATION, ANY
+ * WARRANTY OF MERCHANTABILITY OR FITNESS FOR A PARTICULAR PURPOSE.
+ *
  * IN NO EVENT SHALL SAM LEFFLER OR SILICON GRAPHICS BE LIABLE FOR
  * ANY SPECIAL, INCIDENTAL, INDIRECT OR CONSEQUENTIAL DAMAGES OF ANY KIND,
  * OR ANY DAMAGES WHATSOEVER RESULTING FROM LOSS OF USE, DATA OR PROFITS,
- * WHETHER OR NOT ADVISED OF THE POSSIBILITY OF DAMAGE, AND ON ANY THEORY OF 
- * LIABILITY, ARISING OUT OF OR IN CONNECTION WITH THE USE OR PERFORMANCE 
+ * WHETHER OR NOT ADVISED OF THE POSSIBILITY OF DAMAGE, AND ON ANY THEORY OF
+ * LIABILITY, ARISING OUT OF OR IN CONNECTION WITH THE USE OR PERFORMANCE
  * OF THIS SOFTWARE.
  */
 
@@ -63,7 +61,7 @@
 #ifdef HAVE_ASSERT_H
 # include <assert.h>
 #else
-# define assert(x) 
+# define assert(x)
 #endif
 
 #ifdef HAVE_SEARCH_H
@@ -90,11 +88,25 @@ extern int snprintf(char* str, size_t size, const char* format, ...);
 #endif
 
 #define    streq(a,b)      (strcmp(a,b) == 0)
+#define    strneq(a,b,n)   (strncmp(a,b,n) == 0)
 
 #ifndef TRUE
 #define	TRUE	1
 #define	FALSE	0
 #endif
+
+#define TIFF_SIZE_T_MAX ((size_t) ~ ((size_t)0))
+#define TIFF_TMSIZE_T_MAX (tmsize_t)(TIFF_SIZE_T_MAX >> 1)
+
+/*
+ * Largest 32-bit unsigned integer value.
+ */
+#define TIFF_UINT32_MAX 0xFFFFFFFFU
+
+/*
+ * Largest 64-bit unsigned integer value.
+ */
+#define TIFF_UINT64_MAX (((uint64)(TIFF_UINT32_MAX)) << 32 | TIFF_UINT32_MAX)
 
 typedef struct client_info {
     struct client_info *next;
@@ -146,6 +158,9 @@ struct tiff {
         #define TIFF_DIRTYSTRIP 0x200000U /* stripoffsets/stripbytecount dirty*/
         #define TIFF_PERSAMPLE  0x400000U /* get/set per sample tags as arrays */
         #define TIFF_BUFFERMMAP 0x800000U /* read buffer (tif_rawdata) points into mmap() memory */
+        #define TIFF_DEFERSTRILELOAD 0x1000000U /* defer strip/tile offset/bytecount array loading. */
+        #define TIFF_LAZYSTRILELOAD  0x2000000U /* lazy/ondemand loading of strip/tile offset/bytecount values. Only used if TIFF_DEFERSTRILELOAD is set and in read-only mode */
+        #define TIFF_CHOPPEDUPARRAYS 0x4000000U /* set when allocChoppedUpStripArrays() has modified strip array */
 	uint64               tif_diroff;       /* file offset of current directory */
 	uint64               tif_nextdiroff;   /* file offset of following directory */
 	uint64*              tif_dirlist;      /* list of offsets to already seen directories to prevent IFD looping */
@@ -225,6 +240,7 @@ struct tiff {
 	 * setting up an old tag extension scheme. */
 	TIFFFieldArray*      tif_fieldscompat;
 	size_t               tif_nfieldscompat;
+	void                *(*get_jpeg_mem_ptr)(thandle_t);
 };
 
 #define isPseudoTag(t) (t > 0xffff)            /* is tag value normal or pseudo */
@@ -277,7 +293,7 @@ struct tiff {
 #define TIFFhowmany8_64(x) (((x)&0x07)?((uint64)(x)>>3)+1:(uint64)(x)>>3)
 #define TIFFroundup_64(x, y) (TIFFhowmany_64(x,y)*(y))
 
-/* Safe multiply which returns zero if there is an integer overflow */
+/* Safe multiply which returns zero if there is an *unsigned* integer overflow. This macro is not safe for *signed* integer types */
 #define TIFFSafeMultiply(t,v,m) ((((t)(m) != (t)0) && (((t)(((v)*(m))/(m))) == (t)(v))) ? (t)((v)*(m)) : (t)0)
 
 #define TIFFmax(A,B) ((A)>(B)?(A):(B))
@@ -332,8 +348,12 @@ typedef size_t TIFFIOSize_t;
 #define _TIFF_off_t off_t
 #endif
 
-#if __clang_major__ >= 4 || (__clang_major__ == 3 && __clang_minor__ >= 8)
+#if defined(__has_attribute) && defined(__clang__)
+#if __has_attribute(no_sanitize)
 #define TIFF_NOSANITIZE_UNSIGNED_INT_OVERFLOW __attribute__((no_sanitize("unsigned-integer-overflow")))
+#else
+#define TIFF_NOSANITIZE_UNSIGNED_INT_OVERFLOW
+#endif
 #else
 #define TIFF_NOSANITIZE_UNSIGNED_INT_OVERFLOW
 #endif
@@ -383,11 +403,15 @@ extern TIFFErrorHandlerExt _TIFFerrorHandlerExt;
 
 extern uint32 _TIFFMultiply32(TIFF*, uint32, uint32, const char*);
 extern uint64 _TIFFMultiply64(TIFF*, uint64, uint64, const char*);
+extern tmsize_t _TIFFMultiplySSize(TIFF*, tmsize_t, tmsize_t, const char*);
+extern tmsize_t _TIFFCastUInt64ToSSize(TIFF*, uint64, const char*);
 extern void* _TIFFCheckMalloc(TIFF*, tmsize_t, tmsize_t, const char*);
 extern void* _TIFFCheckRealloc(TIFF*, void*, tmsize_t, tmsize_t, const char*);
 
 extern double _TIFFUInt64ToDouble(uint64);
 extern float _TIFFUInt64ToFloat(uint64);
+
+extern float _TIFFClampDoubleToFloat(double);
 
 extern tmsize_t
 _TIFFReadEncodedStripAndAllocBuffer(TIFF* tif, uint32 strip,
@@ -441,6 +465,12 @@ extern int TIFFInitSGILog(TIFF*, int);
 #endif
 #ifdef LZMA_SUPPORT
 extern int TIFFInitLZMA(TIFF*, int);
+#endif
+#ifdef ZSTD_SUPPORT
+extern int TIFFInitZSTD(TIFF*, int);
+#endif
+#ifdef WEBP_SUPPORT
+extern int TIFFInitWebP(TIFF*, int);
 #endif
 #ifdef VMS
 extern const TIFFCodec _TIFFBuiltinCODECS[];

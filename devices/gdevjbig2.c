@@ -108,7 +108,9 @@ jbig2_print_page(gx_device_printer * pdev, gp_file * prn_stream)
             code = gs_note_error(gs_error_ioerror);
             goto done;
         }
-        gdev_prn_get_bits(pdev, lnum, in, &data);        
+        code = gdev_prn_get_bits(pdev, lnum, in, &data);
+        if (code < 0)
+            goto done;
         sputs(&cstrm, data, state.stride, &ignore_used);
     }
 

@@ -352,6 +352,20 @@ enum {
      * the PDF font may not match the widths of the glyphs in the font.
      */
     gxdso_event_info,
+    /* gxdso_overprint_active:
+    *     data = NULL
+    *     size = 0
+    * Returns 1 if the overprint device is active,
+    * 0 otherwise.
+    */
+    gxdso_overprint_active,
+    /* gxdso_in_smask:
+    *     data = NULL
+    *     size = 0
+    * Returns 1 if we are within an smask (either construction or usage),
+    * 0 otherwise.
+    */
+    gxdso_in_smask,
 
     /* Debug only dsos follow here */
 #ifdef DEBUG

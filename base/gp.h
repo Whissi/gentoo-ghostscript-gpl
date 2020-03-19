@@ -334,7 +334,11 @@ gp_rewind(gp_file *f) {
 
 char *gp_fgets(char *buffer, size_t n, gp_file *f);
 
-int gp_fprintf(gp_file *f, const char *fmt, ...);
+int gp_fprintf(gp_file *f, const char *fmt, ...)
+#ifdef __GNUC__
+    __attribute__ ((format (__printf__, 2, 3)))
+#endif
+    ;
 
 /* ------ Reading from stdin, unbuffered if possible ------ */
 
@@ -388,7 +392,7 @@ extern const char gp_current_directory_name[];
 /* Define the string to be concatenated with the file mode */
 /* for opening files without end-of-line conversion. */
 /* This is always either "" or "b". */
-extern const char gp_fmode_binary_suffix[];
+extern const char* gp_fmode_binary_suffix;
 
 /* Define the file modes for binary reading or writing. */
 /* (This is just a convenience: they are "r" or "w" + the suffix.) */

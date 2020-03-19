@@ -269,11 +269,11 @@ gconfigd_h=$(GLGENDIR)$(D)gconfigd.h
 iconfxx_h=$(GLGENDIR)$(D)iconfxx.h
 iconfig_h=$(GLGENDIR)$(D)iconfig.h
 
-all default : $(GS_XE) $(PCL_XPS_TARGETS) $(GS_SHARED_OBJS) $(MAKEDIRSTOP) $(GS_MAK) $(MAKEDIRS)
+all default : $(GS_XE) $(PCL_XPS_PDL_TARGETS) $(GS_SHARED_OBJS) $(MAKEDIRSTOP) $(GS_MAK) $(MAKEDIRS)
 	$(NO_OP)
 
-experimental: all $(GPDL_TARGET)
-        $(NO_OP)
+experimental: all
+	$(NO_OP)
 
 # the distclean and maintainer-clean targets (if any)
 # are the responsibility of the platform-specific
@@ -428,7 +428,7 @@ $(GLGENDIR)$(D)fdevs.tr: $(GS_MAK) $(ECHOGS_XE) $(GSPLAT_DEVS_ALL) $(FEATURE_DEV
 	$(EXP)$(ECHOGS_XE) -a $(GLGENDIR)$(D)fdevs.tr -+ $(FEATURE_DEVS_EXTRA)
 
 $(GLGENDIR)$(D)devdevs.tr: $(GS_MAK) $(ECHOGS_XE) $(DEVICE_DEVS_ALL) $(MAKEDIRS)
-	$(EXP)$(ECHOGS_XE) -a $(GLGENDIR)$(D)devdevs.tr -+ $(DEVICE_DEVS)
+	$(EXP)$(ECHOGS_XE) -w $(GLGENDIR)$(D)devdevs.tr -+ $(DEVICE_DEVS)
 	$(EXP)$(ECHOGS_XE) -a $(GLGENDIR)$(D)devdevs.tr -+ $(DEVICE_DEVS1)
 	$(EXP)$(ECHOGS_XE) -a $(GLGENDIR)$(D)devdevs.tr -+ $(DEVICE_DEVS2)
 	$(EXP)$(ECHOGS_XE) -a $(GLGENDIR)$(D)devdevs.tr -+ $(DEVICE_DEVS3)

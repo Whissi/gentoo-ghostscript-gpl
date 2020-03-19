@@ -71,8 +71,8 @@
 #define GDI_COMP_MODITIFF 6
 #define GDI_COMP_NOSEND   0x7f
 
-#define GDI_MARGINS_A4	        0.167, 0.167, 0.167, 0.167
-#define GDI_MARGINS_LETTER	0.167, 0.167, 0.167, 0.167
+#define GDI_MARGINS_A4	        0.167f, 0.167f, 0.167f, 0.167f
+#define GDI_MARGINS_LETTER	0.167f, 0.167f, 0.167f, 0.167f
 /*#define GDI_MARGINS_A4	0.0, 0.0, 0.0, 0.0*/
 /*#define GDI_MARGINS_LETTER	0.0, 0.0, 0.0, 0.0*/
 
@@ -484,12 +484,15 @@ unsigned long FrameTiffComp(unsigned char *pubDest,
     case 1:
       *TgtPtr++ = 0x00;
       ulret++;
+      /* Fall through. */
     case 2:
       *TgtPtr++ = 0x00;
       ulret++;
+      /* Fall through. */
     case 3:
       *TgtPtr++ = 0x00;
       ulret++;
+      /* Fall through. */
     default:
       break;
     }
@@ -500,10 +503,13 @@ unsigned long FrameTiffComp(unsigned char *pubDest,
     {
     case 1:
       ulret++;
+      /* Fall through. */
     case 2:
       ulret++;
+      /* Fall through. */
     case 3:
       ulret++;
+      /* Fall through. */
     default:
       break;
     }
@@ -542,11 +548,14 @@ unsigned int FrameTiff_Comp(unsigned char *lpSrcBuf, unsigned char *lpTgtBuf, un
 
     if(ubFirst == ubSecond)  /* case of data match */
     {
+      #if 0
+      /* This code causes coverity problems, and has no affect. */
       usEndCnt = usCount;
       if (usCount > 16384)
       {
         usEndCnt = 16384;
       }
+      #endif
       usEndCnt = usCount - 2;
       while (usEndCnt--)
       {
@@ -583,11 +592,14 @@ unsigned int FrameTiff_Comp(unsigned char *lpSrcBuf, unsigned char *lpTgtBuf, un
       ubMisCnt = 0;
       if (usCount > 2)
       {
+        #if 0
+        /* This code causes coverity problems, and has no affect. */
         usEndCnt = usCount;
         if (usCount > 16384)
         {
           usEndCnt = 16384;
         }
+        #endif
         usEndCnt = usCount - 2;
         /* usEndCnt = usCount - 2; original*/
         /* 19990824 by LSM : for end file while (usEndCnt--)*/
@@ -680,11 +692,14 @@ unsigned int PreTiffComp(unsigned char *lpSrcBuf, unsigned int nSrcBytes)
 
     if(ubFirst == ubSecond)  /* case of data match */
     {
+      #if 0
+      /* This code causes coverity problems, and has no affect. */
       usEndCnt = usCount;
       if (usCount > 16384)
       {
         usEndCnt = 16384;
       }
+      #endif
       usEndCnt = usCount - 2;
       while (usEndCnt--)
       {
@@ -716,12 +731,15 @@ unsigned int PreTiffComp(unsigned char *lpSrcBuf, unsigned int nSrcBytes)
       ubMisCnt = 0;
       if (usCount > 2)
       {
+        #if 0
+        /* This code causes coverity problems, and has no affect. */
         usEndCnt = usCount;
         if (usCount > 16384)
         {
           usEndCnt = 16384;
         }
         /* usEndCnt = usCount - 2;*/
+        #endif
         usEndCnt = usCount - 2;
         /* 19990824 by LSM : for Last file while (usEndCnt--)*/
         while (usEndCnt--)

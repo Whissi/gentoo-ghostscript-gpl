@@ -126,13 +126,6 @@ tiff12_print_page(gx_device_printer * pdev, gp_file * file)
     gx_device_tiff *const tfdev = (gx_device_tiff *)pdev;
     int code;
 
-    /* open the TIFF device */
-    if (gdev_prn_file_is_new(pdev)) {
-        tfdev->tif = tiff_from_filep(pdev, pdev->dname, file, tfdev->BigEndian, tfdev->UseBigTIFF);
-        if (!tfdev->tif)
-            return_error(gs_error_invalidfileaccess);
-    }
-
     code = gdev_tiff_begin_page(tfdev, file);
     if (code < 0)
         return code;
@@ -146,12 +139,16 @@ tiff12_print_page(gx_device_printer * pdev, gp_file * file)
     {
         int y;
         int size = gdev_prn_raster(pdev);
-        byte *data = gs_alloc_bytes(pdev->memory, size, "tiff12_print_page");
+
+        /* We allocate an extra 5 bytes to avoid buffer overflow when accessing
+        src[5] below, if size if not multiple of 6. This fixes bug-701807. */
+        int size_alloc = size + 5;
+        byte *data = gs_alloc_bytes(pdev->memory, size_alloc, "tiff12_print_page");
 
         if (data == 0)
             return_error(gs_error_VMerror);
 
-        memset(data, 0, size);
+        memset(data, 0, size_alloc);
 
         for (y = 0; y < pdev->height; ++y) {
             const byte *src;
@@ -184,13 +181,6 @@ tiff_rgb_print_page(gx_device_printer * pdev, gp_file * file)
 {
     gx_device_tiff *const tfdev = (gx_device_tiff *)pdev;
     int code;
-
-    /* open the TIFF device */
-    if (gdev_prn_file_is_new(pdev)) {
-        tfdev->tif = tiff_from_filep(pdev, pdev->dname, file, tfdev->BigEndian, tfdev->UseBigTIFF);
-        if (!tfdev->tif)
-            return_error(gs_error_invalidfileaccess);
-    }
 
     code = gdev_tiff_begin_page(tfdev, file);
     if (code < 0)

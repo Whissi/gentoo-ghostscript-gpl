@@ -167,6 +167,7 @@ atx_print_page(gx_device_printer *pdev, gp_file *f, int max_width_bytes)
         (int)ceil((height / pdev->HWResolution[1] + top_bottom_skip) * 100);
     gs_memory_t *mem = pdev->memory;
     int raster = gx_device_raster((gx_device *)pdev, true);
+    int width = pdev->width;
     byte *buf;
     /*
      * ATX_COMPRESSED_DATA only takes a 1-byte (word) count.
@@ -176,6 +177,9 @@ atx_print_page(gx_device_printer *pdev, gp_file *f, int max_width_bytes)
     byte *compressed;
     int blank_lines, lnum;
     int code = 0;
+    byte mask;
+    int endidx = width>>3;
+    int rowlen = (width+7)>>3;
 
     /* Enforce a minimum 3" page length. */
     if (page_length_100ths < 300)
@@ -187,15 +191,29 @@ atx_print_page(gx_device_printer *pdev, gp_file *f, int max_width_bytes)
         code = gs_note_error(gs_error_VMerror);
         goto done;
     }
+    memset(buf, 0, raster);
+    if (width & 7)
+        mask = ~(255>>(width & 7));
+    else
+        mask = 255, endidx--;
+
     fput_atx_command(f, ATX_SET_PAGE_LENGTH, page_length_100ths);
     for (blank_lines = 0, lnum = 0; lnum < height; ++lnum) {
         byte *row;
         byte *end;
         int count;
 
-        gdev_prn_get_bits(pdev, lnum, buf, &row);
+        code = gdev_prn_get_bits(pdev, lnum, buf, &row);
+        if (code < 0)
+            goto done;
+        /* Clear any trailing padding bits */
+        row[endidx] &= mask;
+	/* We need an even number of bytes to work with. */
+	end = row + rowlen;
+	if (rowlen & 1)
+	    *end++ = 0;
         /* Find the end of the non-blank data. */
-        for (end = row + raster; end > row && end[-1] == 0 && end[-2] == 0; )
+        while (end > row && end[-1] == 0 && end[-2] == 0)
             end -= 2;
         if (end == row) {		/* blank line */
             ++blank_lines;

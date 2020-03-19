@@ -65,9 +65,14 @@ jetp3852_print_page(gx_device_printer *pdev, gp_file *prn_stream)
     unsigned int count,tempcnt;
     unsigned char vtp,cntc1,cntc2;
     int line_size_color_plane;
+    int code = 0;
 
     byte data[DATA_SIZE];
     byte plane_data[LINE_SIZE * 3];
+
+    /* Initialise data to zeros, otherwise later on, uninitialised bytes in
+    dp[] can be greater than 7, which breaks spr8[dp[]]. */
+    memset(data, 0x00, DATA_SIZE);
 
     /* Set initial condition for printer */
     gp_fputs("\033@",prn_stream);
@@ -77,10 +82,19 @@ jetp3852_print_page(gx_device_printer *pdev, gp_file *prn_stream)
         int lnum;
         int line_size = gdev_mem_bytes_per_scan_line((gx_device *)pdev);
         int num_blank_lines = 0;
+
+        if (line_size > DATA_SIZE) {
+            emprintf2(pdev->memory, "invalid resolution and/or width gives line_size = %d, max. is %d\n",
+                      line_size, DATA_SIZE);
+            return_error(gs_error_rangecheck);
+        }
+
         for ( lnum = 0; lnum < pdev->height; lnum++ ) {
             byte *end_data = data + line_size;
-            gdev_prn_copy_scan_lines(pdev, lnum,
+            code = gdev_prn_copy_scan_lines(pdev, lnum,
                                      (byte *)data, line_size);
+            if (code < 0)
+                break;
             /* Remove trailing 0s. */
             while ( end_data > data && end_data[-1] == 0 )
                 end_data--;
@@ -91,10 +105,6 @@ jetp3852_print_page(gx_device_printer *pdev, gp_file *prn_stream)
                 int i;
                 byte *odp;
                 byte *row;
-
-                /* Pad with 0s to fill out the last */
-                /* block of 8 bytes. */
-                memset(end_data, 0, 7);
 
                 /* Transpose the data to get pixel planes. */
                 for ( i = 0, odp = plane_data; i < DATA_SIZE;
@@ -166,5 +176,5 @@ jetp3852_print_page(gx_device_printer *pdev, gp_file *prn_stream)
     /* eject page */
     gp_fputs("\014", prn_stream);
 
-    return 0;
+    return code;;
 }

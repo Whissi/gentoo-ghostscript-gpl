@@ -105,13 +105,18 @@ int
 gx_stroke_path_expansion(const gs_gstate * pgs, const gx_path * ppath,
                          gs_fixed_point * ppt)
 {
-    const subpath *psub = ppath->first_subpath;
+    const subpath *psub;
     const segment *pseg;
     double cx = fabs(pgs->ctm.xx) + fabs(pgs->ctm.yx);
     double cy = fabs(pgs->ctm.xy) + fabs(pgs->ctm.yy);
     double expand = pgs->line_params.half_width;
     int result = 1;
 
+    if (ppath == NULL) {
+        ppt->x = ppt->y = 0;
+        return 0;		/* no expansion */
+    }
+    psub = ppath->first_subpath;
     /* Adjust the expansion (E) for square caps, if needed */
     if (pgs->line_params.start_cap == gs_cap_square ||
         pgs->line_params.end_cap == gs_cap_square)
@@ -1053,9 +1058,9 @@ gx_stroke_path_only_aux(gx_path * ppath, gx_path * to_path, gx_device * pdev,
         gx_path_free(&stroke_path_body, "gx_stroke_path_only error");   /* (only needed if error) */
     if (to_path_reverse == &stroke_path_reverse)
         gx_path_free(&stroke_path_reverse, "gx_stroke_path_only error");
+  exf:
     if (dash_count)
         gx_path_free(&dpath, "gx_stroke_path exit(dash path)");
-  exf:
     if (ppath->curve_count)
         gx_path_free(&fpath, "gx_stroke_path exit(flattened path)");
     return code;

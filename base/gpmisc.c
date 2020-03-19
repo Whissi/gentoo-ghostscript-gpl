@@ -743,7 +743,7 @@ gp_open_printer(const gs_memory_t *mem,
                       char         fname[gp_file_name_sizeof],
                       int          binary_mode)
 {
-    gp_file *file;
+    gp_file *file = NULL;
     gs_lib_ctx_t *ctx = mem->gs_lib_ctx;
     gs_fs_list_t *fs = ctx->core->fs;
 
@@ -770,7 +770,7 @@ gp_open_scratch_file(const gs_memory_t *mem,
                      char              *fname,
                      const char        *mode)
 {
-    gp_file *file;
+    gp_file *file = NULL;
     gs_lib_ctx_t *ctx = mem->gs_lib_ctx;
     gs_fs_list_t *fs = ctx->core->fs;
 
@@ -800,7 +800,7 @@ gp_open_scratch_file_rm(const gs_memory_t *mem,
                         char              *fname,
                         const char        *mode)
 {
-    gp_file *file;
+    gp_file *file = NULL;
     gs_lib_ctx_t *ctx = mem->gs_lib_ctx;
     gs_fs_list_t *fs = ctx->core->fs;
 
@@ -969,7 +969,11 @@ validate(const gs_memory_t *mem,
                     const char *aend = path + strlen(path);
                     while (aend != a2 && !gs_file_name_check_separator(a2, 1, a2))
                       a2++;
-                    if (aend != a2)
+                    /* If the control path ends in a directory separator and we've scanned
+                       to the end of the candidate path with no further directory separators
+                       found, we have a match
+                     */
+                    if (aend == a2)
                       /* PATH=abc/? pattern=abc/ */
                       goto found; /* Bingo! */
                  }
@@ -1008,48 +1012,88 @@ gp_validate_path_len(const gs_memory_t *mem,
                  const uint         len,
                  const char        *mode)
 {
-    char *buffer;
+    char *buffer, *bufferfull;
     uint rlen;
     int code = 0;
+    const char *cdirstr = gp_file_name_current();
+    int cdirstrl = strlen(cdirstr);
+    const char *dirsepstr = gp_file_name_separator();
+    int dirsepstrl = strlen(dirsepstr);
+    int prefix_len = cdirstrl + dirsepstrl;
 
     /* mem->gs_lib_ctx can be NULL when we're called from mkromfs */
     if (mem->gs_lib_ctx == NULL ||
         mem->gs_lib_ctx->core->path_control_active == 0)
         return 0;
 
+    /* For current directory accesses, we need handle both a "bare" name,
+     * and one with a cwd prefix (in Unix terms, both "myfile.ps" and
+     * "./myfile.ps".
+     *
+     * So we check up front if it's absolute, then just use that.
+     * If it includes cwd prefix, we try that, then remove the prefix
+     * and try again.
+     * If it doesn't include the cwd prefix, we try it, then add the
+     * prefix and try again.
+     * To facilitate that, we allocate a large enough buffer to take
+     * the path *and* the prefix up front.
+     */
+    if (gp_file_name_is_absolute(path, len)) {
+       /* Absolute path, we don't need anything extra */
+       prefix_len = cdirstrl = dirsepstrl = 0;
+    }
+    else if (len > prefix_len && !memcmp(path, cdirstr, cdirstrl)
+             && !memcmp(path + cdirstrl, dirsepstr, dirsepstrl)) {
+          prefix_len = 0;
+    }
     rlen = len+1;
-    buffer = (char *)gs_alloc_bytes(mem->non_gc_memory, rlen, "gp_validate_path");
-    if (buffer == NULL)
+    bufferfull = (char *)gs_alloc_bytes(mem->non_gc_memory, rlen + prefix_len, "gp_validate_path");
+    if (bufferfull == NULL)
         return gs_error_VMerror;
 
+    buffer = bufferfull + prefix_len;
     if (gp_file_name_reduce(path, (uint)len, buffer, &rlen) != gp_combine_success)
         return gs_error_invalidfileaccess;
     buffer[rlen] = 0;
 
-    switch (mode[0])
-    {
-    case 'r': /* Read */
-        code = validate(mem, buffer, gs_permit_file_reading);
+    while (1) {
+        switch (mode[0])
+        {
+        case 'r': /* Read */
+            code = validate(mem, buffer, gs_permit_file_reading);
+            break;
+        case 'w': /* Write */
+            code = validate(mem, buffer, gs_permit_file_writing);
+            break;
+        case 'a': /* Append needs reading and writing */
+            code = (validate(mem, buffer, gs_permit_file_reading) |
+                    validate(mem, buffer, gs_permit_file_writing));
+            break;
+        case 'c': /* "Control" */
+            code =  validate(mem, buffer, gs_permit_file_control);
+            break;
+        case 't': /* "Rename to" */
+            code = (validate(mem, buffer, gs_permit_file_writing) |
+                    validate(mem, buffer, gs_permit_file_control));
+            break;
+        default:
+            errprintf(mem, "gp_validate_path: Unknown mode='%s'\n", mode);
+            code = gs_note_error(gs_error_invalidfileaccess);
+        }
+        if (code < 0 && prefix_len > 0 && buffer > bufferfull) {
+            buffer = bufferfull;
+            memcpy(buffer, cdirstr, cdirstrl);
+            memcpy(buffer + cdirstrl, dirsepstr, dirsepstrl);
+            continue;
+        }
+        else if (code < 0 && cdirstrl > 0 && prefix_len == 0 && buffer == bufferfull) {
+            buffer = bufferfull + cdirstrl + dirsepstrl;
+            continue;
+        }
         break;
-    case 'w': /* Write */
-        code = validate(mem, buffer, gs_permit_file_writing);
-        break;
-    case 'a': /* Append needs reading and writing */
-        code = (validate(mem, buffer, gs_permit_file_reading) |
-                validate(mem, buffer, gs_permit_file_writing));
-        break;
-    case 'c': /* "Control" */
-        code =  validate(mem, buffer, gs_permit_file_control);
-        break;
-    case 't': /* "Rename to" */
-        code = (validate(mem, buffer, gs_permit_file_writing) |
-                validate(mem, buffer, gs_permit_file_control));
-        break;
-    default:
-        errprintf(mem, "gp_validate_path: Unknown mode='%s'\n", mode);
-        code = gs_note_error(gs_error_invalidfileaccess);
     }
-    gs_free_object(mem->non_gc_memory, buffer, "gp_validate_path");
+
+    gs_free_object(mem->non_gc_memory, bufferfull, "gp_validate_path");
 #ifdef EACCES
     if (code == gs_error_invalidfileaccess)
         errno = EACCES;

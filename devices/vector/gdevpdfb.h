@@ -98,7 +98,16 @@ const gx_device_pdf PDF_DEVICE_IDENT =
   NULL,				/* push_transparency_state */
   NULL,				/* pop_transparency_state */
   NULL,				/* put_image */
-  gdev_pdf_dev_spec_op		/* dev_spec_op */
+  gdev_pdf_dev_spec_op,		/* dev_spec_op */
+  NULL,             /* copy_planes */
+  NULL,             /* get_profile */
+  NULL,             /* set_graphics_type_tag */
+  NULL,             /* strip_copy_rop2 */
+  NULL,             /* strip_tile_rect_devn */
+  NULL,             /* copy_alpha_hl_color */
+  NULL,             /* process_page */
+  NULL,             /* transform_pixel_region */
+  gdev_pdf_fill_stroke_path /* fill_stroke_path */
  },
  psdf_initial_values(PSDF_VERSION_INITIAL, 0 /*false */ ),  /* (!ASCII85EncodePages) */
  0,                     /* pdf_font_dir */
@@ -162,9 +171,9 @@ const gx_device_pdf PDF_DEVICE_IDENT =
  {-1, -1},			/* page_dsc_info */
  0 /*false*/,			/* fill_overprint */
  0 /*false*/,			/* stroke_overprint */
+ 1 /* Absolute Colorimetric */, /* rendering intent */
  0 /*false*/,                   /* remap_fill_coilor */
  0 /*false*/,                   /* remap_stroke_coilor */
- 0,				/* overprint_mode */
  gs_no_id,			/* halftone_id */
  {gs_no_id, gs_no_id, gs_no_id, gs_no_id}, /* transfer_ids */
  0,				/* transfer_not_identity */
@@ -288,7 +297,8 @@ const gx_device_pdf PDF_DEVICE_IDENT =
  -1,                    /* Last Form ID, start with -1 which means 'none' */
  0,                     /* ExtensionMetadata */
  0,                     /* PDFFormName */
- 0                      /* PassThroughWriter */
+ 0,                     /* PassThroughWriter */
+ 1.0                    /* UserUnit */
 };
 
 #else

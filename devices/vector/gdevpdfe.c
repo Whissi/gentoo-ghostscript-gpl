@@ -202,8 +202,13 @@ pdf_xmp_time(char *buf, int buf_length)
     time_t t;
     char buf1[4+1+2+1+2+1]; /* yyyy-mm-dd\0 */
 
+#ifdef CLUSTER
+    memset(&t, 0, sizeof(t));
+    memset(&tms, 0, sizeof(tms));
+#else
     time(&t);
     tms = *localtime(&t);
+#endif
     gs_sprintf(buf1,
             "%04d-%02d-%02d",
             tms.tm_year + 1900, tms.tm_mon + 1, tms.tm_mday);
@@ -646,8 +651,7 @@ pdf_write_document_metadata(gx_device_pdf *pdev, const byte digest[6])
         {
 
             pdf_xml_tag_open_beg(s, "rdf:Description");
-            pdf_xml_attribute_name(s, "rdf:about");
-            pdf_xml_attribute_value(s, instance_uuid);
+            pdf_xml_copy(s, " rdf:about=\"\"");
             pdf_xml_attribute_name(s, "xmlns:pdf");
             pdf_xml_attribute_value(s, "http://ns.adobe.com/pdf/1.3/");
 
@@ -684,8 +688,7 @@ pdf_write_document_metadata(gx_device_pdf *pdev, const byte digest[6])
             }
 
             pdf_xml_tag_open_beg(s, "rdf:Description");
-            pdf_xml_attribute_name(s, "rdf:about");
-            pdf_xml_attribute_value(s, instance_uuid);
+            pdf_xml_copy(s, " rdf:about=\"\"");
             pdf_xml_attribute_name(s, "xmlns:xmp");
             pdf_xml_attribute_value(s, "http://ns.adobe.com/xap/1.0/");
             pdf_xml_tag_end(s);
@@ -718,8 +721,7 @@ pdf_write_document_metadata(gx_device_pdf *pdev, const byte digest[6])
             pdf_xml_newline(s);
 
             pdf_xml_tag_open_beg(s, "rdf:Description");
-            pdf_xml_attribute_name(s, "rdf:about");
-            pdf_xml_attribute_value(s, instance_uuid);
+            pdf_xml_copy(s, " rdf:about=\"\"");
             pdf_xml_attribute_name(s, "xmlns:xapMM");
             pdf_xml_attribute_value(s, "http://ns.adobe.com/xap/1.0/mm/");
             pdf_xml_attribute_name(s, "xapMM:DocumentID");
@@ -728,8 +730,7 @@ pdf_write_document_metadata(gx_device_pdf *pdev, const byte digest[6])
             pdf_xml_newline(s);
 
             pdf_xml_tag_open_beg(s, "rdf:Description");
-            pdf_xml_attribute_name(s, "rdf:about");
-            pdf_xml_attribute_value(s, instance_uuid);
+            pdf_xml_copy(s, " rdf:about=\"\"");
             pdf_xml_attribute_name(s, "xmlns:dc");
             pdf_xml_attribute_value(s, "http://purl.org/dc/elements/1.1/");
             pdf_xml_attribute_name(s, "dc:format");
@@ -803,8 +804,7 @@ pdf_write_document_metadata(gx_device_pdf *pdev, const byte digest[6])
             pdf_xml_newline(s);
             if (pdev->PDFA != 0) {
                 pdf_xml_tag_open_beg(s, "rdf:Description");
-                pdf_xml_attribute_name(s, "rdf:about");
-                pdf_xml_attribute_value(s, instance_uuid);
+                pdf_xml_copy(s, " rdf:about=\"\"");
                 pdf_xml_attribute_name(s, "xmlns:pdfaid");
                 pdf_xml_attribute_value(s, "http://www.aiim.org/pdfa/ns/id/");
                 pdf_xml_attribute_name(s, "pdfaid:part");

@@ -141,6 +141,30 @@ CONTRIBSRC=$(CONTRIBDIR)$(D)
 
 ###### ----------------------- End of catalog ----------------------- ######
 
+### --------------------- The Apple printer devices --------------------- ###
+### Note: these drivers were contributed by users.                        ###
+###                                                                       ###
+### Maintained by Mike Galatean contact via https://bugs.ghostscript.com  ###
+###                                                                       ###
+
+appledmp_=$(DEVOBJ)gdevadmp.$(OBJ)
+
+$(DEVOBJ)gdevadmp.$(OBJ) : $(CONTRIBSRC)gdevadmp.c $(PDEVH) $(CONTRIB_MAK) $(MAKEDIRS)
+	$(DEVCC) $(DEVO_)gdevadmp.$(OBJ) $(C_) $(CONTRIBSRC)gdevadmp.c
+
+$(DD)appledmp.dev : $(appledmp_) $(DD)page.dev $(CONTRIB_MAK) $(MAKEDIRS)
+	$(SETPDEV) $(DD)appledmp $(appledmp_)
+
+$(DD)iwhi.dev : $(appledmp_) $(DD)page.dev $(CONTRIB_MAK) $(MAKEDIRS)
+	$(SETPDEV) $(DD)iwhi $(appledmp_)
+
+$(DD)iwlo.dev : $(appledmp_) $(DD)page.dev $(CONTRIB_MAK) $(MAKEDIRS)
+	$(SETPDEV) $(DD)iwlo $(appledmp_)
+
+$(DD)iwlq.dev : $(appledmp_) $(DD)page.dev $(CONTRIB_MAK) $(MAKEDIRS)
+	$(SETPDEV) $(DD)iwlq $(appledmp_)
+
+
 ### ----------------- The BJC-210/240/250/250ex/265/1000 ---------------- ###
 
 ### 
@@ -1200,15 +1224,15 @@ $(DD)rpdl.dev : $(rpdl_) $(DD)page.dev \
 ### ---------- RICOH RPDL IV(600dpi) printer devices ---------- ###
 #rpdl_=$(DEVOBJ)gdevrpdl.$(OBJ)
 #$(DEVOBJ)gdevrpdl.$(OBJ) : $(JAPSRC)gdevrpdl.c \
-                           $(CONTRIB_MAK) $(MAKEDIRS)
+#                           $(CONTRIB_MAK) $(MAKEDIRS)
 #	$(DEVCC) $(DEVO_)gdevrpdl.$(OBJ) $(C_) $(JAPSRC)gdevrpdl.c
 #
 #$(DD)nx100f.dev : $(rpdl_) $(DD)page.dev \
-                           $(CONTRIB_MAK) $(MAKEDIRS)
+#                           $(CONTRIB_MAK) $(MAKEDIRS)
 #	$(SETPDEV2) $(DD)nx100f $(rpdl_)
 #
 #$(DD)nx100v.dev : $(rpdl_) $(DD)page.dev \
-                           $(CONTRIB_MAK) $(MAKEDIRS)
+#                           $(CONTRIB_MAK) $(MAKEDIRS)
 #	$(SETPDEV2) $(DD)nx100v $(rpdl_)
 
 ### ------------ The ALPS Micro Dry printer devices ------------ ###

@@ -188,6 +188,10 @@ gsicc_set_iccsmaskprofile(const char *pname,
             gsicc_get_profile_handle_buffer(icc_profile->buffer,
                                             icc_profile->buffer_size,
                                             mem);
+    if (!icc_profile->profile_handle) {
+        rc_free_icc_profile(mem, icc_profile, "gsicc_set_iccsmaskprofile");
+        return NULL;
+    }
     /* Compute the hash code of the profile. Everything in the
        ICC manager will have it's hash code precomputed */
     gsicc_get_icc_buff_hash(icc_profile->buffer, &(icc_profile->hashcode),
@@ -496,6 +500,23 @@ gsicc_get_default_type(cmm_profile_t *profile_data)
     }
 }
 
+int
+gsicc_use_fast_color(cmm_profile_t* profile_data)
+{
+    switch (profile_data->default_match) {
+    case CIE_A:
+    case CIE_ABC:
+    case CIE_DEF:
+    case CIE_DEFG:
+    case LAB_TYPE:
+    case NAMED_TYPE:
+    case DEVICEN_TYPE:
+        return 0;
+    default:
+        return profile_data->num_comps;
+    }
+}
+
 bool
 gsicc_is_default_profile(cmm_profile_t *profile_data)
 {
@@ -533,20 +554,14 @@ void
 gsicc_adjust_profile_rc(cmm_profile_t *profile_data, int delta, const char *name_str)
 {
     if (profile_data != NULL) {
-#ifndef MEMENTO_SQUEEZE_BUILD
         gx_monitor_enter(profile_data->lock);
-#endif
         if (profile_data->rc.ref_count == 1 && delta < 0) {
             profile_data->rc.ref_count = 0;		/* while locked */
-#ifndef MEMENTO_SQUEEZE_BUILD
             gx_monitor_leave(profile_data->lock);
-#endif
             rc_free_struct(profile_data, name_str);
         } else {
             rc_adjust(profile_data, delta, name_str);
-#ifndef MEMENTO_SQUEEZE_BUILD
             gx_monitor_leave(profile_data->lock);
-#endif
         }
     }
 }
@@ -1440,7 +1455,7 @@ gsicc_new_device_profile_array(gs_memory_t *memory)
     result->usefastcolor = false;  /* Default is to not use fast color */
     result->prebandthreshold = true;
     result->supports_devn = false;
-    result->sim_overprint = false;  /* Default is now not to simulate overprint */
+    result->sim_overprint = true;  /* Default is to simulate overprint */
     rc_init_free(result, memory->non_gc_memory, 1, rc_free_profile_array);
     return result;
 }
@@ -2141,17 +2156,14 @@ gsicc_profile_new(stream *s, gs_memory_t *memory, const char* pname,
     result->v2_size = 0;
     result->release = gscms_release_profile; /* Default case */
 
-#ifdef MEMENTO_SQUEEZE_BUILD
-    result->lock = NULL;
-#else
     result->lock = gx_monitor_label(gx_monitor_alloc(mem_nongc),
                                     "gsicc_manage");
     if (result->lock == NULL) {
+        gs_free_object(mem_nongc, result->buffer, "gsicc_load_profile");
         gs_free_object(mem_nongc, result, "gsicc_profile_new");
         gs_free_object(mem_nongc, nameptr, "gsicc_profile_new");
         return NULL;
     }
-#endif
     if_debug1m(gs_debug_flag_icc, mem_nongc,
                "[icc] allocating ICC profile = 0x%p\n", result);
     return result;
@@ -2185,12 +2197,10 @@ rc_free_icc_profile(gs_memory_t * mem, void *ptr_in, client_name_t cname)
             profile->name_length = 0;
         }
         profile->hash_is_valid = 0;
-#ifndef MEMENTO_SQUEEZE_BUILD
         if (profile->lock != NULL) {
             gx_monitor_free(profile->lock);
             profile->lock = NULL;
         }
-#endif
         /* If we had a DeviceN profile with names deallocate that now */
         if (profile->spotnames != NULL) {
             /* Free the linked list in this object */
@@ -2846,7 +2856,7 @@ dump_icc_buffer(const gs_memory_t *mem, int buffersize, char filename[],byte *Bu
 
     gs_sprintf(full_file_name,"%d)%s_debug.icc",global_icc_index,filename);
     fid = gp_fopen(mem, full_file_name,"wb");
-    fwrite(Buffer,sizeof(unsigned char),buffersize,fid);
+    gp_fwrite(Buffer,sizeof(unsigned char),buffersize,fid);
     fclose(fid);
 }
 #endif

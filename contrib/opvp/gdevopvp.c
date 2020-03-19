@@ -1796,6 +1796,7 @@ opvp_load_vector_driver(void)
                 }
                 OpenPrinter_0_2 = NULL;
                 ErrorNo = NULL;
+                dlclose(h);
             }
             i++;
         }
@@ -2505,15 +2506,12 @@ opvp_map_rgb_color(gx_device *dev,
     b = prgb[2];
 #endif
 
-#if !(ENABLE_SIMPLE_MODE)
-    pdev = (gx_device_opvp *)dev;
-    r = -1;
-#endif
-    cs = OPVP_CSPACE_STANDARDRGB;
-
 #if ENABLE_SIMPLE_MODE
     cs = colorSpace;
 #else
+    pdev = (gx_device_opvp *)dev;
+    r = -1;
+    cs = OPVP_CSPACE_STANDARDRGB;
     if (pdev->is_open) {
         /* call GetColorSpace */
         if (apiEntry->opvpGetColorSpace) {
@@ -2560,7 +2558,11 @@ opvp_map_rgb_color(gx_device *dev,
         } else {
             k = 0;
         }
-        return (k + (y << 8) + (m << 16) + (c << 24));
+        return (gx_color_index) k
+                + ((gx_color_index) y << 8)
+                + ((gx_color_index) m << 16)
+                + ((gx_color_index) c << 24)
+                ;
         break;
     case OPVP_CSPACE_DEVICEGRAY:
 #if GS_VERSION_MAJOR >= 8
@@ -3581,13 +3583,17 @@ opvp_fill_mask(
     const gx_clip_path *pcpath)
 {
     if (vector) {
+        int code;
 #if GS_VERSION_MAJOR >= 8       /* for gs 8.15 */
-        gdev_vector_update_fill_color((gx_device_vector *)dev, NULL, pdcolor);
+        code = gdev_vector_update_fill_color((gx_device_vector *)dev, NULL, pdcolor);
 #else
-        gdev_vector_update_fill_color((gx_device_vector *)dev, pdcolor);
+        code = gdev_vector_update_fill_color((gx_device_vector *)dev, pdcolor);
 #endif
-        gdev_vector_update_clip_path((gx_device_vector *)dev, pcpath);
-        gdev_vector_update_log_op((gx_device_vector *)dev, lop);
+        if (code < 0)   return code;
+        code = gdev_vector_update_clip_path((gx_device_vector *)dev, pcpath);
+        if (code < 0)   return code;
+        code = gdev_vector_update_log_op((gx_device_vector *)dev, lop);
+        if (code < 0)   return code;
     }
 
     return gx_default_fill_mask(dev, data, data_x, raster, id,
@@ -4023,6 +4029,10 @@ opvp_image_plane_data(
     if (buf) {
         /* Adjust image data gamma */
         pbe = (bbox_image_enum *)vinfo->bbox_info;
+        if (!pbe) {
+            ecode = gs_note_error(gs_error_invalidaccess);
+            goto end;
+        }
         tinfo = (gx_image_enum *)pbe->target_info;
         pgs = tinfo->pgs;
 
@@ -4339,20 +4349,16 @@ opvp_image_plane_data(
             for (i = 0; i < height; i++) {
                 ptr = buf + raster_length * i;
                 for (j = 0; j < vinfo->width; j++) {
-                    ptr[j*3] = min(255, frac2cv(gx_map_color_frac(pgs,
-                      cv2frac(ptr[j*3]), effective_transfer[0])));
-                    ptr[j*3+1] = min(255, frac2cv(gx_map_color_frac(pgs,
-                      cv2frac(ptr[j*3+1]), effective_transfer[1])));
-                    ptr[j*3+2] = min(255, frac2cv(gx_map_color_frac(pgs,
-                      cv2frac(ptr[j*3+2]), effective_transfer[2])));
+                    ptr[j*3+0] = frac2byte(gx_map_color_frac(pgs, byte2frac(ptr[j*3+0]), effective_transfer[0]));
+                    ptr[j*3+1] = frac2byte(gx_map_color_frac(pgs, byte2frac(ptr[j*3+1]), effective_transfer[1]));
+                    ptr[j*3+2] = frac2byte(gx_map_color_frac(pgs, byte2frac(ptr[j*3+2]), effective_transfer[2]));
                 }
             }
         } else if (vinfo->bits_per_pixel == 8) { /* 8bit Gray image */
             for (i = 0; i < height; i++) {
                 ptr = buf + raster_length * i;
                 for (j=0; j < vinfo->width; j++) {
-                    ptr[j] = min(255, frac2cv(gx_map_color_frac(pgs,
-                      cv2frac(ptr[j]), effective_transfer[3])));
+                    ptr[j] = frac2byte(gx_map_color_frac(pgs, byte2frac(ptr[j]), effective_transfer[3]));
                 }
             }
         }
@@ -4361,20 +4367,16 @@ opvp_image_plane_data(
             for (i = 0; i < height; i++) {
                 ptr = buf + raster_length * i;
                 for (j = 0; j < vinfo->width; j++) {
-                    ptr[j*3] = min(255, frac2cv(gx_map_color_frac(pgs,
-                      cv2frac(ptr[j*3]), effective_transfer.colored.red)));
-                    ptr[j*3+1] = min(255, frac2cv(gx_map_color_frac(pgs,
-                      cv2frac(ptr[j*3+1]), effective_transfer.colored.green)));
-                    ptr[j*3+2] = min(255, frac2cv(gx_map_color_frac(pgs,
-                      cv2frac(ptr[j*3+2]), effective_transfer.colored.blue)));
+                    ptr[j*3+0] = frac2byte(gx_map_color_frac(pgs, byte2frac(ptr[j*3+0]), effective_transfer.colored.red));
+                    ptr[j*3+1] = frac2byte(gx_map_color_frac(pgs, byte2frac(ptr[j*3+1]), effective_transfer.colored.green));
+                    ptr[j*3+2] = frac2byte(gx_map_color_frac(pgs, byte2frac(ptr[j*3+2]), effective_transfer.colored.blue));
                 }
             }
         } else if (vinfo->bits_per_pixel == 8) { /* 8bit Gray image */
             for (i = 0; i < height; i++) {
                 ptr = buf + raster_length * i;
                 for (j = 0; j < vinfo->width; j++) {
-                    ptr[j] = min(255, frac2cv(gx_map_color_frac(pgs,
-                      cv2frac(ptr[j]), effective_transfer.colored.gray)));
+                    ptr[j] = frac2byte(gx_map_color_frac(pgs, byte2frac(ptr[j]), effective_transfer.colored.gray));
                 }
             }
         }
@@ -4385,14 +4387,15 @@ opvp_image_plane_data(
             apiEntry->opvpTransferDrawImage(printerContext,
                         raster_length * height, (void *)buf);
         }
-        if (buf) {
-            free(buf); /* free buffer */
-        }
     }
 
     vinfo->y += height;
     ecode = (vinfo->y >= vinfo->height);
 
+end:
+    if (buf) {
+        free(buf); /* free buffer */
+    }
     return ecode;
 }
 
@@ -4833,7 +4836,6 @@ opvp_vector_dopath(
     int i;
     int pop = 0;
     int npoints = 0;
-    int *cp_num = NULL;
     _fPoint *points = NULL;
     opvp_point_t *opvp_p = NULL;
     _fPoint current;
@@ -4912,11 +4914,6 @@ opvp_vector_dopath(
                 break;
             case gs_pe_curveto:
                 /* npoints */
-                if (!cp_num)
-                cp_num = calloc(sizeof(int), 2);
-                cp_num[0] = npoints;
-                cp_num[1] = 0;
-
                 /* call BezierPath */
                 if (apiEntry->opvpBezierPath) {
                     r = apiEntry->opvpBezierPath(
@@ -4938,7 +4935,6 @@ opvp_vector_dopath(
 
             /* reset */
             npoints = 1;
-            if (cp_num) free(cp_num), cp_num = NULL;
             points = realloc(points, sizeof(_fPoint));
             points[0] = current;
 #endif
@@ -5066,7 +5062,6 @@ opvp_vector_dopath(
 #ifdef  OPVP_OPT_MULTI_PATH
     if (points) free(points);
     if (opvp_p) free(opvp_p);
-    if (cp_num) free(cp_num);
 #endif
     return ecode;
 }

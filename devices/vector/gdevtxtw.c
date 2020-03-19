@@ -37,10 +37,10 @@
 
 /* #define TRACE_TXTWRITE 1 */
 
-extern single_glyph_list_t *SingleGlyphList;
-extern double_glyph_list_t *DoubleGlyphList;
-extern treble_glyph_list_t *TrebleGlyphList;
-extern quad_glyph_list_t *QuadGlyphList;
+extern single_glyph_list_t SingleGlyphList[];
+extern double_glyph_list_t DoubleGlyphList[];
+extern treble_glyph_list_t TrebleGlyphList[];
+extern quad_glyph_list_t QuadGlyphList[];
 /*
  * Define the structure used to return glyph width information.  Note that
  * there are two different sets of width information: real-number (x,y)
@@ -1046,10 +1046,10 @@ txtwrite_put_params(gx_device * dev, gs_param_list * plist)
 {
     gx_device_txtwrite_t *tdev = (gx_device_txtwrite_t *) dev;
     int ecode = 0;
-    int code;
+    int code, old_TextFormat = tdev->TextFormat;
     const char *param_name;
     gs_param_string ofs;
-    bool dummy;
+    bool dummy, open = dev->is_open;
 
     switch (code = param_read_string(plist, (param_name = "OutputFile"), &ofs)) {
         case 0:
@@ -1092,12 +1092,6 @@ txtwrite_put_params(gx_device * dev, gs_param_list * plist)
     if (code < 0)
         return code;
 
-    code = gx_default_put_params(dev, plist);
-    if (code < 0)
-        return code;
-
-    dev->interpolate_control = 0;
-
     if (ofs.data != 0) {	/* Close the file if it's open. */
         if (tdev->file != 0) {
             gp_fclose(tdev->file);
@@ -1106,6 +1100,23 @@ txtwrite_put_params(gx_device * dev, gs_param_list * plist)
         memcpy(tdev->fname, ofs.data, ofs.size);
         tdev->fname[ofs.size] = 0;
     }
+
+    /* If we change media size then gs_default_put_params will close
+     * the device if it is open. We don't want it to do that, so set
+     * the device's 'is_open' flag to false, and reset it after we've
+     * processed the params.
+     */
+    if (old_TextFormat == tdev->TextFormat && open)
+        dev->is_open = false;
+
+    code = gx_default_put_params(dev, plist);
+    if (code < 0)
+        return code;
+
+    dev->is_open = open;
+
+    dev->interpolate_control = 0;
+
     return 0;
 }
 
@@ -1693,97 +1704,99 @@ static int get_unicode(textw_text_enum_t *penum, gs_font *font, gs_glyph glyph, 
 
     length = font->procs.decode_glyph((gs_font *)font, glyph, ch, NULL, 0);
     if (length == 0) {
-        code = font->procs.glyph_name(font, glyph, &gnstr);
-        if (code >= 0 && gnstr.size == 7) {
-            if (!memcmp(gnstr.data, "uni", 3)) {
-                static const char *hexdigits = "0123456789ABCDEF";
-                char *d0 = strchr(hexdigits, gnstr.data[3]);
-                char *d1 = strchr(hexdigits, gnstr.data[4]);
-                char *d2 = strchr(hexdigits, gnstr.data[5]);
-                char *d3 = strchr(hexdigits, gnstr.data[6]);
+        if (glyph != GS_NO_GLYPH) {
+            code = font->procs.glyph_name(font, glyph, &gnstr);
+            if (code >= 0 && gnstr.size == 7) {
+                if (!memcmp(gnstr.data, "uni", 3)) {
+                    static const char *hexdigits = "0123456789ABCDEF";
+                    char *d0 = strchr(hexdigits, gnstr.data[3]);
+                    char *d1 = strchr(hexdigits, gnstr.data[4]);
+                    char *d2 = strchr(hexdigits, gnstr.data[5]);
+                    char *d3 = strchr(hexdigits, gnstr.data[6]);
 
-                if (d0 != NULL && d1 != NULL && d2 != NULL && d3 != NULL) {
-                    *Buffer++ = ((d0 - hexdigits) << 12) + ((d1 - hexdigits) << 8) + ((d2 - hexdigits) << 4) + (d3 - hexdigits);
-                    return 1;
-                }
-            }
-        }
-        if (length == 0) {
-            single_glyph_list_t *sentry = (single_glyph_list_t *)&SingleGlyphList;
-            double_glyph_list_t *dentry = (double_glyph_list_t *)&DoubleGlyphList;
-            treble_glyph_list_t *tentry = (treble_glyph_list_t *)&TrebleGlyphList;
-            quad_glyph_list_t *qentry = (quad_glyph_list_t *)&QuadGlyphList;
-
-            /* Search glyph to single Unicode value table */
-            while (sentry->Glyph != 0) {
-                if (sentry->Glyph[0] < gnstr.data[0]) {
-                    sentry++;
-                    continue;
-                }
-                if (sentry->Glyph[0] > gnstr.data[0]){
-                    break;
-                }
-                if (strlen(sentry->Glyph) == gnstr.size) {
-                    if(memcmp(gnstr.data, sentry->Glyph, gnstr.size) == 0) {
-                        *Buffer = sentry->Unicode;
+                    if (d0 != NULL && d1 != NULL && d2 != NULL && d3 != NULL) {
+                        *Buffer++ = ((d0 - hexdigits) << 12) + ((d1 - hexdigits) << 8) + ((d2 - hexdigits) << 4) + (d3 - hexdigits);
                         return 1;
                     }
                 }
-                sentry++;
             }
+            if (length == 0) {
+                single_glyph_list_t *sentry = SingleGlyphList;
+                double_glyph_list_t *dentry = DoubleGlyphList;
+                treble_glyph_list_t *tentry = TrebleGlyphList;
+                quad_glyph_list_t *qentry = QuadGlyphList;
 
-            /* Search glyph to double Unicode value table */
-            while (dentry->Glyph != 0) {
-                if (dentry->Glyph[0] < gnstr.data[0]) {
+                /* Search glyph to single Unicode value table */
+                while (sentry->Glyph != 0) {
+                    if (sentry->Glyph[0] < gnstr.data[0]) {
+                        sentry++;
+                        continue;
+                    }
+                    if (sentry->Glyph[0] > gnstr.data[0]){
+                        break;
+                    }
+                    if (strlen(sentry->Glyph) == gnstr.size) {
+                        if(memcmp(gnstr.data, sentry->Glyph, gnstr.size) == 0) {
+                            *Buffer = sentry->Unicode;
+                            return 1;
+                        }
+                    }
+                    sentry++;
+                }
+
+                /* Search glyph to double Unicode value table */
+                while (dentry->Glyph != 0) {
+                    if (dentry->Glyph[0] < gnstr.data[0]) {
+                        dentry++;
+                        continue;
+                    }
+                    if (dentry->Glyph[0] > gnstr.data[0]){
+                        break;
+                    }
+                    if (strlen(dentry->Glyph) == gnstr.size) {
+                        if(memcmp(gnstr.data, dentry->Glyph, gnstr.size) == 0) {
+                            memcpy(Buffer, dentry->Unicode, 2);
+                            return 2;
+                        }
+                    }
                     dentry++;
-                    continue;
                 }
-                if (dentry->Glyph[0] > gnstr.data[0]){
-                    break;
-                }
-                if (strlen(dentry->Glyph) == gnstr.size) {
-                    if(memcmp(gnstr.data, dentry->Glyph, gnstr.size) == 0) {
-                        memcpy(Buffer, dentry->Unicode, 2);
-                        return 2;
-                    }
-                }
-                dentry++;
-            }
 
-            /* Search glyph to triple Unicode value table */
-            while (tentry->Glyph != 0) {
-                if (tentry->Glyph[0] < gnstr.data[0]) {
+                /* Search glyph to triple Unicode value table */
+                while (tentry->Glyph != 0) {
+                    if (tentry->Glyph[0] < gnstr.data[0]) {
+                        tentry++;
+                        continue;
+                    }
+                    if (tentry->Glyph[0] > gnstr.data[0]){
+                        break;
+                    }
+                    if (strlen(tentry->Glyph) == gnstr.size) {
+                        if(memcmp(gnstr.data, tentry->Glyph, gnstr.size) == 0) {
+                            memcpy(Buffer, tentry->Unicode, 3);
+                            return 3;
+                        }
+                    }
                     tentry++;
-                    continue;
                 }
-                if (tentry->Glyph[0] > gnstr.data[0]){
-                    break;
-                }
-                if (strlen(tentry->Glyph) == gnstr.size) {
-                    if(memcmp(gnstr.data, tentry->Glyph, gnstr.size) == 0) {
-                        memcpy(Buffer, tentry->Unicode, 3);
-                        return 3;
-                    }
-                }
-                tentry++;
-            }
 
-            /* Search glyph to quadruple Unicode value table */
-            while (qentry->Glyph != 0) {
-                if (qentry->Glyph[0] < gnstr.data[0]) {
-                    qentry++;
-                    continue;
-                }
-                if (qentry->Glyph[0] > gnstr.data[0]){
-                    break;
-                }
-                if (strlen(qentry->Glyph) == gnstr.size) {
-                    if(memcmp(gnstr.data, qentry->Glyph, gnstr.size) == 0) {
-                        memcpy(Buffer, qentry->Unicode, 4);
-                        return 4;
+                /* Search glyph to quadruple Unicode value table */
+                while (qentry->Glyph != 0) {
+                    if (qentry->Glyph[0] < gnstr.data[0]) {
+                        qentry++;
+                        continue;
                     }
+                    if (qentry->Glyph[0] > gnstr.data[0]){
+                        break;
+                    }
+                    if (strlen(qentry->Glyph) == gnstr.size) {
+                        if(memcmp(gnstr.data, qentry->Glyph, gnstr.size) == 0) {
+                            memcpy(Buffer, qentry->Unicode, 4);
+                            return 4;
+                        }
+                    }
+                    qentry++;
                 }
-                qentry++;
             }
         }
         *Buffer = fallback;
@@ -1890,8 +1903,8 @@ txtwrite_process_cmap_text(gs_text_enum_t *pte)
                 pte->returned.total_width.x += dpt.x;
                 pte->returned.total_width.y += dpt.y;
 
-                penum->TextBufferIndex += get_unicode(penum, (gs_font *)pte->orig_font, glyph, chr, &penum->TextBuffer[penum->TextBufferIndex]);
                 penum->Widths[penum->TextBufferIndex] += dpt.x;
+                penum->TextBufferIndex += get_unicode(penum, (gs_font *)pte->orig_font, glyph, chr, &penum->TextBuffer[penum->TextBufferIndex]);
                 break;
             case 2:		/* end of string */
                 return 0;
@@ -2109,7 +2122,8 @@ txt_add_fragment(gx_device_txtwrite_t *tdev, textw_text_enum_t *penum)
         penum->TextBufferIndex, sizeof(float), "txtwrite alloc widths array");
     if (!penum->text_state->Widths)
         return gs_note_error(gs_error_VMerror);
-    memcpy(penum->text_state->Widths, penum->Widths, penum->TextBufferIndex * sizeof(float));
+    memset(penum->text_state->Widths, 0x00, penum->TextBufferIndex * sizeof(float));
+    memcpy(penum->text_state->Widths, penum->Widths, penum->text.size * sizeof(float));
 
     unsorted_entry->Unicode_Text = (unsigned short *)gs_malloc(tdev->memory->stable_memory,
         penum->TextBufferIndex, sizeof(unsigned short), "txtwrite alloc sorted text buffer");
@@ -2121,7 +2135,8 @@ txt_add_fragment(gx_device_txtwrite_t *tdev, textw_text_enum_t *penum)
         penum->TextBufferIndex, sizeof(float), "txtwrite alloc widths array");
     if (!unsorted_entry->Widths)
         return gs_note_error(gs_error_VMerror);
-    memcpy(unsorted_entry->Widths, penum->Widths, penum->TextBufferIndex * sizeof(float));
+    memset(unsorted_entry->Widths, 0x00, penum->TextBufferIndex * sizeof(float));
+    memcpy(unsorted_entry->Widths, penum->Widths, penum->text.size * sizeof(float));
 
     unsorted_entry->FontName = (char *)gs_malloc(tdev->memory->stable_memory,
         (strlen(penum->text_state->FontName) + 1), sizeof(unsigned char), "txtwrite alloc sorted text buffer");

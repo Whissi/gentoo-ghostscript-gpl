@@ -28,11 +28,11 @@
 #include <stdlib.h>
 #include <limits.h>
 
-#define MM_PER_INCH 25.4
-#define TOP_MARGIN    12. / MM_PER_INCH
-#define BOTTOM_MARGIN 15. / MM_PER_INCH
-#define LEFT_MARGIN   3.4 / MM_PER_INCH
-#define RIGHT_MARGIN  3.4 / MM_PER_INCH
+#define MM_PER_INCH 25.4f
+#define TOP_MARGIN    12.f / MM_PER_INCH
+#define BOTTOM_MARGIN 15.f / MM_PER_INCH
+#define LEFT_MARGIN   3.4f / MM_PER_INCH
+#define RIGHT_MARGIN  3.4f / MM_PER_INCH
 
 /* The device descriptor */
 static dev_proc_open_device(alps_open);
@@ -110,8 +110,8 @@ typedef enum {
 static int
 alps_open(gx_device *pdev)
 {
-    int xdpi = pdev->x_pixels_per_inch;
-    int ydpi = pdev->y_pixels_per_inch;
+    int xdpi = (int)pdev->x_pixels_per_inch;
+    int ydpi = (int)pdev->y_pixels_per_inch;
     const float margins[4] = {
         LEFT_MARGIN,
         BOTTOM_MARGIN,
@@ -129,10 +129,10 @@ alps_open(gx_device *pdev)
         return_error(gs_error_rangecheck);
 
     density = (xdpi == 300 ? 0.75 : xdpi == 600 ? 0.44 : 0.4);
-    dev_alps->cyan    *= density;
-    dev_alps->magenta *= density;
-    dev_alps->yellow  *= density;
-    dev_alps->black   *= density;
+    dev_alps->cyan    = (int)(dev_alps->cyan    * density);
+    dev_alps->magenta = (int)(dev_alps->magenta * density);
+    dev_alps->yellow  = (int)(dev_alps->yellow  * density);
+    dev_alps->black   = (int)(dev_alps->black   * density);
 
     return gdev_prn_open(pdev);
 }
@@ -402,15 +402,17 @@ runlength(byte *out, byte *in, int length)
     return p_out - out;
 }
 
-#define write_short(data, stream) { \
-    gp_fputc((unsigned char) (data), stream); \
-    gp_fputc((unsigned short) (data) >> 8, stream); \
+static void write_short(unsigned data, gp_file* stream)
+{
+    gp_fputc((unsigned char) (data), stream);
+    gp_fputc((unsigned short) (data) >> 8, stream);
 }
 
-#define alps_cmd(cmd1, data, cmd2, stream) { \
-    gp_fwrite(cmd1, 1, 3, stream); \
-    write_short(data, stream); \
-    gp_fputc(cmd2, stream); \
+static void alps_cmd(const char* cmd1, unsigned data, int cmd2, gp_file* stream)
+{
+    gp_fwrite(cmd1, 1, 3, stream);
+    write_short(data, stream);
+    gp_fputc(cmd2, stream);
 }
 
 static void
@@ -449,8 +451,8 @@ alps_init(gx_device_printer *pdev, gp_file *prn_stream, alps_printer_type ptype)
             : pdev->x_pixels_per_inch == 600 ? 3 : 4), prn_stream);
     gp_fputc(0122, prn_stream);
 
-    height = (pdev->MediaSize[1] - pdev->HWMargins[1] - pdev->HWMargins[3])
-            * pdev->y_pixels_per_inch / 72.;
+    height = (short)((pdev->MediaSize[1] - pdev->HWMargins[1] - pdev->HWMargins[3])
+            * pdev->y_pixels_per_inch / 72.);
     alps_cmd("\033\046\154", height, 0120, prn_stream);
 
     /* if -dReverseSide ... */
@@ -486,7 +488,7 @@ alps_print_page(gx_device_printer *pdev, gp_file *prn_stream,
     int c_comp, num_comp = pdev->color_info.num_components;
     int n_comp = (dev_alps->mediaType == 1 ? 3 : num_comp);
     int *error, *ep;
-    int i, j;
+    int i, j, code = 0;
 
     /* allocate memory */
     work = (byte *)gs_malloc(pdev->memory->non_gc_memory, 3+sizeof(int), line_size,
@@ -528,19 +530,23 @@ alps_print_page(gx_device_printer *pdev, gp_file *prn_stream,
         for(y = 0; y < y_height; y ++) {
             uint len = line_size;
 
-            gdev_prn_get_bits(pdev, y, in, &dp);
+            code = gdev_prn_get_bits(pdev, y, in, &dp);
+            if (code < 0)
+                return code;
 
             switch (pdev->color_info.depth) {
             case 4:
                 /* get a component of CMYK from raster data */
                 len = cmyk_to_bit(work, dp, len, c_comp);
                 dp = work;
+                /* Fall through. */
             case 1:
                 /* remove trailing 0s */
                 for( ; len > 0 && dp[len-1] == 0; len --);
                 break;
             case 32:
                 dp += c_comp;
+                /* Fall through. */
             case 8:
                 outP = work;
                 ep = error;

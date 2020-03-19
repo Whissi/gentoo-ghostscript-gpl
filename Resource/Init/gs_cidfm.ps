@@ -120,7 +120,12 @@ currentdict end def
       (DroidSansFallback.ttf)
     } if
   } if
-  concatstrings
+  % If CIDFSubstFont looks like a path/file (rather than just file)
+  % use it without the CIDFSubstPath string
+  dup .file_name_directory_separator rsearch
+  {pop pop pop exch pop}
+  {pop concatstrings}
+  ifelse
   % The CSI data just has to be valid, the substition machinery will
   % generally overwrite it with appropriate values for the missing font.
   /CSI  [(Identity) 0]
@@ -136,7 +141,7 @@ currentdict end def
 % <dir.../base.extn> .basename <dir>
 /.splitdirname {
   (/) rsearch { //true } { (\\) rsearch } ifelse
-  {3 -2 roll pop pop //true}{//false} ifelse
+  {exch concatstrings exch pop //true}{//false} ifelse
 } bind def
 
 % <file> .addcidfmappath -
@@ -209,7 +214,7 @@ currentdict end def
     } loop
   } forall
   currentdict end
-  {exch pop (/) concatstrings /PermitFileReading exch .addcontrolpath} forall
+  {exch pop /PermitFileReading exch .addcontrolpath} forall
 
   % Checks for vicious substitution cycles.
   dup length dict copy                  % <<map>>

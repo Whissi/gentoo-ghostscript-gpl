@@ -110,7 +110,7 @@ gs_cspace_new_DeviceN(
     gs_color_space *pcs;
     gs_device_n_params *pcsdevn;
     char **pnames;
-    int code;
+    int i, code;
 
     if (palt_cspace == 0 || !palt_cspace->type->can_be_alt_space)
         return_error(gs_error_rangecheck);
@@ -134,12 +134,13 @@ gs_cspace_new_DeviceN(
         return code;
     }
     pnames = (char **)gs_alloc_bytes(pcsdevn->mem, num_components * sizeof(char *), "gs_cspace_new_DeviceN");
-    memset(pnames, 0x00, num_components * sizeof(char *));
     if (pnames == 0) {
         gs_free_object(pmem, pcsdevn->map, ".gs_cspace_build_DeviceN(map)");
         gs_free_object(pmem, pcs, "gs_cspace_new_DeviceN");
         return_error(gs_error_VMerror);
     }
+    for (i=0; i<num_components; i++)
+        pnames[i] = NULL;		/* empty string for check_DeviceN_component_names */
     pcs->base_space = palt_cspace;
     rc_increment_cs(palt_cspace);
     pcsdevn->names = pnames;
@@ -545,7 +546,7 @@ check_DeviceN_component_names(const gs_color_space * pcs, gs_gstate * pgs)
     int num_comp = pcs->params.device_n.num_components;
     int i;
     int colorant_number;
-    byte * pname;
+    const char *pname;
     uint name_size;
     gs_devicen_color_map * pcolor_component_map
         = &pgs->color_component_map;
@@ -581,8 +582,10 @@ check_DeviceN_component_names(const gs_color_space * pcs, gs_gstate * pgs)
         /*
          * Get the character string and length for the component name.
          */
-        pname = (byte *)names[i];
-        name_size = strlen(names[i]);
+        pname = names[i];
+        if (pname == NULL)
+            pname = "";
+        name_size = strlen(pname);
         /*
          * Compare the colorant name to the device's.  If the device's
          * compare routine returns GX_DEVICE_COLOR_MAX_COMPONENTS then the
@@ -590,13 +593,13 @@ check_DeviceN_component_names(const gs_color_space * pcs, gs_gstate * pgs)
          * SeparationOrder list.
          */
         colorant_number = (*dev_proc(dev, get_color_comp_index))
-                    (dev, (const char *)pname, name_size, SEPARATION_NAME);
+                                   (dev, pname, name_size, SEPARATION_NAME);
         if (colorant_number >= 0) {		/* If valid colorant name */
             pcolor_component_map->color_map[i] =
             (colorant_number == GX_DEVICE_COLOR_MAX_COMPONENTS) ? -1
                                                    : colorant_number;
         } else {
-            if (strncmp((char *) pname, "None", name_size) != 0) {
+            if (strncmp(pname, "None", name_size) != 0) {
                     non_match = true;
             } else {
                 /* Device N includes one or more None Entries. We can't reduce
@@ -621,7 +624,7 @@ gx_check_process_names_DeviceN(gs_color_space * pcs, gs_gstate * pgs)
     int i, num_comp, num_spots = 0, num_rgb_process = 0;
     int num_cmyk_process = 0, num_other = 0;
     char **names;
-    byte *pname;
+    const char *pname;
     uint name_size;
 
     names = pcs->params.device_n.names;
@@ -629,21 +632,23 @@ gx_check_process_names_DeviceN(gs_color_space * pcs, gs_gstate * pgs)
 
     /* Step through the color space colorants */
     for (i = 0; i < num_comp; i++) {
-        pname = (byte *)names[i];
-        name_size = strlen(names[i]);
+        pname = names[i];
+        if (pname == NULL)
+            pname = "";
+        name_size = strlen(pname);
 
         /* Classify */
-        if (strncmp((char *)pname, "None", name_size) == 0) {
+        if (strncmp(pname, "None", name_size) == 0) {
             num_other++;
         } else {
-            if (strncmp((char *)pname, "Cyan", name_size) == 0 ||
-                strncmp((char *)pname, "Magenta", name_size) == 0 ||
-                strncmp((char *)pname, "Yellow", name_size) == 0 ||
-                strncmp((char *)pname, "Black", name_size) == 0) {
+            if (strncmp(pname, "Cyan", name_size) == 0 ||
+                strncmp(pname, "Magenta", name_size) == 0 ||
+                strncmp(pname, "Yellow", name_size) == 0 ||
+                strncmp(pname, "Black", name_size) == 0) {
                 num_cmyk_process++;
-            } else if (strncmp((char *)pname, "Red", name_size) == 0 ||
-                strncmp((char *)pname, "Green", name_size) == 0 ||
-                strncmp((char *)pname, "Blue", name_size) == 0) {
+            } else if (strncmp(pname, "Red", name_size) == 0 ||
+                strncmp(pname, "Green", name_size) == 0 ||
+                strncmp(pname, "Blue", name_size) == 0) {
                 num_rgb_process++;
             } else {
                 num_spots++;
@@ -733,14 +738,18 @@ gx_set_overprint_DeviceN(const gs_color_space * pcs, gs_gstate * pgs)
         if ( base_type->index == gs_color_space_index_DeviceCMYK )
             return base_type->set_overprint( pcs->base_space, pgs );
         else
-            return gx_spot_colors_set_overprint( pcs->base_space, pgs);
+            return gx_set_no_overprint(pgs);
     } else {
         gs_overprint_params_t   params;
 
-        if ((params.retain_any_comps = pgs->overprint)) {
+
+        params.retain_any_comps = (pgs->overprint && pgs->is_fill_color) ||
+                                  (pgs->stroke_overprint && !pgs->is_fill_color);
+
+        if (params.retain_any_comps) {
             int     i, ncomps = pcs->params.device_n.num_components;
 
-            params.retain_spot_comps = false;
+            params.is_fill_color = pgs->is_fill_color;	/* for fill_stroke */
             params.drawn_comps = 0;
             for (i = 0; i < ncomps; i++) {
                 int mcomp = pcmap->color_map[i];
@@ -750,7 +759,9 @@ gx_set_overprint_DeviceN(const gs_color_space * pcs, gs_gstate * pgs)
         }
 
         /* Only DeviceCMYK can use overprint mode */
-        pgs->effective_overprint_mode = 0;
+        params.effective_opm = pgs->color[0].effective_opm = 0;
+        params.op_state = OP_STATE_NONE;
+        params.is_fill_color =pgs->is_fill_color;
         return gs_gstate_update_overprint(pgs, &params);
     }
 }
@@ -765,7 +776,7 @@ gx_final_DeviceN(const gs_color_space * pcs)
     char **proc_names = pcs->params.device_n.process_names;
     int k;
 
-    for (k = 0; k > pcs->params.device_n.num_components; k++)
+    for (k = 0; k < pcs->params.device_n.num_components; k++)
         gs_free_object(mem, pcs->params.device_n.names[k], "gx_final_DeviceN");
     gs_free_object(mem, pcs->params.device_n.names, "gx_final_DeviceN");
 
@@ -812,7 +823,10 @@ gx_serialize_DeviceN(const gs_color_space * pcs, stream * s)
     if (code < 0)
         return code;
     for (n=0;n < p->num_components;n++) {
-        code = sputs(s, (const byte *)p->names[n], strlen(p->names[n]) + 1, &m);
+        const char *name = p->names[n];
+        if (name == NULL)
+            name = "";
+        code = sputs(s, (const byte *)name, strlen(name) + 1, &m);
         if (code < 0)
             return code;
     }

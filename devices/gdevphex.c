@@ -947,8 +947,8 @@ static	void	ScheduleMiddle( SCHEDUL *p );
 static	void	ScheduleTrailing( SCHEDUL *p );
 static	void	ScheduleBand( SCHEDUL *p, int mask );
 
-static	void	RenderPage( RENDER *p );
-static	void	RenderLine( RENDER *p, int line );
+static	int	RenderPage( RENDER *p );
+static	int	RenderLine( RENDER *p, int line );
 static	int		IsScanlineEmpty( RENDER *p, byte *line );
 
 static	int		RleCompress( RAWLINE *raw, int min, int max, byte *rle_data );
@@ -1347,10 +1347,10 @@ float	margins[ 4 ];						/* L, B, R, T					*/
 
         width  = pdev->width  / pdev->x_pixels_per_inch;
 
-        margins[ 0 ] = 0.12;
-        margins[ 1 ] = 0.5;
-        margins[ 2 ] = 0.12;
-        margins[ 3 ] = ( width > 11.46+0.12 ) ? width - (11.46+0.12) : 0.12;
+        margins[ 0 ] = 0.12f;
+        margins[ 1 ] = 0.5f;
+        margins[ 2 ] = 0.12f;
+        margins[ 3 ] = ( width > 11.46f+0.12f ) ? width - (11.46f+0.12f) : 0.12f;
 
         gx_device_set_margins( pdev, margins, true );
         return( gdev_prn_open( pdev ) );
@@ -1399,7 +1399,7 @@ int		i;
         m = 255 - ( g >> ( gx_color_value_bits - 8 ) );
         y = 255 - ( b >> ( gx_color_value_bits - 8 ) );
 
-        k = xtrans[ min( c, min( m, y ) ) ] * 0.8; /* FIXME:empirical constant */
+        k = (int)(xtrans[ min( c, min( m, y ) ) ] * 0.8); /* FIXME:empirical constant */
         c -= k;
         m -= k;
         y -= k;
@@ -1454,15 +1454,15 @@ CVAL	r, g, b;
 
         if ( MAP_RGB_ADOBE ) {
 
-                r = gx_max_color_value * ( 1.0 - min( 1.0, (c / 255.0 + k / 255.0) ) );
-                g = gx_max_color_value * ( 1.0 - min( 1.0, (m / 255.0 + k / 255.0) ) );
-                b = gx_max_color_value * ( 1.0 - min( 1.0, (y / 255.0 + k / 255.0) ) );
+                r = (CVAL)(gx_max_color_value * ( 1.0 - min( 1.0, (c / 255.0 + k / 255.0) ) ));
+                g = (CVAL)(gx_max_color_value * ( 1.0 - min( 1.0, (m / 255.0 + k / 255.0) ) ));
+                b = (CVAL)(gx_max_color_value * ( 1.0 - min( 1.0, (y / 255.0 + k / 255.0) ) ));
         }
         else {
 
-                r = gx_max_color_value * ( 1.0 - c / 255.0 ) * ( 1.0 - k / 255.0);
-                g = gx_max_color_value * ( 1.0 - m / 255.0 ) * ( 1.0 - k / 255.0);
-                b = gx_max_color_value * ( 1.0 - y / 255.0 ) * ( 1.0 - k / 255.0);
+                r = (CVAL)(gx_max_color_value * ( 1.0 - c / 255.0 ) * ( 1.0 - k / 255.0));
+                g = (CVAL)(gx_max_color_value * ( 1.0 - m / 255.0 ) * ( 1.0 - k / 255.0));
+                b = (CVAL)(gx_max_color_value * ( 1.0 - y / 255.0 ) * ( 1.0 - k / 255.0));
         }
 
         prgb[ 0 ] = r;
@@ -1682,6 +1682,7 @@ static	int		photoex_print_page( PDEV *device, gp_file *stream )
 {
 int			pixels;						/* Length of the line 				*/
 int			x;							/* Work vars						*/
+int			code = 0;
 EDEV		*dev;						/* Our device						*/
 RENDER		*render;					/* Rendering info					*/
 
@@ -1709,7 +1710,7 @@ double		psize;
         /* Check if the requested width is within device limits.
            The calculations are in 1440 dpi units. */
 
-        start = 1440.0 * dev_l_margin( device );
+        start = (int)(1440.0 * dev_l_margin( device ));
 
         x = xres == 360 ? 4 : xres == 720 ? 2 : 1;
 
@@ -1772,9 +1773,9 @@ double		psize;
 
         /* Set up papersize and margins */
 
-        SendPaper( stream, device->height / device->y_pixels_per_inch * unit );
-        SendMargin( stream, ( psize - dev_b_margin( device ) ) * unit,
-                                            dev_t_margin( device ) * unit );
+        SendPaper( stream, (int)(device->height / device->y_pixels_per_inch * unit) );
+        SendMargin( stream, (int)(( psize - dev_b_margin( device ) ) * unit),
+                            (int)(          dev_t_margin( device )   * unit) );
 
         /* Dot size as per user setting */
 
@@ -1791,7 +1792,9 @@ double		psize;
 
         /* Render the page and send image data to printer */
 
-        RenderPage( render );
+        code = RenderPage( render );
+        if (code < 0)
+            goto xit;
 
         /* Eject the paper, reset printer */
 
@@ -1799,10 +1802,10 @@ double		psize;
         SendReset( stream );
 
         /* Release the memory and return */
-
+xit:
         gs_free( dev->memory, render->dbuff, pixels, sizeof( long ), "PhotoEX" );
         gs_free( dev->memory, render, 1, sizeof( RENDER ), "PhotoEX" );
-        return( 0 );
+        return( code );
 }
 
 /*
@@ -1810,7 +1813,7 @@ double		psize;
 *	~~~~~~~~~~~~~~
 */
 
-static	void	RenderPage( RENDER *p )
+static	int	RenderPage( RENDER *p )
 {
 int		last_done;					/* The last line rendered				*/
 int		last_need;					/* The largest line number we need		*/
@@ -1819,6 +1822,7 @@ int		last_band;					/* Indicates the last band				*/
 int		min, max;					/* Min/max active bytes in a raw line	*/
 int		phase;						/* 1440dpi X weave offset				*/
 int		i, j, l, col;
+int		code = 0;
 
         p->htone_thold = HalftoneThold( p );
         p->htone_last  = -1 - p->htone_thold;
@@ -1842,7 +1846,11 @@ int		i, j, l, col;
                 last_need = last_done;
                 for ( i = NOZZLES-1 ; i >= 0 && p->schedule.head[ i ] == -1 ; i-- );
                 if ( i >= 0 ) last_need = p->schedule.head[ i ];
-                while ( last_need > last_done ) RenderLine( p, ++last_done );
+                while ( last_need > last_done ) {
+                    code = RenderLine( p, ++last_done );
+                    if (code < 0)
+                       return code;	/* punt */
+                }
 
                 /* Now loop through the colours and build the data stream */
 
@@ -1932,6 +1940,8 @@ int		i, j, l, col;
                 move_down += p->schedule.down;
 
         } while	( ! last_band );
+
+        return code;
 }
 
 /*
@@ -1944,14 +1954,16 @@ int		i, j, l, col;
 *	When it sees a nonempty line again, it restarts the renderer.
 */
 
-static	void	RenderLine( RENDER *p, int line )
+static	int	RenderLine( RENDER *p, int line )
 {
 byte	*data;
-int		i;
+int		i, code = 0;
 
         /* Get the line from Ghostscript and see if its empty */
 
-        gdev_prn_get_bits( (PDEV *) p->dev, line, p->dbuff, &data );
+        code = gdev_prn_get_bits( (PDEV *) p->dev, line, p->dbuff, &data );
+        if (code < 0)
+            return code;
 
         if ( IsScanlineEmpty( p, data ) ) {
 
@@ -1994,6 +2006,7 @@ int		i;
                 HalftoneLine( p, line, data );
                 p->htone_last = line;
         }
+        return 0;
 }
 
 /*

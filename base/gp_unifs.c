@@ -128,6 +128,10 @@ gp_open_scratch_file_impl(const gs_memory_t *mem,
 	}
     }
 #else
+    /* Coverity thinks that any use of mktemp() is insecure. But if we
+    reach here then there is no mkstemp() alternative available, so there's
+    not much we can do. Haven't been able to disable this - e.g. '//
+    coverity[SECURE_TEMP]' doesn't have any affect. */
     mktemp(fname);
     fp = gp_fopentemp(fname, mode);
 #endif
@@ -191,16 +195,16 @@ int gp_pread_impl(char *buf, size_t count, gs_offset_t offset, FILE *f)
     int c;
     int64_t os, curroff = gp_ftell_impl(f);
     if (curroff < 0) return curroff;
-    
+
     os = gp_fseek_impl(f, offset, 0);
     if (os < 0) return os;
-    
+
     c = fread(buf, 1, count, f);
     if (c < 0) return c;
-    
+
     os = gp_fseek_impl(f, curroff, 0);
     if (os < 0) return os;
-    
+
     return c;
 #endif
 }
@@ -215,16 +219,16 @@ int gp_pwrite_impl(const char *buf, size_t count, gs_offset_t offset, FILE *f)
     int c;
     int64_t os, curroff = gp_ftell_impl(f);
     if (curroff < 0) return curroff;
-    
+
     os = gp_fseek_impl(f, offset, 0);
     if (os < 0) return os;
-    
+
     c = fwrite(buf, 1, count, f);
     if (c < 0) return c;
-    
+
     os = gp_fseek_impl(f, curroff, 0);
     if (os < 0) return os;
-    
+
     return c;
 #endif
 }
@@ -434,7 +438,6 @@ gp_enumerate_files_next_impl(gs_memory_t * mem, file_enum * pfen, char *ptr, uin
     char *pattern = pfen->pattern;
     int pathead = pfen->pathead;
     int len;
-    struct stat stbuf;
 
     if (pfen->first_time) {
         pfen->dirp = ((worklen == 0) ? opendir(".") : opendir(work));
@@ -501,31 +504,24 @@ gp_enumerate_files_next_impl(gs_memory_t * mem, file_enum * pfen, char *ptr, uin
 
     /* Perhaps descend into subdirectories */
     if (pathead < maxlen) {
-        DIR *dp;
-
-        if (((stat(work, &stbuf) >= 0)
-             ? !stat_is_dir(stbuf)
-        /* Couldn't stat it.
-         * Well, perhaps it's a directory and
-         * we'll be able to list it anyway.
-         * If it isn't or we can't, no harm done. */
-             : 0))
+        /* Using stat() to decide whether this item is a directory then opening
+        using opendir(), results in Coverity complaining about races. Se
+        instead we simple call opendir() immediately and look at whether it
+        succeeded. */
+        DIR *dp = opendir(work);
+        if (!dp) {
+            /* Not a directory. */
             goto winner;
+        }
 
         if (pfen->patlen == pathead + 1) {      /* Listing "foo/?/" -- return this entry */
-            /* if it's a directory. */
-            if (!stat_is_dir(stbuf)) {  /* Do directoryp test the hard way */
-                dp = opendir(work);
-                if (!dp)
-                    goto top;
-                closedir(dp);
-            }
+            closedir(dp);
             work[len++] = '/';
             goto winner;
         }
+
         /* >>> Should optimise the case in which the next level */
         /* >>> of directory has no wildcards. */
-        dp = opendir(work);
 #ifdef DEBUG
         {
             char save_end = pattern[pathead];
@@ -536,10 +532,7 @@ gp_enumerate_files_next_impl(gs_memory_t * mem, file_enum * pfen, char *ptr, uin
             pattern[pathead] = save_end;
         }
 #endif /* DEBUG */
-        if (!dp)
-            /* Can't list this one */
-            goto top;
-        else {                  /* Advance to the next directory-delimiter */
+        {                  /* Advance to the next directory-delimiter */
             /* in pattern */
             char *p;
             dirstack *d;
@@ -642,11 +635,11 @@ bool gp_fseekable_impl(FILE *f)
 {
     struct stat s;
     int fno;
-    
+
     fno = fileno(f);
     if (fno < 0)
         return(false);
-    
+
     if (fstat(fno, &s) < 0)
         return(false);
 

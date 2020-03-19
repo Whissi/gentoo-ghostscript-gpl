@@ -29,9 +29,7 @@
 #include "cal.h"
 #endif
 
-#ifndef MEMENTO_SQUEEZE_BUILD
 #define USE_LCMS2_LOCKING
-#endif
 
 #ifdef USE_LCMS2_LOCKING
 #include "gxsync.h"
@@ -877,6 +875,7 @@ gscms_create(gs_memory_t *memory)
 
 #ifdef WITH_CAL
     cmsPlugin(ctx, cal_cms_extensions());
+    cmsPlugin(ctx, cal_cms_extensions2());
 #endif
 
     cmsSetLogErrorHandler(ctx, gscms_error);
