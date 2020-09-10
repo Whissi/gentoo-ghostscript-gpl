@@ -1,4 +1,4 @@
-/* Copyright (C) 2001-2019 Artifex Software, Inc.
+/* Copyright (C) 2001-2020 Artifex Software, Inc.
    All Rights Reserved.
 
    This software is provided AS-IS with no warranty, either express or
@@ -15,6 +15,9 @@
 
 
 /* Header file for testbed implementation of Even Better Screening. */
+
+#ifndef evenbetter_rll_h_INCLUDED
+#define evenbetter_rll_h_INCLUDED
 
 #ifdef __cplusplus
 extern "C" {
@@ -100,4 +103,6 @@ eb_free_aligned(void *p);
 
 #ifdef __cplusplus
 }
+#endif
+
 #endif

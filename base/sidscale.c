@@ -1,4 +1,4 @@
-/* Copyright (C) 2001-2019 Artifex Software, Inc.
+/* Copyright (C) 2001-2020 Artifex Software, Inc.
    All Rights Reserved.
 
    This software is provided AS-IS with no warranty, either express or
@@ -255,14 +255,14 @@ s_ISpecialDownScale_init(stream_state * st)
 
     /* create intermediate image to hold horizontal zoom */
     ss->tmp = 
-        gs_alloc_byte_array(mem, ss->params.WidthOut * ss->params.spp_interp,
+        gs_alloc_byte_array(mem, (size_t)ss->params.WidthOut * ss->params.spp_interp,
                             ss->sizeofPixelIn, "image_scale tmp");
     /* Allocate buffers for 1 row of source and destination. */
     ss->dst = 
-        gs_alloc_byte_array(mem, ss->params.WidthOut * ss->params.spp_interp,
+        gs_alloc_byte_array(mem, (size_t)ss->params.WidthOut * ss->params.spp_interp,
                             ss->sizeofPixelOut, "image_scale dst");
     ss->src = 
-        gs_alloc_byte_array(mem, ss->params.WidthIn * ss->params.spp_interp,
+        gs_alloc_byte_array(mem, (size_t)ss->params.WidthIn * ss->params.spp_interp,
                             ss->sizeofPixelIn, "image_scale src");
     if (ss->tmp == 0 || ss->dst == 0 || ss->src == 0) {
         s_ISpecialDownScale_release(st);

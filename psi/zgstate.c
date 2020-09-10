@@ -1,4 +1,4 @@
-/* Copyright (C) 2001-2019 Artifex Software, Inc.
+/* Copyright (C) 2001-2020 Artifex Software, Inc.
    All Rights Reserved.
 
    This software is provided AS-IS with no warranty, either express or
@@ -106,7 +106,7 @@ zcurrent_uint(i_ctx_t *i_ctx_p, uint (*current_proc)(const gs_gstate *))
 /* "Client" procedures */
 static void *gs_istate_alloc(gs_memory_t * mem);
 static int gs_istate_copy(void *to, const void *from);
-static void gs_istate_free(void *old, gs_memory_t * mem);
+static void gs_istate_free(void *old, gs_memory_t * mem, gs_gstate *pgs);
 static const gs_gstate_client_procs istate_procs = {
     gs_istate_alloc,
     gs_istate_copy,
@@ -124,6 +124,9 @@ int_gstate_alloc(const gs_dual_memory_t * dmem)
     gs_ref_memory_t *lmem = dmem->space_local;
     gs_ref_memory_t *gmem = dmem->space_global;
     gs_gstate *pgs = gs_gstate_alloc((gs_memory_t *)lmem);
+
+    if (pgs == NULL)
+        return NULL;
 
     iigs = gs_alloc_struct((gs_memory_t *)lmem, int_gstate, &st_int_gstate,
                            "int_gstate_alloc(int_gstate)");
@@ -690,7 +693,7 @@ gs_istate_copy(void *to, const void *from)
 
 /* Free the interpreter's part of a graphics state. */
 static void
-gs_istate_free(void *old, gs_memory_t * mem)
+gs_istate_free(void *old, gs_memory_t * mem, gs_gstate *pgs)
 {
     gs_free_object(mem, old, "int_grestore");
 }

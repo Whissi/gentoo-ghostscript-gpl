@@ -1,4 +1,4 @@
-/* Copyright (C) 2001-2019 Artifex Software, Inc.
+/* Copyright (C) 2001-2020 Artifex Software, Inc.
    All Rights Reserved.
 
    This software is provided AS-IS with no warranty, either express or
@@ -146,8 +146,8 @@ struct gs_gc_root_s {
 
 /* Print a root debugging message. */
 #define if_debug_root(c, mem, msg, rp)\
-  if_debug4m(c, mem, "%s 0x%lx: 0x%lx -> 0x%lx\n",\
-             msg, (ulong)(rp), (ulong)(rp)->p, (ulong)*(rp)->p)
+  if_debug4m(c, mem, "%s "PRI_INTPTR": "PRI_INTPTR" -> "PRI_INTPTR"\n",\
+             msg, (intptr_t)(rp), (intptr_t)(rp)->p, (intptr_t)*(rp)->p)
 
 /*
  * We don't want to tie the allocator to using a single garbage collector,

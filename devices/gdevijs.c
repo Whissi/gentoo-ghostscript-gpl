@@ -1,4 +1,4 @@
-/* Copyright (C) 2001-2019 Artifex Software, Inc.
+/* Copyright (C) 2001-2020 Artifex Software, Inc.
    All Rights Reserved.
 
    This software is provided AS-IS with no warranty, either express or
@@ -78,7 +78,7 @@
 /* This should go into gdevprn.h, or, better yet, gdevprn should
    acquire an API for changing resolution. */
 int gdev_prn_maybe_realloc_memory(gx_device_printer *pdev,
-                                  gdev_prn_space_params *old_space,
+                                  gdev_space_params *old_space,
                                   int old_width, int old_height,
                                   bool old_page_uses_transparency);
 

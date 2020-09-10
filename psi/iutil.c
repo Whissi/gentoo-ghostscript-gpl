@@ -1,4 +1,4 @@
-/* Copyright (C) 2001-2019 Artifex Software, Inc.
+/* Copyright (C) 2001-2020 Artifex Software, Inc.
    All Rights Reserved.
 
    This software is provided AS-IS with no warranty, either express or
@@ -531,7 +531,7 @@ other:
             break;
         }
         /* Internal operator, no name. */
-        gs_sprintf(buf, "@0x%lx", (ulong) op->value.opproc);
+        gs_sprintf(buf, "@"PRI_INTPTR, (intptr_t) op->value.opproc);
         break;
     }
     case t_real:

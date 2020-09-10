@@ -1,4 +1,4 @@
-/* Copyright (C) 2001-2019 Artifex Software, Inc.
+/* Copyright (C) 2001-2020 Artifex Software, Inc.
    All Rights Reserved.
 
    This software is provided AS-IS with no warranty, either express or
@@ -63,7 +63,7 @@ int outprintf(const gs_memory_t *mem, const char *fmt, ...)
 
     va_start(args, fmt);
     count = vsnprintf(buf, sizeof(buf), fmt, args);
-    if (count >= sizeof(buf) || count < 0)  { /* C99 || MSVC */
+    if (count < 0 || count >= sizeof(buf))  { /* MSVC || C99 */
         outwrite(mem, buf, sizeof(buf) - 1);
         outwrite(mem, msg_truncated, sizeof(msg_truncated) - 1);
     } else {
@@ -82,7 +82,7 @@ int errprintf_nomem(const char *fmt, ...)
 
     va_start(args, fmt);
     count = vsnprintf(buf, sizeof(buf), fmt, args);
-    if (count >= sizeof(buf) || count < 0)  { /* C99 || MSVC */
+    if (count < 0 || count >= sizeof(buf))  { /* MSVC || C99*/
         errwrite_nomem(buf, sizeof(buf) - 1);
         errwrite_nomem(msg_truncated, sizeof(msg_truncated) - 1);
     } else {
@@ -101,7 +101,7 @@ int errprintf(const gs_memory_t *mem, const char *fmt, ...)
 
     va_start(args, fmt);
     count = vsnprintf(buf, sizeof(buf), fmt, args);
-    if (count >= sizeof(buf) || count < 0)  { /* C99 || MSVC */
+    if (count < 0 || count >= sizeof(buf))  { /* MSVC || C99 */
         errwrite(mem, buf, sizeof(buf) - 1);
         errwrite(mem, msg_truncated, sizeof(msg_truncated) - 1);
     } else {
@@ -222,15 +222,22 @@ dmprintf_file_only(const gs_memory_t *mem,const char *file)
         dpfm(mem, dprintf_file_only_format, dprintf_file_tail(file));
 }
 #endif
+
+/* This calculation is also performed for pdfwrite to manufacture the Producer string
+ * in PDF output. The code is in ghostpdl/devices/vector/gdevpdfu.c pdf_store_default_Producer().
+ * Should we change this calculation both sets of code need to be updated.
+ */
 void
 printf_program_ident(const gs_memory_t *mem, const char *program_name, long revision_number)
 {
     if (program_name)
         outprintf(mem, (revision_number ? "%s " : "%s"), program_name);
     if (revision_number) {
-        int fpart = revision_number % 100;
+        int major = (int)(revision_number / 1000);
+        int minor = (int)(revision_number - (major * 1000)) / 10;
+        int patch = revision_number % 10;
 
-        outprintf(mem, "%d.%02d", (int)(revision_number / 100), fpart);
+        outprintf(mem, "%d.%02d.%d", major, minor, patch);
     }
 }
 void
@@ -241,9 +248,11 @@ emprintf_program_ident(const gs_memory_t *mem,
     if (program_name) {
         epfm(mem, (revision_number ? "%s " : "%s"), program_name);
         if (revision_number) {
-            int fpart = revision_number % 100;
+        int major = (int)(revision_number / 1000);
+        int minor = (int)(revision_number - (major * 1000)) / 10;
+        int patch = revision_number % 10;
 
-            epfm(mem, "%d.%02d", (int)(revision_number / 100), fpart);
+            epfm(mem, "%d.%02d.%d", major, minor, patch);
         }
         epfm(mem, ": ");
     }
@@ -328,7 +337,7 @@ int gs_throw_imp(const char *func, const char *file, int line, int op, int code,
     if (op == 3)
         errprintf_nomem("  %s:%d: %s(): %s\n", file, line, func, msg);
 
-    if (count >= sizeof(msg) || count < 0)  { /* C99 || MSVC */
+    if (count < 0 || count >= sizeof(msg))  { /* MSVC || C99 */
         errwrite_nomem(msg_truncated, sizeof(msg_truncated) - 1);
     }
     return code;
@@ -555,7 +564,7 @@ debug_dump_bytes(const gs_memory_t *mem, const byte * from, const byte * to, con
     while (p != to) {
         const byte *q = min(p + 16, to);
 
-        dmprintf1(mem, "0x%lx:", (ulong) p);
+        dmprintf1(mem, PRI_INTPTR, (intptr_t)p);
         while (p != q)
             dmprintf1(mem, " %02x", *p++);
         dmputc(mem, '\n');
@@ -609,7 +618,7 @@ debug_print_string_hex(const gs_memory_t *mem, const byte * chrs, uint len)
   BEGIN\
     ulong *fp_ = (ulong *)&first_arg - 2;\
     for (; fp_ && (fp_[1] & 0xff000000) == 0x08000000; fp_ = (ulong *)*fp_)\
-        dprintf2("  fp=0x%lx ip=0x%lx\n", (ulong)fp_, fp_[1]);\
+        dprintf2("  fp="PRI_INTPTR" ip=0x%lx\n", (intptr_t)fp_, fp_[1]);\
   END
 #endif
 

@@ -1,4 +1,4 @@
-/* Copyright (C) 2001-2019 Artifex Software, Inc.
+/* Copyright (C) 2001-2020 Artifex Software, Inc.
    All Rights Reserved.
 
    This software is provided AS-IS with no warranty, either express or
@@ -194,7 +194,7 @@ extern const stream_template s_zlibE_template;
     500000,	    /* ImageMemory */ \
     0,		    /* LockDistillerParams (false) */ \
     0,		    /* LZWEncodePages (false) */ \
-    1,		    /* Overprintmode (OPM) */ \
+    0,		    /* Overprintmode (OPM) */ \
     0,		    /* PreserveOPIComments (false) */ \
     1,		    /* UseFlateCompression (true) */ \
         /* Color processing parameters */\
@@ -332,8 +332,7 @@ extern_st(st_device_psdf);
                 params.MonoImage.Dict),\
     GC_OBJ_ELT2(gx_device_psdf, params.AlwaysEmbed.data,\
                 params.NeverEmbed.data),\
-    GC_CONST_STRING_ELT(gx_device_psdf, params.PSDocOptions),\
-    GC_OBJ_ELT(gx_device_psdf, params.PSPageOptions.data)\
+    GC_CONST_STRING_ELT(gx_device_psdf, params.PSDocOptions)\
   };\
   gs_public_st_basic_super_final(st_device_psdf, gx_device_psdf,\
     "gx_device_psdf", device_psdf_ptrs, device_psdf_data,\

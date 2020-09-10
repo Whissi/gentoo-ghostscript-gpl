@@ -1,4 +1,4 @@
-/* Copyright (C) 2001-2019 Artifex Software, Inc.
+/* Copyright (C) 2001-2020 Artifex Software, Inc.
    All Rights Reserved.
 
    This software is provided AS-IS with no warranty, either express or
@@ -69,8 +69,7 @@ typedef enum {
 /* Bit definitions for serializing PDF 1.4 parameters */
 #define PDF14_SET_BLEND_MODE    (1 << 0)
 #define PDF14_SET_TEXT_KNOCKOUT (1 << 1)
-#define PDF14_SET_SHAPE_ALPHA   (1 << 2)
-#define PDF14_SET_OPACITY_ALPHA (1 << 3)
+#define PDF14_SET_AIS   (1 << 2)
 #define PDF14_SET_OVERPRINT		(1 << 4)
 #define PDF14_SET_FILLCONSTANTALPHA (1 << 6)
 #define PDF14_SET_STROKECONSTANTALPHA (1 << 7)
@@ -87,10 +86,6 @@ typedef enum {
     PDF14_TEXTGROUP_BT_PUSHED,   /* We are in a BT/ET section and group was pushed */
     PDF14_TEXTGROUP_MISSING_ET   /* We pushed a group already and then had another BT occur */
 } pdf14_text_group_state;
-
-typedef struct gs_transparency_source_s {
-    float alpha;		/* constant alpha */
-} gs_transparency_source_t;
 
 struct gs_pdf14trans_params_s {
     /* The type of trasnparency operation */
@@ -124,8 +119,11 @@ struct gs_pdf14trans_params_s {
     gs_blend_mode_t blend_mode;
     bool text_knockout;
     int text_group;
-    gs_transparency_source_t opacity;
-    gs_transparency_source_t shape;
+    bool page_group;
+    bool ais;
+    bool shade_group;
+    float opacity;
+    float shape;
     float fillconstantalpha;
     float strokeconstantalpha;
     bool mask_is_image;
@@ -138,7 +136,7 @@ struct gs_pdf14trans_params_s {
     bool idle; /* For clist reader.*/
     uint mask_id; /* For clist reader.*/
     int group_color_numcomps;
-    gs_transparency_color_t group_color;
+    gs_transparency_color_t group_color_type;
     int64_t icc_hash;
     cmm_profile_t *iccprofile;               /* The profile  */
     bool crop_blend_params;  /* This is used when the blend params are updated
@@ -160,10 +158,6 @@ typedef struct gs_pdf14trans_s {
 /* Access transparency-related graphics state elements. */
 int gs_setblendmode(gs_gstate *, gs_blend_mode_t);
 gs_blend_mode_t gs_currentblendmode(const gs_gstate *);
-int gs_setopacityalpha(gs_gstate *, double);
-float gs_currentopacityalpha(const gs_gstate *);
-int gs_setshapealpha(gs_gstate *, double);
-float gs_currentshapealpha(const gs_gstate *);
 int gs_settextknockout(gs_gstate *, bool);
 bool gs_currenttextknockout(const gs_gstate *);
 
@@ -177,7 +171,7 @@ int gs_pop_pdf14trans_device(gs_gstate * pgs, bool is_pattern);
 
 int gs_abort_pdf14trans_device(gs_gstate * pgs);
 
-void gs_trans_group_params_init(gs_transparency_group_params_t *ptgp);
+void gs_trans_group_params_init(gs_transparency_group_params_t *ptgp, float opacity);
 
 int gs_update_trans_marking_params(gs_gstate * pgs);
 

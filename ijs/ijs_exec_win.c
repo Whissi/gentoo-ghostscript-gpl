@@ -1,5 +1,5 @@
 /**
- * Copyright (C) 2001-2019 Artifex Software, Inc.
+ * Copyright (C) 2001-2020 Artifex Software, Inc.
  *
  * Permission is hereby granted, free of charge, to any person
  * obtaining a copy of this software and associated documentation
@@ -76,9 +76,9 @@ ijs_exec_server(const char *server_cmd, int *pfd_to, int *pfd_from,
         CloseHandle(hPipeTemp);
     }
     if (flag)
-        flag = (fd_stdin_wr = _open_osfhandle((LONG)hChildStdinWr, _O_BINARY)) != -1;
+        flag = (fd_stdin_wr = _open_osfhandle((intptr_t)hChildStdinWr, _O_BINARY)) != -1;
     if (flag)
-        flag = (fd_stdout_rd = _open_osfhandle((LONG)hChildStdoutRd, _O_BINARY)) != -1;
+        flag = (fd_stdout_rd = _open_osfhandle((intptr_t)hChildStdoutRd, _O_BINARY)) != -1;
 
     /* Now create the child process. */
     if (flag) {

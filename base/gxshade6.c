@@ -1,4 +1,4 @@
-/* Copyright (C) 2001-2019 Artifex Software, Inc.
+/* Copyright (C) 2001-2020 Artifex Software, Inc.
    All Rights Reserved.
 
    This software is provided AS-IS with no warranty, either express or
@@ -2389,7 +2389,7 @@ fill_wedges_aux(patch_fill_state_t *pfs, int k, int ka,
         pfs->inside = save_inside;
         return code;
     } else {
-        if (INTERPATCH_PADDING && (wedge_type & interpatch_padding)) {
+        if ((INTERPATCH_PADDING != 0) && (wedge_type & interpatch_padding)) {
             code = mesh_padding(pfs, &pole[0], &pole[3], c0, c1);
             if (code < 0)
                 return code;

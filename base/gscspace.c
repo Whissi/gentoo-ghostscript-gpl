@@ -1,4 +1,4 @@
-/* Copyright (C) 2001-2019 Artifex Software, Inc.
+/* Copyright (C) 2001-2020 Artifex Software, Inc.
    All Rights Reserved.
 
    This software is provided AS-IS with no warranty, either express or
@@ -98,9 +98,12 @@ gs_cspace_final(const gs_memory_t *cmem, void *vptr)
     gs_color_space *pcs = (gs_color_space *)vptr;
     (void)cmem; /* unused */
 
+    if (pcs->interpreter_free_cspace_proc != NULL) {
+        (*pcs->interpreter_free_cspace_proc) ((gs_memory_t *)cmem, pcs);
+    }
     if (pcs->type->final)
         pcs->type->final(pcs);
-    if_debug2m('c', cmem, "[c]cspace final %p %d\n", pcs, (int)pcs->id);
+    if_debug2m('c', cmem, "[c]cspace final "PRI_INTPTR" %d\n", (intptr_t)pcs, (int)pcs->id);
     rc_decrement_only_cs(pcs->base_space, "gs_cspace_final");
     if (pcs->params.device_n.devn_process_space != NULL)
         rc_decrement_only_cs(pcs->params.device_n.devn_process_space, "gs_cspace_final");
@@ -118,12 +121,14 @@ gs_cspace_alloc_with_id(gs_memory_t *mem, ulong id,
 
     rc_alloc_struct_1(pcs, gs_color_space, &st_color_space, mem, return NULL,
                       "gs_cspace_alloc_with_id");
-    if_debug3m('c', mem, "[c]cspace alloc %p %s %d\n",
-               pcs, pcstype->stype->sname, pcstype->index);
+    if_debug3m('c', mem, "[c]cspace alloc "PRI_INTPTR" %s %d\n",
+               (intptr_t)pcs, pcstype->stype->sname, pcstype->index);
     pcs->type = pcstype;
     pcs->id = id;
     pcs->base_space = NULL;
     pcs->pclient_color_space_data = NULL;
+    pcs->interpreter_data = NULL;
+    pcs->interpreter_free_cspace_proc = NULL;
     pcs->cmm_icc_profile_data = NULL;
     pcs->icc_equivalent = NULL;
     pcs->params.device_n.devn_process_space = NULL;
@@ -329,8 +334,11 @@ gx_install_DeviceGray(gs_color_space * pcs, gs_gstate * pgs)
         return 0;
 
     /* If we haven't initialised the iccmanager, do it now. */
-    if (pgs->icc_manager->default_gray == NULL)
-        gsicc_init_iccmanager(pgs);
+    if (pgs->icc_manager->default_gray == NULL) {
+        int code = gsicc_init_iccmanager(pgs);
+        if (code < 0)
+            return code;
+    }
 
     /* pcs takes a reference to the default_gray profile data */
     pcs->cmm_icc_profile_data = pgs->icc_manager->default_gray;
@@ -483,6 +491,35 @@ gx_set_no_overprint(gs_gstate* pgs)
     params.op_state = OP_STATE_NONE;
     params.is_fill_color = pgs->is_fill_color;
     params.effective_opm = pgs->color[0].effective_opm = 0;
+
+    return gs_gstate_update_overprint(pgs, &params);
+}
+
+/* Retain all the spot colorants and not the process
+   colorants.  This occurs if we have a process color
+   mismatch between the source and the destination but 
+   the output device supports spot colors */
+int
+gx_set_spot_only_overprint(gs_gstate* pgs)
+{
+    gs_overprint_params_t   params = { 0 };
+    gx_device* dev = pgs->device;
+    gx_color_index drawn_comps = 0;
+    gx_device_color_info* pcinfo = (dev == 0 ? 0 : &dev->color_info);
+
+    if (dev) {
+        /* check if color model behavior must be determined */
+        if (pcinfo->opmode == GX_CINFO_OPMODE_UNKNOWN)
+            drawn_comps = check_cmyk_color_model_comps(dev);
+        else
+            drawn_comps = pcinfo->process_comps;
+    }
+
+    params.retain_any_comps = true;
+    params.op_state = OP_STATE_NONE;
+    params.is_fill_color = pgs->is_fill_color;
+    params.effective_opm = pgs->color[0].effective_opm = 0;
+    params.drawn_comps = drawn_comps;
 
     return gs_gstate_update_overprint(pgs, &params);
 }
@@ -643,7 +680,9 @@ gx_set_overprint_DeviceCMYK(const gs_color_space * pcs, gs_gstate * pgs)
    simulation ICC profile that is different than the source profile,
    overprinting is no longer previewed. We follow the same logic here.
    If the source and destination ICC profiles do not match, then there is
-   effectively no overprinting enabled.  This is bug 692433 */
+   effectively no overprinting enabled.  This is bug 692433.  However,
+   even with the mismatch, if the device supports spot colorants, those
+   colors should be maintained. This is bug 702725. */
 int gx_set_overprint_cmyk(const gs_color_space * pcs, gs_gstate * pgs)
 {
     gx_device *             dev = pgs->device;
@@ -677,7 +716,7 @@ int gx_set_overprint_cmyk(const gs_color_space * pcs, gs_gstate * pgs)
     }
 
     if_debug1m(gs_debug_flag_overprint, pgs->memory,
-        "[overprint] gx_set_overprint_cmyk. drawn_comps = 0x%x\n", drawn_comps);
+        "[overprint] gx_set_overprint_cmyk. drawn_comps = 0x%x\n", (uint)drawn_comps);
 
     if (drawn_comps == 0)
         return gx_spot_colors_set_overprint(pcs, pgs);
@@ -760,7 +799,7 @@ int gx_set_overprint_cmyk(const gs_color_space * pcs, gs_gstate * pgs)
 
     if_debug2m(gs_debug_flag_overprint, pgs->memory,
         "[overprint] gx_set_overprint_cmyk. retain_any_comps = %d, drawn_comps = 0x%x\n",
-        params.retain_any_comps, params.drawn_comps);
+        params.retain_any_comps, (uint)(params.drawn_comps));
 
     /* We are in CMYK, the profiles match and overprint is true.  Set effective
        overprint mode to overprint mode but only if effective has not already

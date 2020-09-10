@@ -1,4 +1,4 @@
-/* Copyright (C) 2001-2019 Artifex Software, Inc.
+/* Copyright (C) 2001-2020 Artifex Software, Inc.
    All Rights Reserved.
 
    This software is provided AS-IS with no warranty, either express or
@@ -266,6 +266,18 @@ FILE *
 gp_fopen_impl(const gs_memory_t *mem, const char *fname, const char *mode)
 {
     return fopen(fname, mode);
+}
+
+int
+gp_unlink_impl(gs_memory_t *mem, const char *fname)
+{
+    return unlink(fname);
+}
+
+int
+gp_rename_impl(gs_memory_t *mem, const char *from, const char *to)
+{
+    return rename(from, to);
 }
 
 int gp_stat_impl(gs_memory_t *mem, const char *path, struct stat *buf)

@@ -1,4 +1,4 @@
-/* Copyright (C) 2001-2019 Artifex Software, Inc.
+/* Copyright (C) 2001-2020 Artifex Software, Inc.
    All Rights Reserved.
 
    This software is provided AS-IS with no warranty, either express or
@@ -43,5 +43,10 @@
  */
 int gdev_mem_set_planar(gx_device_memory * mdev, int num_planes,
                         const gx_render_plane_t *planes /*[num_planes]*/);
+
+int gdev_mem_set_planar_interleaved(
+                             gx_device_memory * mdev, int num_planes,
+                       const gx_render_plane_t *planes /*[num_planes]*/,
+                             int interleaved);
 
 #endif /* gdevmpla_INCLUDED */

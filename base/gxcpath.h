@@ -1,4 +1,4 @@
-/* Copyright (C) 2001-2019 Artifex Software, Inc.
+/* Copyright (C) 2001-2020 Artifex Software, Inc.
    All Rights Reserved.
 
    This software is provided AS-IS with no warranty, either express or
@@ -115,7 +115,7 @@ void gx_make_clip_device_in_heap(gx_device_clip * dev, const gx_clip_path *pcpat
                               gs_memory_t *mem);
 
 #define clip_rect_print(ch, str, ar)\
-  if_debug7(ch, "[%c]%s 0x%lx: (%d,%d),(%d,%d)\n", ch, str, (ulong)ar,\
+  if_debug7(ch, "[%c]%s "PRI_INTPTR": (%d,%d),(%d,%d)\n", ch, str, (intptr_t)ar,\
             (ar)->xmin, (ar)->ymin, (ar)->xmax, (ar)->ymax)
 
 /* Exported by gxcpath.c for gxacpath.c */

@@ -1,4 +1,4 @@
-/* Copyright (C) 2001-2019 Artifex Software, Inc.
+/* Copyright (C) 2001-2020 Artifex Software, Inc.
    All Rights Reserved.
 
    This software is provided AS-IS with no warranty, either express or
@@ -497,7 +497,7 @@ do_stroke(gs_gstate * pgs)
         }
         gs_setlinewidth(pgs, new_width);
         scale_dash_pattern(pgs, scale);
-        gs_setflat(pgs, orig_flatness * scale);
+        gs_setflat(pgs, (double)(orig_flatness * scale));
         /*
          * The alpha-buffer device requires that we fill the
          * entire path as a single unit.
@@ -607,8 +607,23 @@ static int do_fill_stroke(gs_gstate *pgs, int rule, int *restart)
     /* It is either our first time, or the stroke was a pattern and
        we are coming back from the error if restart < 1 (0 is first
        time, 1 stroke is set, and we only need to finish out fill */
-    if (pgs->is_fill_color)
-        gs_swapcolors_quick(pgs);
+    if (pgs->is_fill_color) {
+        /* if the fill_color is a pattern, make sure the tile is locked so that	*/
+        /* it does not get evicted as the stroke color is loaded.		*/
+        if (gx_dc_is_pattern1_color(gs_currentdevicecolor_inline(pgs))) {
+            gs_id id;
+
+            if(gs_currentdevicecolor_inline(pgs)->colors.pattern.p_tile != NULL) {
+                id = gs_currentdevicecolor_inline(pgs)->colors.pattern.p_tile->id;
+                code = gx_pattern_cache_entry_set_lock(pgs, id, true);
+            } else {
+                code = 0;
+            }
+	    if (code < 0)
+		return code;	/* lock failed -- tile not in cache? */
+        }
+        gs_swapcolors_quick(pgs);	/* switch to the stroke color */
+    }
 
     if (*restart < 1) {
 
@@ -642,9 +657,14 @@ static int do_fill_stroke(gs_gstate *pgs, int rule, int *restart)
             return code;
         /* If this was a pattern color, make sure and lock it in the pattern_cache */
         if (gx_dc_is_pattern1_color(gs_currentdevicecolor_inline(pgs))) {
-            gs_id id = gs_currentdevicecolor_inline(pgs)->colors.pattern.p_tile->id;
+            gs_id id;
 
-            code = gx_pattern_cache_entry_set_lock(pgs, id, true);
+            if(gs_currentdevicecolor_inline(pgs)->colors.pattern.p_tile != NULL) {
+                id = gs_currentdevicecolor_inline(pgs)->colors.pattern.p_tile->id;
+                code = gx_pattern_cache_entry_set_lock(pgs, id, true);
+            } else {
+                code = 0;
+            }
 	    if (code < 0)
 		return code;	/* lock failed -- tile not in cache? */
         }
@@ -730,7 +750,7 @@ static int do_fill_stroke(gs_gstate *pgs, int rule, int *restart)
             goto out;
         gs_setlinewidth(pgs, new_width);
         scale_dash_pattern(pgs, scale);
-        gs_setflat(pgs, orig_flatness * scale);
+        gs_setflat(pgs, (double)(orig_flatness * scale));
         pgs->log_op = orig_lop;
     } else
         acode = 0;
@@ -742,13 +762,33 @@ static int do_fill_stroke(gs_gstate *pgs, int rule, int *restart)
         gs_setflat(pgs, orig_flatness);
         acode = alpha_buffer_release(pgs, code >= 0);
     }
+    if (pgs->is_fill_color) {
+        /* The color _should_ be the fill color, so make sure it is unlocked	*/
+        if (gx_dc_is_pattern1_color(gs_currentdevicecolor_inline(pgs))) {
+            gs_id id;
+
+            if(gs_currentdevicecolor_inline(pgs)->colors.pattern.p_tile != NULL) {
+                id = gs_currentdevicecolor_inline(pgs)->colors.pattern.p_tile->id;
+                code = gx_pattern_cache_entry_set_lock(pgs, id, false);
+            } else {
+                code = 0;
+            }
+	    if (code < 0)
+		return code;	/* lock failed -- tile not in cache? */
+        }
+    }
 out:
     if (gx_dc_is_pattern1_color(gs_altdevicecolor_inline(pgs))) {
-	gs_id id = gs_altdevicecolor_inline(pgs)->colors.pattern.p_tile->id;
+        gs_id id;
 
-	rcode = gx_pattern_cache_entry_set_lock(pgs, id, false);
-	if (rcode < 0)
-	    return rcode;	/* unlock failed -- shouldn't be possible */
+        if (gs_altdevicecolor_inline(pgs)->colors.pattern.p_tile != NULL) {
+            id = gs_altdevicecolor_inline(pgs)->colors.pattern.p_tile->id;
+            rcode = gx_pattern_cache_entry_set_lock(pgs, id, false);
+	        if (rcode < 0)
+	            return rcode;	/* unlock failed -- shouldn't be possible */
+        } else {
+            code = 0;
+        }
     }
     if (code >= 0 && acode < 0)
         code = acode;

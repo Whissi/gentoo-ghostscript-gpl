@@ -1,5 +1,5 @@
 /**
- * Copyright (C) 2001-2019 Artifex Software, Inc.
+ * Copyright (C) 2001-2020 Artifex Software, Inc.
  *
  * Permission is hereby granted, free of charge, to any person
  * obtaining a copy of this software and associated documentation
@@ -21,6 +21,9 @@
  * CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
  * SOFTWARE.
 **/
+
+#ifndef ijs_h_INCLUDED
+#define ijs_h_INCLUDED
 
 /* This file contains common data types for IJS */
 
@@ -122,3 +125,5 @@ ijs_recv_int (IjsRecvChan *ch, int *val);
 
 int
 ijs_recv_block (IjsRecvChan *ch, char *buf, int buf_size);
+
+#endif

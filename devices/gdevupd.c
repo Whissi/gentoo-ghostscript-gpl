@@ -1,4 +1,4 @@
-/* Copyright (C) 2001-2019 Artifex Software, Inc.
+/* Copyright (C) 2001-2020 Artifex Software, Inc.
    All Rights Reserved.
 
    This software is provided AS-IS with no warranty, either express or
@@ -1048,8 +1048,8 @@ upd_print_page(gx_device_printer *pdev, gp_file *out)
  */
    if(!upd || B_OK4GO != (upd->flags & (B_OK4GO | B_ERROR))) {
 #if UPD_MESSAGES & (UPD_M_ERROR | UPD_M_TOPCALLS)
-         errprintf(pdev->memory, "CALL-REJECTED upd_print_page(0x%05lx,0x%05lx)\n",
-             (long) udev,(long) out);
+         errprintf(pdev->memory, "CALL-REJECTED upd_print_page(" PRI_INTPTR "," PRI_INTPTR ")\n",
+             (intptr_t)udev,(intptr_t) out);
 #endif
 	 return_error(gs_error_undefined);
    }

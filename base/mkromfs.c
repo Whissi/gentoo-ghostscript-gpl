@@ -1,4 +1,4 @@
-/* Copyright (C) 2001-2019 Artifex Software, Inc.
+/* Copyright (C) 2001-2020 Artifex Software, Inc.
    All Rights Reserved.
 
    This software is provided AS-IS with no warranty, either express or
@@ -161,6 +161,18 @@ int gp_stat_impl(const gs_memory_t *mem, const char *path, struct _stat64 *buf)
 }
 #endif
 
+int
+gs_add_control_path_flags(const gs_memory_t *mem, gs_path_control_t type, const char *path, int flags)
+{
+    return 0;
+}
+
+int
+gs_remove_control_path_flags(const gs_memory_t *mem, gs_path_control_t type, const char *path, int flags)
+{
+    return 0;
+}
+
 /*******************************************************************************
  * The following are non-redirected printing functions to avoid the need for
  * these included from gsmisc.c (unix gp_ functions, among others, use if_debug).
@@ -178,7 +190,7 @@ int outprintf(const gs_memory_t *mem, const char *fmt, ...)
 
     va_start(args, fmt);
     count = vsnprintf(buf, sizeof(buf), fmt, args);
-    if (count >= sizeof(buf) || count < 0)  { /* C99 || MSVC */
+    if (count < 0 || count >= sizeof(buf))  { /* MSVC || C99 */
         fwrite(buf, 1, sizeof(buf) - 1, stdout);
         fwrite(msg_truncated, 1, sizeof(msg_truncated) - 1, stdout);
     } else {
@@ -197,7 +209,7 @@ int errprintf_nomem(const char *fmt, ...)
 
     va_start(args, fmt);
     count = vsnprintf(buf, sizeof(buf), fmt, args);
-    if (count >= sizeof(buf) || count < 0)  { /* C99 || MSVC */
+    if (count < 0 || count >= sizeof(buf))  { /* MSVC || C99 */
         fwrite(buf, 1, sizeof(buf) - 1, stderr);
         fwrite(msg_truncated, 1, sizeof(msg_truncated) - 1, stderr);
     } else {
@@ -216,7 +228,7 @@ int errprintf(const gs_memory_t *mem, const char *fmt, ...)
 
     va_start(args, fmt);
     count = vsnprintf(buf, sizeof(buf), fmt, args);
-    if (count >= sizeof(buf) || count < 0)  { /* C99 || MSVC */
+    if (count < 0 || count >= sizeof(buf))  { /* MSVC || C99 */
         fwrite(buf, 1, sizeof(buf) - 1, stderr);
         fwrite(msg_truncated, 1, sizeof(msg_truncated) - 1, stderr);
     } else {
@@ -521,6 +533,9 @@ static void
 prepare_splits(split_data *splits)
 {
     if (splits->num_splits) {
+        /* Limit splits->num_splits to something merely insane to avoid overflow. */
+        if (splits->num_splits > (1<<(8*sizeof(int)-2))/sizeof(unsigned long))
+            splits->num_splits = (1<<(8*sizeof(int)-2))/sizeof(unsigned long);
         /* Make sure we have a properly sized size array. */
         if (splits->num_splits > splits->max_splits) {
             unsigned long *sizes = realloc(splits->sizes, sizeof(unsigned long) * splits->num_splits);
@@ -1139,8 +1154,8 @@ static unsigned long pscompact_getcompactedblock(pscompstate *psc, unsigned char
         switch (psc->state) {
             case PSC_BufferIn:
                 c = psc->pgetc(psc->file);
-                if ((c <= 32) || (c == EOF)) {
-                    /* Whitespace */
+                if (c <= 32) {
+                    /* Whitespace (or EOF) */
                     if (psc->inpos == 0) {
                         /* Leading whitespace, just bin it */
                         break;
@@ -1393,6 +1408,7 @@ static unsigned long pscompact_getcompactedblock(pscompstate *psc, unsigned char
             {
                 unsigned char c = psc->bufferout[psc->outpos++];
                 if (psc->noescape) {
+                    /* No change */
                 } else if ((c == 10) && (psc->outpos < psc->outend)) {
                     if (!psc->escaping) {
                         c = '\\';

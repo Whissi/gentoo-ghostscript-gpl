@@ -1,4 +1,4 @@
-/* Copyright (C) 2001-2019 Artifex Software, Inc.
+/* Copyright (C) 2001-2020 Artifex Software, Inc.
    All Rights Reserved.
 
    This software is provided AS-IS with no warranty, either express or
@@ -146,24 +146,6 @@ gs_gstate_initialize(gs_gstate * pgs, gs_memory_t * mem)
     pgs->custom_color_callback = INIT_CUSTOM_COLOR_PTR;
 #endif
     return 0;
-}
-
-/*
- * Make a temporary copy of a gs_gstate.  Note that this does not
- * do all the necessary reference counting, etc.  However, it does
- * clear out the transparency stack in the destination.
- */
-gs_gstate *
-gs_gstate_copy_temp(const gs_gstate * pgs, gs_memory_t * mem)
-{
-    gs_gstate *pgs_copy =
-        gs_alloc_struct(mem, gs_gstate, &st_gs_gstate,
-                        "gs_gstate_copy");
-
-    if (pgs_copy) {
-        *pgs_copy = *pgs;
-    }
-    return pgs_copy;
 }
 
 /* Increment reference counts to note that an gs_gstate has been copied. */

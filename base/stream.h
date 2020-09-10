@@ -1,4 +1,4 @@
-/* Copyright (C) 2001-2019 Artifex Software, Inc.
+/* Copyright (C) 2001-2020 Artifex Software, Inc.
    All Rights Reserved.
 
    This software is provided AS-IS with no warranty, either express or
@@ -422,7 +422,7 @@ extern const stream_procs s_filter_read_procs, s_filter_write_procs;
  */
 int s_init_filter(stream *fs, stream_state *fss, byte *buf, uint bsize,
                   stream *target);
-stream *s_add_filter(stream **ps, const stream_template *template,
+stream *s_add_filter(stream **ps, const stream_template *template_,
                      stream_state *ss, gs_memory_t *mem);
 
 /*

@@ -1,4 +1,4 @@
-/* Copyright (C) 2001-2019 Artifex Software, Inc.
+/* Copyright (C) 2001-2020 Artifex Software, Inc.
    All Rights Reserved.
 
    This software is provided AS-IS with no warranty, either express or
@@ -229,7 +229,8 @@ gs_main_init_with_args01(gs_main_instance * minst, int argc, char *argv[])
                 if (gs_debug[':'] && !have_dumped_args) {
                     int i;
 
-                    dmprintf1(minst->heap, "%% Args passed to instance 0x%p: ", minst);
+                    dmprintf1(minst->heap, "%% Args passed to instance "PRI_INTPTR": ",
+                              (intptr_t)minst);
                     for (i=1; i<argc; i++)
                         dmprintf1(minst->heap, "%s ", argv[i]);
                     dmprintf(minst->heap, "\n");
@@ -473,6 +474,14 @@ run_stdin:
                 code = gs_add_explicit_control_path(minst->heap, arg, gs_permit_file_control);
                 if (code < 0) return code;
                 break;
+            }
+            if (*arg != 0) {
+                /* Unmatched switch. */
+                outprintf(minst->heap,
+                          "   Unknown switch '--%s'.\n",
+                          arg);
+                arg_finit(pal);
+                return gs_error_Fatal;
             }
             /* FALLTHROUGH */
         case '+':
@@ -829,14 +838,15 @@ run_stdin:
 
                     ialloc_set_space(idmemory, avm_system);
                     if (isd) {
-                        int num, i;
+                        int i;
+                        int64_t num;
 
                         /* Check for numbers so we can provide for suffix scalers */
                         /* Note the check for '#' is for PS "radix" numbers such as 16#ff */
                         /* and check for '.' and 'e' or 'E' which are 'real' numbers */
                         if ((strchr(eqp, '#') == NULL) && (strchr(eqp, '.') == NULL) &&
                             (strchr(eqp, 'e') == NULL) && (strchr(eqp, 'E') == NULL) &&
-                            ((i = sscanf((const char *)eqp, "%d", &num)) == 1)) {
+                            ((i = sscanf((const char *)eqp, "%"PRIi64, &num)) == 1)) {
                             char suffix = eqp[strlen(eqp) - 1];
 
                             switch (suffix) {
@@ -857,7 +867,7 @@ run_stdin:
                                 default:
                                     break;   /* not a valid suffix or last char was digit */
                             }
-                            make_int(&value, num);
+                            make_int(&value, (ps_int)num);
                         } else {
                             /* use the PS scanner to capture other valid token types */
                             stream astream;
@@ -916,6 +926,33 @@ run_stdin:
                 /* Enter the name in systemdict. */
                 i_initial_enter_name_copy(minst->i_ctx_p, adef, &value);
                 arg_free((char *)adef, minst->heap);
+                break;
+            }
+        case 'p':
+            {
+                char *adef = arg_copy(arg, minst->heap);
+                char *eqp;
+
+                if (adef == NULL)
+                    return gs_error_Fatal;
+                eqp = strchr(adef, '=');
+
+                if (eqp == NULL)
+                    eqp = strchr(adef, '#');
+                if (eqp == NULL) {
+                    outprintf(minst->heap, "Usage: -pNAME=STRING\n");
+                    arg_free((char *)adef, minst->heap);
+                    return gs_error_Fatal;
+                }
+                *eqp++ = 0;
+                /* Slightly uncomfortable calling back up to a higher
+                 * level, but we'll live with it. */
+                code = gsapi_set_param(gs_lib_ctx_get_interp_instance(minst->heap),
+                                       adef, eqp, gs_spt_parsed);
+                if (code < 0) {
+                    arg_free((char *)adef, minst->heap);
+                    return code;
+                }
                 break;
             }
         case 'u':               /* undefine name */
@@ -1097,7 +1134,17 @@ gs_main_run_file2(gs_main_instance *minst,
                   int              *pexit_code,
                   ref              *perror_object)
 {
-    return runarg(minst, "", filename, ".runfile", runFlush, user_errors, pexit_code, perror_object);
+    int code, code1;
+
+    code = gs_add_control_path(minst->heap, gs_permit_file_reading, filename);
+    if (code < 0) return code;
+
+    code = runarg(minst, "", filename, ".runfile", runFlush, user_errors, pexit_code, perror_object);
+
+    code1 = gs_remove_control_path(minst->heap, gs_permit_file_reading, filename);
+    if (code >= 0 && code1 < 0) code = code1;
+
+    return code;
 }
 static int
 run_string(gs_main_instance *minst,

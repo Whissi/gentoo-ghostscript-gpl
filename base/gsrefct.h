@@ -1,4 +1,4 @@
-/* Copyright (C) 2001-2019 Artifex Software, Inc.
+/* Copyright (C) 2001-2020 Artifex Software, Inc.
    All Rights Reserved.
 
    This software is provided AS-IS with no warranty, either express or
@@ -151,7 +151,7 @@ rc_free_proc(rc_free_struct_only);
 #  define rc_check_(vp)\
      BEGIN\
        if (gs_debug_c('?') && (vp)->rc.ref_count < 0)\
-         lprintf2("0x%lx has ref_count of %ld!\n", (ulong)(vp),\
+         lprintf2(PRI_INTPTR" has ref_count of %ld!\n", (intptr_t)(vp),\
                   (vp)->rc.ref_count);\
      END
 #else

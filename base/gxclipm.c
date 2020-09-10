@@ -1,4 +1,4 @@
-/* Copyright (C) 2001-2019 Artifex Software, Inc.
+/* Copyright (C) 2001-2020 Artifex Software, Inc.
    All Rights Reserved.
 
    This software is provided AS-IS with no warranty, either express or
@@ -241,7 +241,7 @@ mask_clip_copy_mono(gx_device * dev,
             /* Copy a tile slice to the memory device buffer. */
             memcpy(cdev->buffer.bytes,
                    cdev->tiles.data + cy * cdev->tiles.raster,
-                   cdev->tiles.raster * ny);
+                   (size_t)cdev->tiles.raster * ny);
             /* Intersect the tile with the source data. */
             /* mcolor0 and mcolor1 invert the data if needed. */
             /* This call can't fail. */

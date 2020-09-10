@@ -1,4 +1,4 @@
-% Copyright (C) 2001-2019 Artifex Software, Inc.
+% Copyright (C) 2001-2020 Artifex Software, Inc.
 % All Rights Reserved.
 %
 % This software is provided AS-IS with no warranty, either express or
@@ -278,6 +278,16 @@ systemdict begin
 } bind odef
 currentdict /runpdfstring .undef
 
+/DisablePageHandlerDevice
+{
+  systemdict /FirstPage known
+  systemdict /LastPage known or
+  systemdict /Pagelist known or
+  {
+      <</DisablePageHandler //true>> setpagedevice
+  } if
+} bind def
+
 /runpdfbegin {		% <file> runpdfbegin -
    userdict begin
         % It turns out that the PDF interpreter uses memory more
@@ -300,6 +310,8 @@ currentdict /runpdfstring .undef
    %% resources and needs this definition in place.
    <</MaxOpStack -1>> setuserparams
 
+   //DisablePageHandlerDevice exec
+
    0 setobjectformat
    /Page# //null def
    /Page //null def
@@ -311,8 +323,9 @@ currentdict /runpdfstring .undef
    /CumulativePageCount currentpagedevice /PageCount get def
 } bind executeonly def
 
+currentdict /DisablePageHandlerDevice undef
+
 /runpdfpagerange {	% - runpdfpagerange <firstpage#> <lastpage#>
-<</DisablePageHandler //true>> setpagedevice
    /PortfolioPage where {
      pop
      PortfolioPage cvi dup pdfpagecount add                  % a b+1
@@ -321,8 +334,8 @@ currentdict /runpdfstring .undef
      dup 3 index exch cvs pop                                % a b+1 /P (b+1)
      store
      1 sub                                                   % a b
-     /FirstPage where { pop FirstPage <</DisablePageHandler //true>> setpagedevice} { 1 } ifelse
-     /LastPage  where { pop LastPage  <</DisablePageHandler //true>> setpagedevice} {2000000000} ifelse  % a b fp lp
+     /FirstPage where { pop FirstPage} { 1 } ifelse
+     /LastPage  where { pop LastPage} {2000000000} ifelse  % a b fp lp
      2 index 2 index lt { % b < fp
        1e10
      } {
@@ -395,7 +408,6 @@ currentdict /runpdfstring .undef
              pop
            }
            forall
-           <</DisablePageHandler //true>> setpagedevice
            /PDFPageList pdfpagecount 1 add array def
            {
              (,) search {
@@ -477,7 +489,6 @@ currentdict /runpdfstring .undef
        1 pdfpagecount
      }{
        /FirstPage where {
-         <</DisablePageHandler //true>> setpagedevice
          pop FirstPage dup pdfpagecount gt {
            (\nRequested FirstPage is greater than the number of pages in the file: ) print
             pdfpagecount = flush
@@ -485,7 +496,7 @@ currentdict /runpdfstring .undef
        } {
           1
        } ifelse
-       /LastPage where {<</DisablePageHandler //true>> setpagedevice pop LastPage pdfpagecount .min } { pdfpagecount } ifelse
+       /LastPage where {pop LastPage pdfpagecount .min } { pdfpagecount } ifelse
        1 index 1 index gt {
          (   No pages will be processed \(FirstPage > LastPage\).) = flush
        } {
@@ -513,7 +524,12 @@ currentdict /runpdfstring .undef
       {
         dup /Page# exch store
         QUIET not { (Page ) print dup //== exec flush } if
-        pdfgetpage pdfshowpage
+        pdfgetpage
+        dup //null ne { pdfshowpage } {
+          (   **** Error: Page #) pdfformaterror Page# 10 string cvs pdfformaterror
+          ( not found.\n) pdfformaterror
+          /dopdfpages cvx /syntaxerror signalerror
+        } ifelse
       }{
         pop
       }ifelse
@@ -538,6 +554,7 @@ currentdict /runpdfstring .undef
    PDFTopSave restore
    end			% userdict
    2 vmreclaim		% couldn't hurt
+   <</DisablePageHandler //false>> setpagedevice
 } bind executeonly def
 
 % Copy stream to an external temporary file and
@@ -1879,7 +1896,7 @@ currentdict /xref-char-dict undef
       parent_obj_get	% not found -- check it's parent.
     } ifelse
   } {
-    pop pop pop 0
+    pop pop 0
   } ifelse
 } bind executeonly def
 
@@ -2076,14 +2093,19 @@ currentdict /xref-char-dict undef
 /pdffindpageref {		% <int> pdffindpage <objref>
   dup pdffindpage?
                 % Stack: index countleft noderef
-   1 index 1 ne { pop pop /pdffindpage cvx /rangecheck signalerror } if
-   exch pop
-   PageIndex 2 index 1 sub 65533 .min 2 index oforce put
-   PageNumbers 1 index oforce 3 index dup 65534 le
-    { put }
-    { pop pop pop }	% don't store more than 65534 pagenumbers
+   dup //null ne {
+     1 index 1 ne { pop pop /pdffindpage cvx /rangecheck signalerror } if
+     exch pop
+     PageIndex 2 index 1 sub 65533 .min 2 index oforce put
+     PageNumbers 1 index oforce 3 index dup 65534 le
+      { put }
+      { pop pop pop }	% don't store more than 65534 pagenumbers
+     ifelse
+   } {
+     exch pop			% return the //null
+   }
    ifelse
-   exch pop
+   exch pop			% pop the page number, return the object or null
 } bind executeonly def
 /pdffindpage {		% <int> pdffindpage <pagedict>
   pdffindpageref oforce
@@ -2751,7 +2773,7 @@ currentdict /PDF2PS_matrix_key undef
   dup /PDFusingtransparency exch def {
     % If the current device isn't CMYK, or if it is a device that (currently) supports transparency
     % we don't need the special handling of Overprint transparency, so disable the checking.
-    currentpagedevice dup /Colors get 4 lt
+    currentpagedevice dup /Colors get 4 lt 1 index /SimulateOverprint get not or
     exch /HaveTransparency .knownget not { //false } if or
     % device needs special Oveprint handling
     /setup_trans exch
@@ -2900,6 +2922,7 @@ currentdict /PDF2PS_matrix_key undef
   % Draw the annotations
   //systemdict /ShowAnnots .knownget not { //true } if {
     /Annots knownoget {
+      dup type /arraytype eq {
       {
         /AnnotDrawCheck exch             % marker to clean up stack on error
         {oforce} stopped
@@ -2936,6 +2959,12 @@ currentdict /PDF2PS_matrix_key undef
         } ifelse
       } ifelse
       } forall
+      }
+      {
+          (   **** Error: Annotation array is not an array, ignoring it.\n) pdfformaterror
+          (               Output may be incorrect.\n) pdfformaterror
+          pop
+      } ifelse
     } if
   } if
   //systemdict /ShowAcroForm .knownget { //true eq } { //false } ifelse {
@@ -3119,48 +3148,56 @@ currentdict /PDF2PS_matrix_key undef
 /annotsusetransparency {	% <page dict> annotsusetransparency <bool>
    //false exch			% Assume no transparency
    /Annots knownoget {		% Get Annots array
+     dup type /arraytype eq {
+         {
+           /AnnotTransparencyCheck exch             % marker to clean up stack on error
+           {oforce} stopped
+           {
+             (   **** Error: Unable to check an annotation for use of transparency.\n) pdfformaterror
+             (                Output may be incorrect.\n) pdfformaterror
+             count -1 0 {                           % make sure we don't go past the top of the stack
+               pop                                  % remove the counter
+               /AnnotTransparencyCheck eq {exit} if % remove object and check if its the marker, exit if it is
+             } for
+           }
+           {
+             exch pop                               % remove the 'on error' marker
+             dup //null ne {
+               dup /Subtype knownoget {
+                 /Highlight eq {      % Highlight annotation is always implemented
+                   pop pop //true exit  % as transparency.
+                 } if
+               } if
+               dup /AP knownoget {	% Get appearance dict for the annoation
+                 /N knownogetdict { 	% Get the /N (i.e. normal) appearance stream
+                   4 dict exch resourceusestransparency { pop pop //true exit } if
+                 } if
+               } if  			% If AP dict known
+               dup /BM knownoget {
+                 pop pop pop //true exit
+               } if
+               dup /CA knownoget {
+                 1 le {
+                   pop pop //true exit
+                 } if
+               } if
+               /ca knownoget {
+                 1 le {
+                   pop //true exit
+                 } if
+               } if
+             } {
+               pop
+             } ifelse
+           } ifelse
+         } forall			% For all annots on the page
+     }
      {
-       /AnnotTransparencyCheck exch             % marker to clean up stack on error
-       {oforce} stopped
-       {
-         (   **** Error: Unable to check an annotation for use of transparency.\n) pdfformaterror
-         (                Output may be incorrect.\n) pdfformaterror
-         count -1 0 {                           % make sure we don't go past the top of the stack
-           pop                                  % remove the counter
-           /AnnotTransparencyCheck eq {exit} if % remove object and check if its the marker, exit if it is
-         } for
-       }
-       {
-         exch pop                               % remove the 'on error' marker
-         dup //null ne {
-           dup /Subtype knownoget {
-             /Highlight eq {      % Highlight annotation is always implemented
-               pop pop //true exit  % as transparency.
-             } if
-           } if
-           dup /AP knownoget {	% Get appearance dict for the annoation
-             /N knownogetdict { 	% Get the /N (i.e. normal) appearance stream
-               4 dict exch resourceusestransparency { pop pop //true exit } if
-             } if
-           } if  			% If AP dict known
-           dup /BM knownoget {
-             //true exit
-           } if
-           dup /CA knownoget {
-             1 le {
-               pop pop //true exit
-             } if
-           } if
-           /ca knownoget {
-             1 le {
-               pop //true exit
-             } if
-           } if
-         } {
-           pop
-         } ifelse
-       } ifelse
-     } forall			% For all annots on the page
+        (   **** Error: Annotation array is not an array, ignoring it.\n) pdfformaterror
+        (               Output may be incorrect.\n) pdfformaterror
+        pop
+     }
+     ifelse
    } if
 } bind executeonly def
 
@@ -3277,17 +3314,24 @@ currentdict /PDF2PS_matrix_key undef
 %	<spotcolordict> <loopdict> <annotsarray>
 % 		 annotsspotcolors <spotcolordict> <loopdict>
 /annotsspotcolors {
-  { oforce
-    dup //null ne {
-      /AP knownoget {	% Get appearance dict for the annoation
-        /N knownogetdict {		% Get the /N (i.e. normal) appearance stream
-          resourcespotcolors
-        } if			% If normal appearance streamknown
-      } if			% If AP dict known
-    } {
-      pop
-    } ifelse
- } forall
+  dup type /arraytype eq {
+      { oforce
+        dup //null ne {
+          /AP knownoget {	% Get appearance dict for the annoation
+            /N knownogetdict {		% Get the /N (i.e. normal) appearance stream
+              resourcespotcolors
+            } if			% If normal appearance streamknown
+          } if			% If AP dict known
+        } {
+          pop
+        } ifelse
+     } forall
+ }
+ {
+    (   **** Error: Annotation array is not an array, ignoring it.\n) pdfformaterror
+    (               Output may be incorrect.\n) pdfformaterror
+     pop
+ } ifelse
 } bind executeonly def
 
 % Determine spot colors are used within a page.  We are creating a dict to
@@ -3311,6 +3355,7 @@ currentdict /PDF2PS_matrix_key undef
   {
     /Parent knownoget
     {
+      dup /Pages known not { pop exit } if	% not a valid Page Tree ancestor
       dup 4 1 roll
       resourcespotcolors
       3 -1 roll
@@ -3603,6 +3648,43 @@ currentdict /PDF2PS_matrix_key undef
 } bind executeonly def
 
 end			% pdfdict
+
+
+systemdict /ALLOWPSTRANSPARENCY get
+{
+  /.setopacityalpha
+  {
+    /.setfillconstantalpha where
+    {
+      pop
+      (   **** WARNING: .setopacityalpha is deprecated (as of 9.53.0) and will be removed in a future release\n) print
+      (   **** See .setfillconstantalpha/.setalphaisshape for the improved solution\n) print flush
+      false .setalphaisshape
+      dup .setfillconstantalpha
+      .setstrokeconstantalpha
+    }
+    {
+      /.setopacityalpha /undefined cvx signalerror
+    } ifelse
+  } bind def
+
+  /.setshapealpha
+  {
+    /.setfillconstantalpha where
+    {
+      pop
+      (   **** WARNING: .setshapealpha is deprecated (as of 9.53.0) and will be removed in a future release.\n) print
+      (   **** See .setfillconstantalpha/.setalphaisshape for the improved solution\n) print flush
+      true .setalphaisshape
+      dup .setfillconstantalpha
+      .setstrokeconstantalpha
+    }
+    {
+      /.setshapealpha /undefined cvx signalerror
+    } ifelse
+  } bind def
+} if
+
 .setglobal
 
 %% This list of operators are used internally by various parts of the Ghostscript PDF interpreter.
@@ -3626,21 +3708,15 @@ end			% pdfdict
 ] systemdict .undefinternalnames
 
 % The following are split out allowing control via ALLOWPSTRANSPARENCY command line param
+% The examples/transparency_example.ps uses some of these (on the first line).
 [
-  /.currentblendmode /.currentopacityalpha /.currentshapealpha /.currenttextknockout /.begintransparencytextgroup
+  /.pushpdf14devicefilter /.poppdf14devicefilter /.setstrokeconstantalpha /.setfillconstantalpha /.endtransparencygroup
+  /.currentblendmode /.currenttextknockout /.begintransparencytextgroup
   /.endtransparencytextgroup /.begintransparencymaskgroup /.begintransparencymaskimage /.begintransparencypagegroup
-  /.endtransparencymask /.image3x /.abortpdf14devicefilter /.setfillconstantalpha /.setalphaisshape /.currentalphaisshape
-
-  % Used by our own test suite files
-  %/.pushpdf14devicefilter    % transparency-example.ps
-  %/.poppdf14devicefilter     % transparency-example.ps
-  %/.setopacityalpha          % transparency-example.ps
-  %/.setshapealpha            % transparency-example.ps
-  %/.endtransparencygroup     % transparency-example.ps
-
+  /.endtransparencymask /.image3x /.abortpdf14devicefilter /.setstrokeconstantalpha /.setfillconstantalpha /.setalphaisshape /.currentalphaisshape
   % undefining these causes errors/incorrect output
   %/.setblendmode /.begintransparencygroup /.settextknockout /.setstrokeoverprint /.setfilloverprint
   %/.currentstrokeoverprint /.currentfilloverprint /.currentfillconstantalpha /.currentstrokeconstantalpha
-  %/.setstrokeconstantalpha /.setfillconstantalpha /.setSMask /.currentSMask
+  %/.setSMask /.currentSMask
 
 ] systemdict dup /ALLOWPSTRANSPARENCY get {pop pop}{.undefinternalnames}ifelse

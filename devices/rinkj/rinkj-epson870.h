@@ -1,4 +1,4 @@
-/* Copyright (C) 2001-2019 Artifex Software, Inc.
+/* Copyright (C) 2001-2020 Artifex Software, Inc.
    All Rights Reserved.
 
    This software is provided AS-IS with no warranty, either express or
@@ -13,8 +13,12 @@
    CA 94945, U.S.A., +1(415)492-9861, for further information.
 */
 
+#ifndef rinkj_epson870_h_INCLUDED
+#define rinkj_epson870_h_INCLUDED
 
 /* A Rinkj driver for a number of variable-dot Epson devices. */
 
 RinkjDevice *
 rinkj_epson870_new (RinkjByteStream *out);
+
+#endif

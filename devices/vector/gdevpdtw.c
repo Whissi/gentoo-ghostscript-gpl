@@ -1,4 +1,4 @@
-/* Copyright (C) 2001-2019 Artifex Software, Inc.
+/* Copyright (C) 2001-2020 Artifex Software, Inc.
    All Rights Reserved.
 
    This software is provided AS-IS with no warranty, either express or
@@ -119,6 +119,9 @@ pdf_simple_font_needs_ToUnicode(const pdf_font_resource_t *pdfont)
             In this circumstance, write the ToUnicode map to get a searchable PDF.
         */
         return true;
+    if (!pdfont->TwoByteToUnicode)
+        return true;
+
     for (ch = 0; ch < 256; ++ch) {
         pdf_encoding_element_t *pet = &pdfont->u.simple.Encoding[ch];
         gs_glyph glyph = pet->glyph;
@@ -136,6 +139,7 @@ pdf_simple_font_needs_ToUnicode(const pdf_font_resource_t *pdfont)
         if( glyph > GS_C_PDF_MAX_GOOD_GLYPH ||
            !(gs_c_pdf_glyph_type[glyph >> 2] & (mask << (( glyph & 3 )<<1) )))
           return true;
+
     }
     return false;
 }

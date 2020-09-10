@@ -1,4 +1,4 @@
-/* Copyright (C) 2001-2019 Artifex Software, Inc.
+/* Copyright (C) 2001-2020 Artifex Software, Inc.
    All Rights Reserved.
 
    This software is provided AS-IS with no warranty, either express or
@@ -84,8 +84,8 @@ static void
 cie_lookup_map3(cie_cached_vector3 * pvec,
                 const gx_cie_vector_cache3_t * pc, const char *cname)
 {
-    if_debug5('c', "[c]lookup %s 0x%lx [%g %g %g]\n",
-              (const char *)cname, (ulong) pc,
+    if_debug5('c', "[c]lookup %s "PRI_INTPTR" [%g %g %g]\n",
+              (const char *)cname, (intptr_t)pc,
               cie_cached2float(pvec->u), cie_cached2float(pvec->v),
               cie_cached2float(pvec->w));
     cie_lookup_mult3(pvec, pc);

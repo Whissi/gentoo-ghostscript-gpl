@@ -1,4 +1,4 @@
-/* Copyright (C) 2001-2019 Artifex Software, Inc.
+/* Copyright (C) 2001-2020 Artifex Software, Inc.
    All Rights Reserved.
 
    This software is provided AS-IS with no warranty, either express or
@@ -94,7 +94,7 @@ construct_ht_order_short(gx_ht_order *porder, const byte *thresholds)
                     phtr->elt_size == sizeof(ushort) &&
                     !memcmp(phtr->levels, levels, num_levels * sizeof(*levels)) &&
                     !memcmp(phtr->bit_data, porder->bit_data,
-                            size * phtr->elt_size)
+                            (size_t)size * phtr->elt_size)
                     ) {
                     /*
                      * This is a predefined halftone.  Free the levels and

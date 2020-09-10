@@ -1,4 +1,4 @@
-/* Copyright (C) 2001-2019 Artifex Software, Inc.
+/* Copyright (C) 2001-2020 Artifex Software, Inc.
    All Rights Reserved.
 
    This software is provided AS-IS with no warranty, either express or
@@ -42,7 +42,7 @@ gs_memory_t *gs_gstate_swap_memory(gs_gstate *, gs_memory_t *);
  */
 typedef void *(*gs_gstate_alloc_proc_t) (gs_memory_t * mem);
 typedef int (*gs_gstate_copy_proc_t) (void *to, const void *from);
-typedef void (*gs_gstate_free_proc_t) (void *old, gs_memory_t * mem);
+typedef void (*gs_gstate_free_proc_t) (void *old, gs_memory_t * mem, gs_gstate *pgs);
 
 typedef enum {
     copy_for_gsave,		/* from = current, to = new(saved) */

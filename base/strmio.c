@@ -1,4 +1,4 @@
-/* Copyright (C) 2001-2019 Artifex Software, Inc.
+/* Copyright (C) 2001-2020 Artifex Software, Inc.
    All Rights Reserved.
 
    This software is provided AS-IS with no warranty, either express or
@@ -202,7 +202,7 @@ s_stdin_read_process(stream_state * st, stream_cursor_read * ignore_pr,
     /* do the callout */
     if (core->stdin_fn)
         count = (*core->stdin_fn)
-            (core->caller_handle, (char *)pw->ptr + 1,
+            (core->std_caller_handle, (char *)pw->ptr + 1,
              core->stdin_is_interactive ? 1 : wcount);
     else
         count = gp_stdin_read((char *)pw->ptr + 1, wcount,

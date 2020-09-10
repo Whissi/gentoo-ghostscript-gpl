@@ -1,4 +1,4 @@
-/* Copyright (C) 2001-2019 Artifex Software, Inc.
+/* Copyright (C) 2001-2020 Artifex Software, Inc.
    All Rights Reserved.
 
    This software is provided AS-IS with no warranty, either express or
@@ -240,9 +240,7 @@ struct gs_gstate_s {
     gs_point subpath_start;
     bool clamp_coordinates;
     gs_logical_operation_t log_op;
-    gx_color_value alpha;
     gs_blend_mode_t blend_mode;
-    gs_transparency_source_t opacity, shape;
     gs_xstate_trans_flags_t trans_flags;
     gs_id soft_mask_id;
     bool text_knockout;
@@ -325,9 +323,9 @@ struct gs_gstate_s {
   0, 0, { gx_line_params_initial }, 0,\
    { (float)(scale), 0.0, 0.0, (float)(-(scale)), 0.0, 0.0 },\
   false, {0, 0}, {0, 0}, false, \
-  lop_default, gx_max_color_value, BLEND_MODE_Compatible,\
-{ 1.0 }, { 1.0 }, {0, 0}, 0, 0/*false*/, 0, 0/*false*/, 0, 0/*false*/, 0, 0/*false*/, 1.0,  \
-   { fixed_half, fixed_half }, 0/*false*/, 1/*true*/, 0/*false*/, 1.0,\
+  lop_default, BLEND_MODE_Compatible,\
+  {0, 0}, 0, 1/*true*/, 0, 0/*false*/, 0, 0/*false*/, 0, 0/*false*/, 1.0,  \
+   { fixed_half, fixed_half }, 0/*false*/, 1/*true*/, 0/*false*/, (float)0.02,\
   1, 1/* bpt true */, 0, 0, 0, INIT_CUSTOM_COLOR_PTR	/* 'Custom color' callback pointer */  \
   gx_default_get_cmap_procs
 
@@ -344,10 +342,7 @@ struct gs_gstate_s {
     s->subpath_start = __state_init.subpath_start; \
     s->clamp_coordinates = __state_init.clamp_coordinates; \
     s->log_op = __state_init.log_op; \
-    s->alpha = __state_init.alpha; \
     s->blend_mode = __state_init.blend_mode; \
-    s->opacity = __state_init.opacity; \
-    s->shape = __state_init.shape; \
     s->trans_flags = __state_init.trans_flags; \
     s->soft_mask_id = __state_init.soft_mask_id; \
     s->text_knockout = __state_init.text_knockout; \
@@ -371,6 +366,14 @@ struct gs_gstate_s {
     s->get_cmap_procs = __state_init.get_cmap_procs; \
     s->show_gstate = NULL; \
     s->is_fill_color = 1; \
+    s->strokeconstantalpha = 1.0; \
+    s->fillconstantalpha = 1.0; \
+    s->alphaisshape = 0; \
+    s->texthscaling = 100.0; \
+    s->textspacing = 0.0; \
+    s->textleading = 0.0; \
+    s->wordspacing = 0.0; \
+    s->textrise = 0.0; \
   } while (0)
 
 struct_proc_finalize(gs_gstate_finalize);
@@ -416,10 +419,6 @@ struct_proc_finalize(gs_gstate_finalize);
 /* Initialize an graphics state, other than the parts covered by */
 /* gs_gstate_initial. */
 int gs_gstate_initialize(gs_gstate * pgs, gs_memory_t * mem);
-
-/* Make a temporary copy of a gs_gstate.  Note that this does not */
-/* do all the necessary reference counting, etc. */
-gs_gstate * gs_gstate_copy_temp(const gs_gstate * pgs, gs_memory_t * mem);
 
 /* Increment reference counts to note that a graphics state has been copied. */
 void gs_gstate_copied(gs_gstate * pgs);

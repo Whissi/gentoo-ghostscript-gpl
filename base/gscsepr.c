@@ -1,4 +1,4 @@
-/* Copyright (C) 2001-2019 Artifex Software, Inc.
+/* Copyright (C) 2001-2020 Artifex Software, Inc.
    All Rights Reserved.
 
    This software is provided AS-IS with no warranty, either express or
@@ -170,11 +170,9 @@ gx_install_Separation(gs_color_space * pcs, gs_gstate * pgs)
          * Give the device an opportunity to capture equivalent colors for any
          * spot colors which might be present in the color space.
          */
-        if (code >= 0) {
-            if (dev_proc(pgs->device, update_spot_equivalent_colors))
-               code = dev_proc(pgs->device, update_spot_equivalent_colors)
-                                                            (pgs->device, pgs);
-        }
+        if (dev_proc(pgs->device, update_spot_equivalent_colors))
+           code = dev_proc(pgs->device, update_spot_equivalent_colors)
+                                                        (pgs->device, pgs);
     }
     return code;
 }

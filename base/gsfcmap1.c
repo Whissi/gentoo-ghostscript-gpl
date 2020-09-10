@@ -1,4 +1,4 @@
-/* Copyright (C) 2001-2019 Artifex Software, Inc.
+/* Copyright (C) 2001-2020 Artifex Software, Inc.
    All Rights Reserved.
 
    This software is provided AS-IS with no warranty, either express or
@@ -17,6 +17,7 @@
 /* Adobe-based CMap character decoding */
 #include "memory_.h"
 #include "string_.h"
+#include "stdint_.h"
 #include "gx.h"
 #include "gserrors.h"
 #include "gsstruct.h"
@@ -46,11 +47,11 @@ ENUM_PTRS_WITH(cmap_lookup_range_enum_ptrs,
 case 0:
     if (pclr->value_type == CODE_VALUE_GLYPH) {
         const byte *pv = pclr->values.data;
-        int size = pclr->value_size;
+        int gsize = pclr->value_size;
         int k;
 
-        for (k = 0; k < pclr->num_entries; ++k, pv += size) {
-            gs_glyph glyph = bytes2int(pv, size);
+        for (k = 0; k < pclr->num_entries; ++k, pv += gsize) {
+            gs_glyph glyph = bytes2int(pv, gsize);
 
             pclr->cmap->mark_glyph(mem, glyph, pclr->cmap->mark_glyph_data);
         }
@@ -187,8 +188,8 @@ code_map_decode_next_multidim_regime(const gx_code_map_t * pcmap,
     if (gs_debug_c('J')) {
         dlprintf("[J]CMDNmr() is called: str=(");
         debug_print_string_hex_nomem(str, ssize);
-        dlprintf3(") @ 0x%lx ssize=%d, %d ranges to check\n",
-                  (ulong)str, ssize, pcmap->num_lookup);
+        dlprintf3(") @ "PRI_INTPTR" ssize=%d, %d ranges to check\n",
+                  (intptr_t)str, ssize, pcmap->num_lookup);
     }
 #endif
 #endif

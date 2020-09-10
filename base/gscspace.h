@@ -1,4 +1,4 @@
-/* Copyright (C) 2001-2019 Artifex Software, Inc.
+/* Copyright (C) 2001-2020 Artifex Software, Inc.
    All Rights Reserved.
 
    This software is provided AS-IS with no warranty, either express or
@@ -218,10 +218,10 @@ typedef ulong gs_separation_name;	/* BOGUS */
  * names.
  */
 typedef int (gs_callback_func_get_colorname_string)
-     (const gs_memory_t *mem, gs_separation_name colorname, unsigned char **ppstr, unsigned int *plen);
+     (gs_gstate *pgs, gs_separation_name colorname, unsigned char **ppstr, unsigned int *plen);
 
 typedef enum { SEP_NONE, SEP_ALL, SEP_OTHER } separation_type;
-typedef enum { SEP_ENUM, SEP_MIX, SEP_PURE_RGB, SEP_PURE_CMYK } separation_colors;
+typedef enum { SEP_ENUM, SEP_MIX, SEP_PURE_RGB, SEP_PURE_CMYK, SEP_PURE_SPOT} separation_colors;
 
 typedef struct gs_separation_params_s {
     gs_memory_t *mem;
@@ -290,6 +290,8 @@ typedef struct gs_pattern_params_s {
 #define cs_DeviceRGB_id 3
 #define cs_DeviceCMYK_id 4
 
+typedef void (*gs_cspace_free_proc_t) (gs_memory_t * mem, void *pcs);
+
 /*
  * The colorspace object. For pattern and indexed colorspaces, the
  * base_space refers to the underlying colorspace. For separation,
@@ -304,6 +306,8 @@ struct gs_color_space_s {
     gs_color_space             *base_space;
     gs_color_space             *icc_equivalent;
     client_color_space_data_t  *pclient_color_space_data;
+    void                       *interpreter_data;
+    gs_cspace_free_proc_t      interpreter_free_cspace_proc;
     cmm_profile_t              *cmm_icc_profile_data;
     union {
         gs_device_pixel_params   pixel;
@@ -369,6 +373,9 @@ void gs_color_space_restrict_color(gs_client_color *, const gs_color_space *);
 
 /* Communicate to overprint compositor that overprint is not to be used */
 int gx_set_no_overprint(gs_gstate* pgs);
+
+/* Communicate to overprint compositor that only spot colors are to be preserved */
+int gx_set_spot_only_overprint(gs_gstate* pgs);
 
 /*
  * Get the base space of an Indexed or uncolored Pattern color space, or the

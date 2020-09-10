@@ -1,4 +1,4 @@
-/* Copyright (C) 2001-2019 Artifex Software, Inc.
+/* Copyright (C) 2001-2020 Artifex Software, Inc.
    All Rights Reserved.
 
    This software is provided AS-IS with no warranty, either express or
@@ -15,6 +15,9 @@
 /* We need several tables, to hold the glyph names and a variable number of
  * Unicode code points.
  */
+
+#ifndef gdevagl_h_INCLUDED
+#define gdevagl_h_INCLUDED
 
 typedef struct single_glyph_list_s {
   const char *Glyph;
@@ -35,3 +38,5 @@ typedef struct quad_glyph_list_s {
   const char *Glyph;
   unsigned short Unicode[4];
 } quad_glyph_list_t;
+
+#endif

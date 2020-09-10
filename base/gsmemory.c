@@ -1,4 +1,4 @@
-/* Copyright (C) 2001-2019 Artifex Software, Inc.
+/* Copyright (C) 2001-2020 Artifex Software, Inc.
    All Rights Reserved.
 
    This software is provided AS-IS with no warranty, either express or
@@ -16,6 +16,7 @@
 
 /* Generic allocator support */
 #include "memory_.h"
+#include "stdint_.h"
 #include "gdebug.h"
 #include "gstypes.h"
 #include "gsmemory.h"
@@ -106,8 +107,8 @@ gs_resize_struct_array(gs_memory_t *mem, void *obj, size_t num_elements,
         return gs_alloc_struct_array(mem, num_elements, void, pstype, cname);
 #ifdef DEBUG
     if (gs_object_type(mem, obj) != pstype) {
-        lprintf3("resize_struct_array 0x%lx, type was 0x%lx, expected 0x%lx!\n",
-                 (ulong)obj, (ulong)gs_object_type(mem, obj), (ulong)pstype);
+        lprintf3("resize_struct_array "PRI_INTPTR", type was "PRI_INTPTR", expected "PRI_INTPTR"!\n",
+                 (intptr_t)obj, (intptr_t)gs_object_type(mem, obj), (intptr_t)pstype);
         return 0;
     }
 #endif
@@ -241,7 +242,7 @@ rc_object_type_name(const void *vp, const rc_header *prc)
         dist = (const char *)&dist - (const char *)vp;
         if (dist < 10000 && dist > -10000)
             return "(on stack)";
-        if ((ulong)pstype < 0x10000 || (long)pstype < 0)
+        if ((uintptr_t)pstype < 0x10000 || (uintptr_t)pstype < 0)
             return "(anomalous)";
     }
     return client_name_string(gs_struct_type_name(pstype));
@@ -251,29 +252,29 @@ rc_object_type_name(const void *vp, const rc_header *prc)
 void
 rc_trace_init_free(const void *vp, const rc_header *prc)
 {
-    dmprintf3(prc->memory, "[^]%s 0x%lx init = %ld\n",
-              rc_object_type_name(vp, prc), (ulong)vp, (long)prc->ref_count);
+    dmprintf3(prc->memory, "[^]%s "PRI_INTPTR" init = %ld\n",
+              rc_object_type_name(vp, prc), (intptr_t)vp, (long)prc->ref_count);
 }
 void
 rc_trace_free_struct(const void *vp, const rc_header *prc, client_name_t cname)
 {
-    dmprintf3(prc->memory, "[^]%s 0x%lx => free (%s)\n",
+    dmprintf3(prc->memory, "[^]%s "PRI_INTPTR" => free (%s)\n",
               rc_object_type_name(vp, prc),
-              (ulong)vp, client_name_string(cname));
+              (intptr_t)vp, client_name_string(cname));
 }
 void
 rc_trace_increment(const void *vp, const rc_header *prc)
 {
-    dmprintf3(prc->memory, "[^]%s 0x%lx ++ => %ld\n",
+    dmprintf3(prc->memory, "[^]%s "PRI_INTPTR" ++ => %ld\n",
               rc_object_type_name(vp, prc),
-              (ulong)vp, (long)prc->ref_count);
+              (intptr_t)vp, (long)prc->ref_count);
 }
 void
 rc_trace_adjust(const void *vp, const rc_header *prc, int delta, const char *cname)
 {
-    dmprintf5(prc->memory, "[^]%s 0x%lx %+d => %ld (%s)\n",
+    dmprintf5(prc->memory, "[^]%s "PRI_INTPTR" %+d => %ld (%s)\n",
               rc_object_type_name(vp, prc),
-              (ulong)vp, delta, (long)(prc->ref_count + delta), cname);
+              (intptr_t)vp, delta, (long)(prc->ref_count + delta), cname);
 }
 
 #endif /* DEBUG */
@@ -297,8 +298,8 @@ ENUM_PTRS_BEGIN_PROC(basic_enum_ptrs)
     /* with number of elements 0 and allocation not passing 'element' */
     if (size == 0) {
 #ifdef DEBUG
-        dmprintf2(mem, "  basic_enum_ptrs: Attempt to enum 0 size structure at 0x%lx, type: %s\n",
-                  (ulong)vptr, pstype->sname);
+        dmprintf2(mem, "  basic_enum_ptrs: Attempt to enum 0 size structure at "PRI_INTPTR", type: %s\n",
+                  (intptr_t)vptr, pstype->sname);
 #endif
         return 0;
     }
@@ -309,8 +310,8 @@ ENUM_PTRS_BEGIN_PROC(basic_enum_ptrs)
 #ifdef DEBUG
         /* some extra checking to make sure we aren't out of bounds */
         if (ppe->offset > size - sizeof(void *)) {
-            dmprintf4(mem, "  basic_enum_ptrs: Attempt to enum ptr with offset=%d beyond size=%d: structure at 0x%lx, type: %s\n",
-                      ppe->offset, size, (ulong)vptr, pstype->sname);
+            dmprintf4(mem, "  basic_enum_ptrs: Attempt to enum ptr with offset=%d beyond size=%d: structure at "PRI_INTPTR", type: %s\n",
+                      ppe->offset, size, (intptr_t)vptr, pstype->sname);
             return 0;
         }
 #endif

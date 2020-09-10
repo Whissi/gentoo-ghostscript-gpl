@@ -1,4 +1,4 @@
-/* Copyright (C) 2001-2019 Artifex Software, Inc.
+/* Copyright (C) 2001-2020 Artifex Software, Inc.
    All Rights Reserved.
 
    This software is provided AS-IS with no warranty, either express or
@@ -342,6 +342,23 @@ clist_init_bands(gx_device * dev, gx_device_memory *bdev, uint data_size,
     return 0;
 }
 
+/* Minimum BufferSpace needed when writing the clist */
+/* This is an exported function because it is used to set up render threads */
+size_t
+clist_minimum_buffer(int nbands) {
+
+    /* Leave enough room after states for commands that write a reasonable
+     * amount of data. The cmd_largest_size and the data_bits_size should  be
+     * enough to buffer command operands. The data_bits_size is the level
+     * at which commands should expect to split data across buffers. If this
+     * extra space is a little large, it doesn't really hurt.
+     */
+    return (nbands * (ulong) sizeof(gx_clist_state) +
+            sizeof(cmd_prefix) +
+            cmd_largest_size +
+            data_bits_size);
+}
+
 /*
  * Initialize the allocation for the band states, which are used only
  * when writing.  Requires: nbands.  Sets: states, cbuf, cend.
@@ -353,14 +370,9 @@ clist_init_states(gx_device * dev, byte * init_data, uint data_size)
         &((gx_device_clist *)dev)->writer;
     ulong state_size = cdev->nbands * (ulong) sizeof(gx_clist_state);
     /* Align to the natural boundary for ARM processors, bug 689600 */
-    long alignment = (-(long)init_data) & (sizeof(init_data) - 1);
+    intptr_t alignment = (-(intptr_t)init_data) & (sizeof(init_data) - 1);
 
-    /*
-     * The +100 in the next line is bogus, but we don't know what the
-     * real check should be. We're effectively assuring that at least 100
-     * bytes will be available to buffer command operands.
-     */
-    if (state_size + sizeof(cmd_prefix) + cmd_largest_size + 100 + alignment > data_size)
+    if (clist_minimum_buffer(cdev->nbands) > data_size)
         return_error(gs_error_rangecheck);
     /* The end buffer position is not affected by alignment */
     cdev->cend = init_data + data_size;
@@ -483,6 +495,7 @@ clist_init_data(gx_device * dev, byte * init_data, uint data_size)
         if (gdev_mem_bits_size(&bdev, band_width, band_height, &cdev->page_line_ptrs_offset) < 0)
             return_error(gs_error_VMerror);
     }
+    cdev->pdf14_trans_group_level = -1;	/* to prevent any initial op except PUSH_DEVICE */
     cdev->ins_count = 0;
     code = clist_init_tile_cache(dev, data, bits_size);
     if (code < 0) {
@@ -1224,8 +1237,8 @@ clist_writer_push_no_cropping(gx_device_clist_writer *cdev)
 
     if (buf == NULL)
         return_error(gs_error_VMerror);
-    if_debug4m('v', cdev->memory, "[v]push cropping[%d], min=%d, max=%d, buf=%p\n",
-               cdev->cropping_level, cdev->cropping_min, cdev->cropping_max, buf);
+    if_debug4m('v', cdev->memory, "[v]push cropping[%d], min=%d, max=%d, buf="PRI_INTPTR"\n",
+               cdev->cropping_level, cdev->cropping_min, cdev->cropping_max, (intptr_t)buf);
     buf->next = cdev->cropping_stack;
     cdev->cropping_stack = buf;
     buf->cropping_min = cdev->cropping_min;
@@ -1261,8 +1274,8 @@ clist_writer_pop_cropping(gx_device_clist_writer *cdev)
     cdev->temp_mask_id = buf->temp_mask_id;
     cdev->cropping_stack = buf->next;
     cdev->cropping_level--;
-    if_debug4m('v', cdev->memory, "[v]pop cropping[%d] min=%d, max=%d, buf=%p\n",
-               cdev->cropping_level, cdev->cropping_min, cdev->cropping_max, buf);
+    if_debug4m('v', cdev->memory, "[v]pop cropping[%d] min=%d, max=%d, buf="PRI_INTPTR"\n",
+               cdev->cropping_level, cdev->cropping_min, cdev->cropping_max, (intptr_t)buf);
     gs_free_object(cdev->memory, buf, "clist_writer_transparency_pop");
     return 0;
 }
@@ -1333,12 +1346,11 @@ clist_put_data(const gx_device_clist *cdev, int select, int64_t offset, const by
 }
 
 gx_device_clist *
-clist_make_accum_device(gx_device *target, const char *dname, void *base, int space,
+clist_make_accum_device(gs_memory_t *mem, gx_device *target, const char *dname, void *base, int space,
                         gx_device_buf_procs_t *buf_procs, gx_band_params_t *band_params,
                         bool use_memory_clist, bool uses_transparency,
                         gs_pattern1_instance_t *pinst)
 {
-        gs_memory_t *mem = target->memory;
         gx_device_clist *cdev = gs_alloc_struct(mem, gx_device_clist,
                         &st_device_clist, "clist_make_accum_device");
         gx_device_clist_writer *cwdev = (gx_device_clist_writer *)cdev;
@@ -1396,7 +1408,7 @@ clist_make_accum_device(gx_device *target, const char *dname, void *base, int sp
 
         /* Fields left zeroed :
             int   max_fill_band;
-            int   is_printer;
+            dev_proc_dev_spec_op(orig_spec_op);
             float MediaSize[2];
             float ImagingBBox[4];
             bool  ImagingBBox_set;
@@ -1413,3 +1425,25 @@ clist_make_accum_device(gx_device *target, const char *dname, void *base, int sp
         */
         return cdev;
 }
+
+/* GC information */
+#define DEVICE_MUTATED_TO_CLIST(pdev) \
+    (((gx_device_clist_mutatable *)(pdev))->buffer_space != 0)
+
+static
+ENUM_PTRS_WITH(device_clist_mutatable_enum_ptrs, gx_device_clist_mutatable *pdev)
+    if (DEVICE_MUTATED_TO_CLIST(pdev))
+        ENUM_PREFIX(st_device_clist, 0);
+    else
+        ENUM_PREFIX(st_device_forward, 0);
+    break;
+ENUM_PTRS_END
+static
+RELOC_PTRS_WITH(device_clist_mutatable_reloc_ptrs, gx_device_clist_mutatable *pdev)
+{
+    if (DEVICE_MUTATED_TO_CLIST(pdev))
+        RELOC_PREFIX(st_device_clist);
+    else
+        RELOC_PREFIX(st_device_forward);
+} RELOC_PTRS_END
+public_st_device_clist_mutatable();

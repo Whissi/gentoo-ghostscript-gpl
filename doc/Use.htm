@@ -1,15 +1,6 @@
 <!doctype html>
 <html>
 <head>
-<!-- Global site tag (gtag.js) - Google Analytics -->
-<script async src="https://www.googletagmanager.com/gtag/js?id=UA-54391264-2"></script>
-<script>
-  window.dataLayer = window.dataLayer || [];
-  function gtag(){dataLayer.push(arguments);}
-  gtag('js', new Date());
-
-  gtag('config', 'UA-54391264-2');
-</script>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
 <link href="https://fonts.googleapis.com/css?family=Source+Sans+Pro" rel="stylesheet">
@@ -2305,6 +2296,44 @@ whereas <code>-sXYZ=35</code> is equivalent to</p>
 </dl>
 
 <dl>
+<dt><code>-p</code><em>name</em><code>=</code><em>string</em></dt>
+<dd>Define a name in systemdict with the parsed version of the given string as value. The string takes a parameter definition in (something very close to) postscript format.
+This allows more complex structures to be passed in than is possible with <code>-d</code> or <code>-s</code>. For example:
+
+<blockquote><code>
+-pFoo=&quot;&lt;&lt; /Bar[1 2 3]/Baz 0.1 /Whizz (string) /Bang &lt;0123&gt; &gt;&gt;&quot;
+</code></blockquote>
+
+<p>This means that <code>-p</code> can do the job of both <code>-d</code> and <code>-s</code>. For example:</p>
+
+<blockquote><code>
+-dDownScaleFactor=3
+</code></blockquote>
+
+<p>can be equivalently performed by</p>
+
+<blockquote><code>
+-pDownScaleFactor=3
+</code></blockquote>
+
+and
+
+<blockquote><code>
+-sPAPERSIZE=letter
+</code></blockquote>
+
+<p>can be equivalently performed by</p>
+
+<blockquote><code>
+-pPAPERSIZE=&quot;(letter)&quot;
+</code></blockquote>
+
+<p>Note, that there are some 'special' values that should be set using <code>-s</code>, not <code>-p</code>, such as <code>DEVICE</code> and <code>DefaultGrayProfile</code>. Broadly, only use <code>-p</code> if you cannot set what you want using <code>-s</code> or <code>-d</code>.</p>
+
+<p>Also, internally, after setting an parameter with <code>-p</code> we perform an <code>initgraphics</code> operation. This is required to allow changes in parameters such as <code>HWResolution</code> to take effect. This means that attempting to use <code>-p</code> other than at the start of a page is liable to give unexpected results.</p>
+</dl>
+
+<dl>
     <dt><code>-u</code><em>name</em></dt>
     <dd>Un-define a name, cancelling <code>-d</code> or <code>-s</code>.
 
@@ -3524,9 +3553,16 @@ operation of <code>setpagedevice</code>, and because this capability is <i>extre
 rarely used, we feel the improvement in security warrants the small reduction in
 flexibility.
 <p>
-Path matching is simple: it is case sensitive, and we do not implement full featured
+Path matching is very simple: it is case sensitive, and we do not implement full featured
 &quot;globbing&quot; or regular expression matching (such complexity would significantly
-and negatively impact performance). The following cases are handled:
+and negatively impact performance). Further, the string parameter(s) passed to the
+<code>--permit-file-*</code> option must exactly match the string(s) used to reference
+the file(s): for example, you cannot use a absolute path to grant permission, and
+then a relative path to reference the file (or vice versa) - the path match will fail.
+Similarly, you cannot grant permission through one symlink, and then reference a file
+directly, or through an alternative symlink - again, the matching will fail.
+<p>
+The following cases are handled:
 <ul>
 <li>
 <dt><code>&quot;&sol;path&sol;to&sol;file&quot;</code></dt>
@@ -5259,7 +5295,7 @@ PCLEOs. (see the FAPI-related source code for details).</p>
 <hr>
 
 <p>
-<small>Copyright &copy; 2000-2019 Artifex Software, Inc.  All rights reserved.</small>
+<small>Copyright &copy; 2000-2020 Artifex Software, Inc.  All rights reserved.</small>
 
 <p>
 This software is provided AS-IS with no warranty, either express or
@@ -5272,7 +5308,7 @@ or contact Artifex Software, Inc.,  1305 Grant Avenue - Suite 200,
 Novato, CA 94945, U.S.A., +1(415)492-9861, for further information.
 
 <p>
-<small>Ghostscript version 9.52, 19 March 2020
+<small>Ghostscript version 9.53.0, 10 September 2020
 
 <!-- [3.0 end visible trailer] ============================================= -->
 

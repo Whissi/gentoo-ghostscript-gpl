@@ -1,4 +1,4 @@
-/* Copyright (C) 2001-2019 Artifex Software, Inc.
+/* Copyright (C) 2001-2020 Artifex Software, Inc.
    All Rights Reserved.
 
    This software is provided AS-IS with no warranty, either express or
@@ -372,6 +372,29 @@ enum {
     /* Private dso used to check that a printer device properly forwards to the default */
     gxdso_debug_printer_check,
 #endif
+    /* gxdso_supports_alpha:
+     *     data = NULL
+     *     size = 0
+     * Returns 1 if the rendering device supports alpha,
+     * 0 otherwise.
+     */
+    gxdso_supports_alpha,
+    /* gxdso_reopen_after_init:
+     *     data = NULL
+     *     size = 0
+     * Returns 1 if the device should be closed/reopened after gs
+     * finishes initialisation (e.g. to give it a chance to fetch
+     * configuration from registered callout handlers),
+     * 0 otherwise.
+     */
+    gxdso_reopen_after_init,
+
+    /* Normally, when we set a device ICC profile, we validate that the number
+     * of components against the number of components the device supports. But
+     * in certain cases, we don't want to do that (DeviceN devices and nullpage,
+     * for example).
+     */
+    gxdso_skip_icc_component_validation,
     /* Add new gxdso_ keys above this. */
     gxdso_pattern__LAST
 };

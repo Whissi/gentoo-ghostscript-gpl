@@ -1,4 +1,4 @@
-/* Copyright (C) 2001-2019 Artifex Software, Inc.
+/* Copyright (C) 2001-2020 Artifex Software, Inc.
    All Rights Reserved.
 
    This software is provided AS-IS with no warranty, either express or
@@ -216,27 +216,25 @@ static dev_proc_destroy_buf_device(dummy_destroy_buf_device)
 /* Attempt to determine the size of a pattern (the approximate amount that will */
 /* be needed in the pattern cache). If we end up using the clist, this is only  */
 /* a guess -- we use the tile size which will _probably_ be too large.          */
-static int
+static size_t
 gx_pattern_size_estimate(gs_pattern1_instance_t *pinst, bool has_tags)
 {
     gx_device *tdev = pinst->saved->device;
     int depth = (pinst->templat.PaintType == 2 ? 1 : tdev->color_info.depth);
-    int64_t raster;
-    int64_t size;
+    size_t raster;
+    size_t size;
 
     if (pinst->size.x == 0 || pinst->size.y == 0)
         return 0;
 
     if (pinst->templat.uses_transparency) {
         /* if the device has tags, add in an extra tag byte for the pdf14 compositor */
-        raster = ((int64_t)pinst->size.x * ((depth/8) + 1 + (has_tags ? 1 : 0)));
+        raster = ((size_t)pinst->size.x * ((depth/8) + 1 + (has_tags ? 1 : 0)));
     } else {
-        raster = ((int64_t)pinst->size.x * depth + 7) / 8;
+        raster = ((size_t)pinst->size.x * depth + 7) / 8;
     }
-    size = raster > max_int / pinst->size.y ? (max_int & ~0xFFFF) : raster * pinst->size.y;
-    if (size > (int64_t)max_int)
-        size = (max_int & ~0xFFFF);
-    return (int)size;
+    size = raster > max_size_t / pinst->size.y ? (max_size_t - 0xFFFF) : raster * pinst->size.y;
+    return size;
 }
 
 static void gx_pattern_accum_finalize_cw(gx_device * dev)
@@ -262,10 +260,10 @@ gx_pattern_accum_alloc(gs_memory_t * mem, gs_memory_t * storage_memory,
 {
     gx_device *tdev = pinst->saved->device;
     bool has_tags = device_encodes_tags(tdev);
-    int size = gx_pattern_size_estimate(pinst, has_tags);
+    size_t size = gx_pattern_size_estimate(pinst, has_tags);
     gx_device_forward *fdev;
     int force_no_clist = 0;
-    int max_pattern_bitmap = tdev->MaxPatternBitmap == 0 ? MaxPatternBitmap_DEFAULT :
+    size_t max_pattern_bitmap = tdev->MaxPatternBitmap == 0 ? MaxPatternBitmap_DEFAULT :
                                 tdev->MaxPatternBitmap;
 
     pinst->is_planar = tdev->is_planar;
@@ -311,7 +309,7 @@ gx_pattern_accum_alloc(gs_memory_t * mem, gs_memory_t * storage_memory,
         gx_device_clist_writer *cwdev;
         const int data_size = 1024*128;
         gx_band_params_t band_params = { 0 };
-        byte *data  = gs_alloc_bytes(tdev->memory->non_gc_memory, data_size, cname);
+        byte *data  = gs_alloc_bytes(mem->non_gc_memory, data_size, cname);
 
         if (data == NULL)
             return 0;
@@ -321,7 +319,7 @@ gx_pattern_accum_alloc(gs_memory_t * mem, gs_memory_t * storage_memory,
         band_params.BandHeight = pinst->size.y;
         band_params.BandBufferSpace = 0;
 
-        cdev = clist_make_accum_device(tdev, "pattern-clist", data, data_size,
+        cdev = clist_make_accum_device(mem, tdev, "pattern-clist", data, data_size,
                                        &buf_procs, &band_params, true, /* use_memory_clist */
                                        pinst->templat.uses_transparency, pinst);
         if (cdev == 0) {
@@ -431,7 +429,7 @@ pattern_accum_open(gx_device * dev)
         code = (*dev_proc(mask, open_device)) ((gx_device *) mask);
         if (code >= 0) {
             mask_open = true;
-            memset(mask->base, 0, mask->raster * mask->height);
+            memset(mask->base, 0, (size_t)mask->raster * mask->height);
         }
     }
 
@@ -727,7 +725,10 @@ blank_unmasked_bits(gx_device * mask,
             ptr += raster;
         }
     } else {
-        if (depth/num_comps != 8)
+        /* Planar, only handle 8 or 16 bits */
+        int bytes_per_component = (depth/num_comps) >> 3;
+
+        if (depth/num_comps != 8 && depth/num_comps != 16)
             return_error(gs_error_rangecheck);
         for (y = 0; y < h; y++)
         {
@@ -746,8 +747,10 @@ blank_unmasked_bits(gx_device * mask,
                     int xx = x+x0;
                     if (((mine[xx>>3]>>(x&7)) & 1) == 0) {
                         *ptr++ = blank;
+                        if (bytes_per_component > 1)
+                            *ptr++ = blank;
                     } else {
-                        ptr++;
+                        ptr += bytes_per_component;
                     }
                 }
             }
@@ -950,7 +953,7 @@ gx_pattern_cache_free_entry(gx_pattern_cache * pcache, gx_color_tile * ctile)
 
         if (ctile->ttrans != NULL) {
             if_debug2m('v', mem,
-                       "[v*] Freeing trans pattern from cache, uid = %ld id = %ld \n",
+                       "[v*] Freeing trans pattern from cache, uid = %ld id = %ld\n",
                        ctile->uid.id, ctile->id);
             if ( ctile->ttrans->pdev14 == NULL) {
                 /* This can happen if we came from the clist */
@@ -987,7 +990,7 @@ gx_pattern_cache_free_entry(gx_pattern_cache * pcache, gx_color_tile * ctile)
 /* enough space is available (or nothing left to free).                     */
 /* This will allow 1 oversized entry                                        */
 void
-gx_pattern_cache_ensure_space(gs_gstate * pgs, int needed)
+gx_pattern_cache_ensure_space(gs_gstate * pgs, size_t needed)
 {
     int code = ensure_pattern_cache(pgs);
     gx_pattern_cache *pcache;
@@ -1015,7 +1018,7 @@ gx_pattern_cache_ensure_space(gs_gstate * pgs, int needed)
 
 /* Export updating the pattern_cache bits_used and tiles_used for clist reading */
 void
-gx_pattern_cache_update_used(gs_gstate *pgs, ulong used)
+gx_pattern_cache_update_used(gs_gstate *pgs, size_t used)
 {
     gx_pattern_cache *pcache = pgs->pattern_cache;
 
@@ -1040,7 +1043,6 @@ gx_pattern_cache_add_entry(gs_gstate * pgs,
     gx_bitmap_id id;
     gx_color_tile *ctile;
     int code = ensure_pattern_cache(pgs);
-    extern dev_proc_open_device(pattern_clist_open_device);
     gx_device_memory *mmask = NULL;
     gx_device_memory *mbits = NULL;
     gx_pattern_trans_t *trans = NULL;
@@ -1107,7 +1109,7 @@ gx_pattern_cache_add_entry(gs_gstate * pgs,
             used += mask_used;
         }
         if (trans != 0) {
-            trans_used = trans->planestride*trans->n_chan;
+            trans_used = (size_t)trans->planestride*trans->n_chan;
             used += trans_used;
         }
     } else {
@@ -1161,7 +1163,7 @@ gx_pattern_cache_add_entry(gs_gstate * pgs,
             ctile->tmask.data = 0;
         if (trans != 0) {
             if_debug2m('v', pgs->memory,
-                       "[v*] Adding trans pattern to cache, uid = %ld id = %ld \n",
+                       "[v*] Adding trans pattern to cache, uid = %ld id = %ld\n",
                        ctile->uid.id, ctile->id);
             ctile->ttrans = trans;
         }

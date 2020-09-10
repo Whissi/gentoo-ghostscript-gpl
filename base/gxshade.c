@@ -1,4 +1,4 @@
-/* Copyright (C) 2001-2019 Artifex Software, Inc.
+/* Copyright (C) 2001-2020 Artifex Software, Inc.
    All Rights Reserved.
 
    This software is provided AS-IS with no warranty, either express or
@@ -173,12 +173,13 @@ cs_next_packed_decoded(shade_coord_stream_t * cs, int num_bits,
     int code = cs->get_value(cs, num_bits, &value);
     double max_value = (double)(uint)
         (num_bits == sizeof(uint) * 8 ? ~0 : ((1 << num_bits) - 1));
+    double dvalue = (double)value;
 
     if (code < 0)
         return code;
     *pvalue =
-        (decode == 0 ? value / max_value :
-         decode[0] + value * (decode[1] - decode[0]) / max_value);
+        (decode == 0 ? dvalue / max_value :
+         decode[0] + dvalue * (decode[1] - decode[0]) / max_value);
     return 0;
 }
 
@@ -433,6 +434,33 @@ top:
     if (cs_lin_test && !gx_has_transfer(pgs, dev->color_info.num_components)) {
         pfs->cs_always_linear = true;
     }
+
+#ifdef IGNORE_SPEC_MATCH_ADOBE_SHADINGS
+    /* Per the spec. If the source space is DeviceN or Separation and the
+       colorants are not supported (i.e. if we are using the alternate tint
+       transform) the interpolation should occur in the source space to
+       accommodate non-linear tint transform functions.
+       e.g. We had a case where the transform function
+       was an increasing staircase. Including that function in the
+       gradient smoothness calculation gave us severe quantization. AR on
+       the other hand is doing the interpolation in device color space
+       and has a smooth result for that case. So AR is not following the spec. The
+       bit below solves the issues for Type 4 and Type 5 shadings as
+       this will avoid interpolations in source space. Type 6 and Type 7 will still
+       have interpolations in the source space even if pfs->cs_always_linear == true.
+       So the approach below does not solve those issues. To do that
+       without changing the shading code, we could make a linear
+       approximation to the alternate tint transform, which would
+       ensure smoothness like what AR provides.
+    */
+    if ((gs_color_space_get_index(pcs) == gs_color_space_index_DeviceN ||
+        gs_color_space_get_index(pcs) == gs_color_space_index_Separation) &&
+        using_alt_color_space((gs_gstate*)pgs) && (psh->head.type == 4 ||
+        psh->head.type == 5)) {
+        pfs->cs_always_linear = true;
+    }
+#endif
+
     return 0;
 }
 

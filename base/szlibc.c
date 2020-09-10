@@ -1,4 +1,4 @@
-/* Copyright (C) 2001-2019 Artifex Software, Inc.
+/* Copyright (C) 2001-2020 Artifex Software, Inc.
    All Rights Reserved.
 
    This software is provided AS-IS with no warranty, either express or
@@ -110,7 +110,7 @@ s_zlib_free(void *zmem, void *data)
     gs_free_object(mem, data, "s_zlib_free(data)");
     for (; ; block = block->next) {
         if (block == 0) {
-            lprintf1("Freeing unrecorded data 0x%lx!\n", (ulong)data);
+            lprintf1("Freeing unrecorded data "PRI_INTPTR"!\n", (intptr_t)data);
             return;
         }
         if (block->data == data)

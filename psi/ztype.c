@@ -1,4 +1,4 @@
-/* Copyright (C) 2001-2019 Artifex Software, Inc.
+/* Copyright (C) 2001-2020 Artifex Software, Inc.
    All Rights Reserved.
 
    This software is provided AS-IS with no warranty, either express or
@@ -281,7 +281,18 @@ zcvi(i_ctx_t *i_ctx_p)
     }
     if (!REAL_CAN_BE_INT(fval))
         return_error(gs_error_rangecheck);
-    make_int(op, (long)fval);   /* truncates towards 0 */
+    if (sizeof(ps_int) != 4 && gs_currentcpsimode(imemory)) {
+        if ((double)fval > (double)MAX_PS_INT32)       /* (double)0x7fffffff */
+            return_error(gs_error_rangecheck);
+        else if ((double)fval < (double)MIN_PS_INT32) /* (double)(int)0x80000000 */
+            return_error(gs_error_rangecheck);
+        else {
+            make_int(op, (ps_int) fval);
+        }
+    }
+    else
+        make_int(op, (ps_int) fval);
+
     return 0;
 }
 
@@ -386,7 +397,13 @@ zcvrs(i_ctx_t *i_ctx_p)
 
                     if (!REAL_CAN_BE_INT(fval))
                         return_error(gs_error_rangecheck);
-                    ival = (ulong) (long)fval;
+                    ival = (ps_uint)fval;
+                    if (sizeof(ps_int) != 4 && gs_currentcpsimode(imemory)) {
+                        if ((double)fval > (double)MAX_PS_INT32)       /* (double)0x7fffffff */
+                            return_error(gs_error_rangecheck);
+                        else if ((double)fval < (double)MIN_PS_INT32) /* (double)(int)0x80000000 */
+                            return_error(gs_error_rangecheck);
+                    }
                 } break;
             case t__invalid:
                 return_error(gs_error_stackunderflow);

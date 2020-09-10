@@ -1,4 +1,4 @@
-/* Copyright (C) 2001-2019 Artifex Software, Inc.
+/* Copyright (C) 2001-2020 Artifex Software, Inc.
    All Rights Reserved.
 
    This software is provided AS-IS with no warranty, either express or
@@ -84,6 +84,10 @@ int gs_main_init1(gs_main_instance * minst);
  * initialization files with PostScript procedure definitions.
  */
 int gs_main_init2(gs_main_instance * minst);
+
+int
+gs_main_set_language_param(gs_main_instance *minst,
+                           gs_param_list    *plist);
 
 /*
  * The runlibfile operator uses a search path, as described in

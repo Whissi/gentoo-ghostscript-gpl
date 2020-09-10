@@ -1,4 +1,4 @@
-/* Copyright (C) 2001-2019 Artifex Software, Inc.
+/* Copyright (C) 2001-2020 Artifex Software, Inc.
    All Rights Reserved.
 
    This software is provided AS-IS with no warranty, either express or
@@ -22,7 +22,6 @@
 #include "gsutil.h"             /* for gs_next_ids */
 #include "gzstate.h"
 #include "gxcspace.h"           /* here for gscolor2.h */
-#include "gsalpha.h"
 #include "gscolor2.h"
 #include "gscoord.h"            /* for gs_initmatrix */
 #include "gscie.h"
@@ -37,8 +36,10 @@
 #include "gzcpath.h"
 #include "gsovrc.h"
 #include "gxcolor2.h"
+#include "gscolor3.h" /* for gs_smoothness() */
 #include "gxpcolor.h"
 #include "gsicc_manage.h"
+#include "gxdevsop.h"
 
 /* Forward references */
 static gs_gstate *gstate_alloc(gs_memory_t *, client_name_t,
@@ -232,7 +233,6 @@ gs_gstate_alloc(gs_memory_t * mem)
     code = gs_nulldevice(pgs);
     if (code < 0)
         goto fail;
-    gs_setalpha(pgs, 1.0);
     gs_setfillconstantalpha(pgs, 1.0);
     gs_setstrokeconstantalpha(pgs, 1.0);
     gs_setalphaisshape(pgs, false);
@@ -319,8 +319,8 @@ gs_gsave(gs_gstate * pgs)
     if (pgs->show_gstate == pgs)
         pgs->show_gstate = pnew->show_gstate = pnew;
     pgs->level++;
-    if_debug2m('g', pgs->memory, "[g]gsave -> 0x%lx, level = %d\n",
-              (ulong) pnew, pgs->level);
+    if_debug2m('g', pgs->memory, "[g]gsave -> "PRI_INTPTR", level = %d\n",
+              (intptr_t)pnew, pgs->level);
     return 0;
 }
 
@@ -378,8 +378,8 @@ gs_grestore_only(gs_gstate * pgs)
     void *pdata = pgs->client_data;
     void *sdata;
 
-    if_debug2m('g', pgs->memory, "[g]grestore 0x%lx, level was %d\n",
-               (ulong) saved, pgs->level);
+    if_debug2m('g', pgs->memory, "[g]grestore "PRI_INTPTR", level was %d\n",
+               (intptr_t)saved, pgs->level);
     if (!saved)
         return 1;
     sdata = saved->client_data;
@@ -593,8 +593,11 @@ gs_gstate_update_overprint(gs_gstate * pgs, const gs_overprint_params_t * pparam
                                                    pgs->memory,
                                                    NULL);
         if (code >= 0 || code == gs_error_handled){
-            if (ovptdev != dev)
+            if (ovptdev != dev) {
                 gx_set_device_only(pgs, ovptdev);
+                /* Get rid of extra reference */
+                rc_decrement(ovptdev, "gs_gstate_update_overprint(ovptdev)");
+            }
             code = 0;
         }
     }
@@ -635,10 +638,35 @@ gs_do_set_overprint(gs_gstate * pgs)
     else {
         gx_device* dev = pgs->device;
         cmm_dev_profile_t* dev_profile;
+        gs_color_space_index pcs_index = gs_color_space_get_index(pcs);
 
         dev_proc(dev, get_profile)(dev, &dev_profile);
-        if (!dev_profile->sim_overprint || dev_profile->device_profile[0]->data_cs != gsCMYK)
+        if (!dev_profile->sim_overprint)
             return code;
+
+        /* Transparency device that supports spots and where we have
+           sep or devicen colors needs special consideration if the device
+           is in a additive blend mode.  This could
+           be written more compactly, but it would be unreadable. */
+        if (dev_proc(dev, dev_spec_op)(dev, gxdso_pdf14_sep_device, NULL, 0) &&
+            (dev->color_info.polarity != GX_CINFO_POLARITY_SUBTRACTIVE) &&
+            (pcs_index == gs_color_space_index_DeviceN ||
+             pcs_index == gs_color_space_index_Separation)) {
+            if (pcs_index == gs_color_space_index_Separation) {
+                if (!(pcs->params.separation.color_type == SEP_MIX ||
+                      pcs->params.separation.color_type == SEP_ENUM)) {
+                    /* Sep color is not a spot color.  We can't do OP and trans */
+                    return code;
+                }
+            }
+            if (pcs_index == gs_color_space_index_DeviceN) {
+                if (pcs->params.device_n.color_type != SEP_PURE_SPOT) {
+                    /* DeviceN has process colors  We can't do OP and trans. */
+                    return code;
+                }
+            }
+
+        }
 
         /* The spaces that do not allow opm (e.g. ones that are not ICC or DeviceCMYK)
            will blow away any true setting later. But we have to be prepared
@@ -915,7 +943,46 @@ gs_initgraphics(gs_gstate * pgs)
     }
     pgs->in_cachedevice = 0;
 
+    code = gs_settextspacing(pgs, (double)0.0);
+    if (code < 0)
+        goto exit;
+    code = gs_settextleading(pgs, (double)0.0);
+    if (code < 0)
+        goto exit;
+
+    gs_settextrenderingmode(pgs, 0);
+
+    code = gs_setwordspacing(pgs, (double)0.0);
+    if (code < 0)
+        goto exit;
+    code = gs_settexthscaling(pgs, (double)100.0);
+    if (code < 0)
+        goto exit;
+
+    gs_setaccuratecurves(pgs, true);
+
+    code = gs_setstrokeconstantalpha(pgs, 1.0);
+    if (code < 0)
+        goto exit;
+    code = gs_setfillconstantalpha(pgs, 1.0);
+    if (code < 0)
+        goto exit;
+    code = gs_setalphaisshape(pgs, 0);
+    if (code < 0)
+        goto exit;
+    code = gs_setblendmode(pgs, BLEND_MODE_Compatible);
+    if (code < 0)
+        goto exit;
+    code = gs_settextknockout(pgs, true);
+    if (code < 0)
+        goto exit;
+    code = gs_setsmoothness(pgs, 0.02); /* Match gs code */
+    if (code < 0)
+        goto exit;
+
     return 0;
+exit:
+    return code;
 }
 
 /* setfilladjust */
@@ -980,6 +1047,13 @@ gs_currenttextspacing(const gs_gstate *pgs)
 int
 gs_settextspacing(gs_gstate *pgs, double Tc)
 {
+    int code = 0;
+    gs_fixed_point dxy;
+
+    code = gs_distance_transform2fixed(&pgs->ctm, Tc, 1, &dxy);
+    if (code < 0)
+        return code;
+
     pgs->textspacing = (float)Tc;
     return 0;
 }
@@ -1279,7 +1353,7 @@ gstate_clone(gs_gstate * pfrom, gs_memory_t * mem, client_name_t cname,
     return pgs;
   fail:
     if (pdata != NULL)
-        (*pfrom->client_procs.free) (pdata, mem);
+        (*pfrom->client_procs.free) (pdata, mem, pgs);
     memset(pgs->color, 0, 2*sizeof(gs_gstate_color));
     gs_free_object(mem, pgs->line_params.dash.pattern, cname);
     GSTATE_ASSIGN_PARTS(pgs, &parts);
@@ -1333,15 +1407,15 @@ gstate_free_contents(gs_gstate * pgs)
         gx_cpath_free(pgs->view_clip, cname);
         pgs->view_clip = NULL;
     }
+    if (pgs->client_data != 0)
+        (*pgs->client_procs.free) (pgs->client_data, mem, pgs);
+    pgs->client_data = 0;
     gs_swapcolors_quick(pgs);
     cs_adjust_counts_icc(pgs, -1);
     gs_swapcolors_quick(pgs);
     cs_adjust_counts_icc(pgs, -1);
     pgs->color[0].color_space = 0;
     pgs->color[1].color_space = 0;
-    if (pgs->client_data != 0)
-        (*pgs->client_procs.free) (pgs->client_data, mem);
-    pgs->client_data = 0;
     gs_free_object(mem, pgs->line_params.dash.pattern, cname);
     pgs->line_params.dash.pattern = 0;
     gstate_free_parts(pgs, mem, cname);     /* this also clears pointers to freed elements */

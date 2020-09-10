@@ -1,4 +1,4 @@
-/* Copyright (C) 2001-2019 Artifex Software, Inc.
+/* Copyright (C) 2001-2020 Artifex Software, Inc.
    All Rights Reserved.
 
    This software is provided AS-IS with no warranty, either express or
@@ -25,7 +25,8 @@
 typedef struct display_callback_s display_callback;
 #endif
 
-/* Called from imain.c to set the display callback in the device instance. */
-int display_set_callback(gs_main_instance *minst, display_callback *callback);
+/* Called from imain.c to reopen the device after initialisation if the.
+ * device requires this. This gives it a chance to refetch any callbacks. */
+int reopen_device_if_required(gs_main_instance *minst);
 
 #endif /* idisp_INCLUDED */

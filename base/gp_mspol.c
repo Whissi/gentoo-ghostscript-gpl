@@ -1,4 +1,4 @@
-/* Copyright (C) 2001-2019 Artifex Software, Inc.
+/* Copyright (C) 2001-2020 Artifex Software, Inc.
    All Rights Reserved.
 
    This software is provided AS-IS with no warranty, either express or
@@ -39,7 +39,7 @@ gp_check_interrupts(const gs_memory_t *mem)
     }
 #endif
     if (mem && mem->gs_lib_ctx && mem->gs_lib_ctx->core->poll_fn)
-        return (*mem->gs_lib_ctx->core->poll_fn)(mem->gs_lib_ctx->core->caller_handle);
+        return (*mem->gs_lib_ctx->core->poll_fn)(mem->gs_lib_ctx->core->poll_caller_handle);
     return 0;
 }
 #endif

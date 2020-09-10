@@ -1,4 +1,4 @@
-/* Copyright (C) 2001-2019 Artifex Software, Inc.
+/* Copyright (C) 2001-2020 Artifex Software, Inc.
    All Rights Reserved.
 
    This software is provided AS-IS with no warranty, either express or
@@ -34,11 +34,12 @@
 #define TIFF_PRINT_BUF_LENGTH 1024
 static const char tifs_msg_truncated[] = "\n*** Previous line has been truncated.\n";
 
-/* place to hold the data for our libtiff i/o hooks */
+/* place to hold the data for our libtiff i/o hooks
+ */
 typedef struct tifs_io_private_t
 {
     gp_file *f;
-    gx_device_printer *pdev;
+    gs_memory_t *memory;
 } tifs_io_private;
 
 /* libtiff i/o hooks */
@@ -104,12 +105,13 @@ static int
 gs_tifsCloseProc(thandle_t fd)
 {
     tifs_io_private *tiffio = (tifs_io_private *)fd;
-    gx_device_printer *pdev = tiffio->pdev;
-    int code = gp_fclose(tiffio->f);
-    
-    gs_free(pdev->memory, tiffio, sizeof(tifs_io_private), 1, "gs_tifsCloseProc");
 
-    return code;
+    /* We don't close tiffio->f as this will be closed later by the
+     * device. */
+
+    gs_free(tiffio->memory, tiffio, sizeof(tifs_io_private), 1, "gs_tifsCloseProc");
+
+    return 0;
 }
 
 static uint64_t
@@ -122,12 +124,12 @@ gs_tifsSizeProc(thandle_t fd)
     if (curpos < 0) {
         return(0);
     }
-    
+
     if (gp_fseek(tiffio->f, (gs_offset_t)0, SEEK_END) < 0) {
         return(0);
     }
     length = (uint64_t)gp_ftell(tiffio->f);
-    
+
     if (gp_fseek(tiffio->f, curpos, SEEK_SET) < 0) {
         return(0);
     }
@@ -152,13 +154,13 @@ tiff_from_filep(gx_device_printer *dev,  const char *name, gp_file *filep, int b
         mode[modelen++] = '8';
 
     mode[modelen] = (char)0;
-    
+
     tiffio = (tifs_io_private *)gs_malloc(dev->memory, sizeof(tifs_io_private), 1, "tiff_from_filep");
     if (!tiffio) {
         return NULL;
     }
     tiffio->f = filep;
-    tiffio->pdev = dev;
+    tiffio->memory = dev->memory;
 
     t = TIFFClientOpen(name, mode,
         (thandle_t) tiffio, (TIFFReadWriteProc)gs_tifsReadProc,
@@ -173,16 +175,15 @@ static void
 gs_tifsWarningHandlerEx(thandle_t client_data, const char* module, const char* fmt, va_list ap)
 {
     tifs_io_private *tiffio = (tifs_io_private *)client_data;
-    gx_device_printer *pdev = tiffio->pdev;    
     int count;
     char buf[TIFF_PRINT_BUF_LENGTH];
 
     count = vsnprintf(buf, sizeof(buf), fmt, ap);
-    if (count >= sizeof(buf) || count < 0)  { /* C99 || MSVC */
-        dmlprintf1(pdev->memory, "%s", buf);
-        dmlprintf1(pdev->memory, "%s\n", tifs_msg_truncated);
+    if (count < 0 || count >= sizeof(buf))  { /* MSVC || C99 */
+        dmlprintf1(tiffio->memory, "%s", buf);
+        dmlprintf1(tiffio->memory, "%s\n", tifs_msg_truncated);
     } else {
-        dmlprintf1(pdev->memory, "%s\n", buf);
+        dmlprintf1(tiffio->memory, "%s\n", buf);
     }
 }
 
@@ -190,22 +191,21 @@ static void
 gs_tifsErrorHandlerEx(thandle_t client_data, const char* module, const char* fmt, va_list ap)
 {
     tifs_io_private *tiffio = (tifs_io_private *)client_data;
-    gx_device_printer *pdev = tiffio->pdev;    
     const char *max_size_error = "Maximum TIFF file size exceeded";
     int count;
     char buf[TIFF_PRINT_BUF_LENGTH];
 
     count = vsnprintf(buf, sizeof(buf), fmt, ap);
-    if (count >= sizeof(buf) || count < 0)  { /* C99 || MSVC */
-        dmlprintf1(pdev->memory, "%s\n", buf);
-        dmlprintf1(pdev->memory, "%s", tifs_msg_truncated);
+    if (count < 0 || count >= sizeof(buf) )  { /* MSVC || C99 */
+        dmlprintf1(tiffio->memory, "%s\n", buf);
+        dmlprintf1(tiffio->memory, "%s", tifs_msg_truncated);
     } else {
-        dmlprintf1(pdev->memory, "%s\n", buf);
+        dmlprintf1(tiffio->memory, "%s\n", buf);
     }
 
 #if (TIFFLIB_VERSION >= 20111221)
     if (!strncmp(fmt, max_size_error, strlen(max_size_error))) {
-        dmlprintf(pdev->memory, "Use -dUseBigTIFF(=true) for BigTIFF output\n");
+        dmlprintf(tiffio->memory, "Use -dUseBigTIFF(=true) for BigTIFF output\n");
     }
 #endif
 }
@@ -242,7 +242,7 @@ TIFFOpen(const char* name, const char* mode)
 {
     (void)name;
     (void)mode;
-    
+
     return(NULL);
 }
 

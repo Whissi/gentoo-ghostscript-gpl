@@ -1,4 +1,4 @@
-/* Copyright (C) 2001-2019 Artifex Software, Inc.
+/* Copyright (C) 2001-2020 Artifex Software, Inc.
    All Rights Reserved.
 
    This software is provided AS-IS with no warranty, either express or
@@ -23,6 +23,6 @@
 
 /* Exported by zvmem2.c for zusparam.c */
 int set_vm_reclaim(i_ctx_t *, long);
-int set_vm_threshold(i_ctx_t *, long);
+int set_vm_threshold(i_ctx_t *, int64_t);
 
 #endif /* ivmem2_INCLUDED */

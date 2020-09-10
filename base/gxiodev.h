@@ -1,4 +1,4 @@
-/* Copyright (C) 2001-2019 Artifex Software, Inc.
+/* Copyright (C) 2001-2020 Artifex Software, Inc.
    All Rights Reserved.
 
    This software is provided AS-IS with no warranty, either express or
@@ -204,5 +204,12 @@ gs_iodev_init(gs_memory_t * mem);
 
 void
 gs_iodev_finit(gs_memory_t * mem);
+
+/* Backdoor into romfs for reading file length.
+ * Required because C++ and C seem to differ on sizeof(stat).
+ */
+int
+romfs_file_len(gs_memory_t * mem, const char *name);
+
 
 #endif /* gxiodev_INCLUDED */

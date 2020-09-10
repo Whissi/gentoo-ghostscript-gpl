@@ -1,4 +1,4 @@
-/* Copyright (C) 2001-2019 Artifex Software, Inc.
+/* Copyright (C) 2001-2020 Artifex Software, Inc.
    All Rights Reserved.
 
    This software is provided AS-IS with no warranty, either express or
@@ -599,7 +599,8 @@ clist_dev_spec_op(gx_device *pdev, int dev_spec_op, void *data, int size)
         return 1;
     if (dev_spec_op == gxdso_pattern_shfill_doesnt_need_path)
         return 1;
-    if (dev_spec_op == gxdso_supports_devn) {
+    if (dev_spec_op == gxdso_supports_devn
+     || dev_spec_op == gxdso_skip_icc_component_validation) {
         cmm_dev_profile_t *dev_profile;
         int code;
         code = dev_proc(cdev, get_profile)((gx_device*) cdev, &dev_profile);
@@ -623,8 +624,8 @@ clist_dev_spec_op(gx_device *pdev, int dev_spec_op, void *data, int size)
         return cwdev->op_fill_active || cwdev->op_stroke_active;
     }
     /* forward to the appropriate super class */
-    if (cdev->is_printer)
-        return gdev_prn_forwarding_dev_spec_op(pdev, dev_spec_op, data, size);
+    if (cdev->orig_spec_op)
+        return cdev->orig_spec_op(pdev, dev_spec_op, data, size);
     if (dev_proc(cdev, open_device) == pattern_clist_open_device)
         return pattern_accum_dev_spec_op(pdev, dev_spec_op, data, size);
     return gx_default_dev_spec_op(pdev, dev_spec_op, data, size);
@@ -985,7 +986,7 @@ clist_copy_planes(gx_device * dev,
         }
 
         /* 0x100 fudge is arbitrary, but the BufferSpace is large w.r.t. cbuf size so it doesn't matter */
-        if ((cdev->cend - cdev->cnext) < 0x100 + (re.height * bytes_row * (long)cdev->color_info.num_components))
+        if ((cdev->cend - cdev->cnext) < 0x100 + ((long)cdev->color_info.num_components * re.height * bytes_row))
             cmd_write_buffer(cdev, cmd_opv_end_run);	/* Insure that all planes fit in the bufferspace */
 
         rect.x = rx, rect.y = re.y;

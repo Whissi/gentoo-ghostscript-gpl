@@ -1,4 +1,4 @@
-/* Copyright (C) 2001-2019 Artifex Software, Inc.
+/* Copyright (C) 2001-2020 Artifex Software, Inc.
    All Rights Reserved.
 
    This software is provided AS-IS with no warranty, either express or
@@ -369,8 +369,8 @@ cmd_check_clip_path(gx_device_clist_writer * cldev, const gx_clip_path * pcpath)
  * or stroking.
  */
 #define FILL_KNOWN\
- (cj_ac_sa_known | flatness_known | op_bm_tk_known | opacity_alpha_known |\
-  shape_alpha_known | fill_adjust_known | alpha_known | clip_path_known)
+ (cj_ac_sa_known | flatness_known | op_bm_tk_known | ais_known |\
+  fill_alpha_known | fill_adjust_known | stroke_alpha_known | clip_path_known)
 static void
 cmd_check_fill_known(gx_device_clist_writer* cdev, const gs_gstate* pgs,
     double flatness, const gs_fixed_point* padjust,
@@ -409,23 +409,23 @@ cmd_check_fill_known(gx_device_clist_writer* cdev, const gs_gstate* pgs,
         state_update(stroke_overprint);
         state_update(renderingintent);
     }
-    if (state_neq(opacity.alpha)) {
-        *punknown |= opacity_alpha_known;
-        state_update(opacity.alpha);
+    if (state_neq(alphaisshape)) {
+        *punknown |= ais_known;
+        state_update(alphaisshape);
     }
-    if (state_neq(shape.alpha)) {
-        *punknown |= shape_alpha_known;
-        state_update(shape.alpha);
+    if (state_neq(strokeconstantalpha)) {
+        *punknown |= stroke_alpha_known;
+        state_update(strokeconstantalpha);
+    }
+    if (cdev->gs_gstate.fillconstantalpha != pgs->fillconstantalpha) {
+        *punknown |= fill_alpha_known;
+        state_update(fillconstantalpha);
     }
     if (cdev->gs_gstate.fill_adjust.x != padjust->x ||
         cdev->gs_gstate.fill_adjust.y != padjust->y
         ) {
         *punknown |= fill_adjust_known;
         cdev->gs_gstate.fill_adjust = *padjust;
-    }
-    if (cdev->gs_gstate.alpha != pgs->alpha) {
-        *punknown |= alpha_known;
-        state_update(alpha);
     }
     if (cmd_check_clip_path(cdev, pcpath))
         *punknown |= clip_path_known;
@@ -486,9 +486,9 @@ cmd_write_unknown(gx_device_clist_writer * cldev, gx_clist_state * pcls,
                  sizeof(float) +	/* line width */
                  sizeof(float) +	/* miter limit */
                  3 +		/* bm_tk, op, and rend intent */
-                 sizeof(float) * 2 +  /* opacity/shape alpha */
-                 sizeof(cldev->gs_gstate.alpha)
-        ];
+                 sizeof(cldev->gs_gstate.alphaisshape) +
+                 sizeof(float) * 2  /* ca CA */
+                 ];
         byte *bp = buf;
         if (unknown & cap_join_known) {
             *bp++ = (cldev->gs_gstate.line_params.start_cap << 3) +
@@ -528,18 +528,18 @@ cmd_write_unknown(gx_device_clist_writer * cldev, gx_clist_state * pcls,
                 cldev->gs_gstate.overprint;
             *bp++ = cldev->gs_gstate.renderingintent;
         }
-        if (unknown & opacity_alpha_known) {
-            memcpy(bp, &cldev->gs_gstate.opacity.alpha, sizeof(float));
+        if (unknown & ais_known) {
+            memcpy(bp, &cldev->gs_gstate.alphaisshape,
+                sizeof(cldev->gs_gstate.alphaisshape));
+            bp += sizeof(cldev->gs_gstate.alphaisshape);
+        }
+        if (unknown & stroke_alpha_known) {
+            memcpy(bp, &cldev->gs_gstate.strokeconstantalpha, sizeof(float));
             bp += sizeof(float);
         }
-        if (unknown & shape_alpha_known) {
-            memcpy(bp, &cldev->gs_gstate.shape.alpha, sizeof(float));
+        if (unknown & fill_alpha_known) {
+            memcpy(bp, &cldev->gs_gstate.fillconstantalpha, sizeof(float));
             bp += sizeof(float);
-        }
-        if (unknown & alpha_known) {
-            memcpy(bp, &cldev->gs_gstate.alpha,
-                   sizeof(cldev->gs_gstate.alpha));
-            bp += sizeof(cldev->gs_gstate.alpha);
         }
         code = set_cmd_put_op(&dp, cldev, pcls, cmd_opv_set_misc2,
                               1 + cmd_sizew(misc2_unknown) + (bp - buf));
@@ -904,7 +904,7 @@ clist_fill_stroke_path(gx_device * pdev, const gs_gstate * pgs,
     if (pdevc_stroke == NULL || pdevc_fill == NULL)
         return_error(gs_error_unknownerror);	/* shouldn't happen */
 
-    if ((cdev->disable_mask & (clist_disable_fill_path || clist_disable_stroke_path)) ||
+    if ((cdev->disable_mask & (clist_disable_fill_path | clist_disable_stroke_path)) ||
         gs_debug_c(',')
         ) {
         /* Disable path-based banding. */

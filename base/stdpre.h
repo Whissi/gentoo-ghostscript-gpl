@@ -1,4 +1,4 @@
-/* Copyright (C) 2001-2019 Artifex Software, Inc.
+/* Copyright (C) 2001-2020 Artifex Software, Inc.
    All Rights Reserved.
 
    This software is provided AS-IS with no warranty, either express or
@@ -42,11 +42,13 @@ typedef struct gp_file_s gp_file;
  * Here we deal with the vagaries of various C compilers.  We assume that:
  *      ANSI-standard Unix compilers define __STDC__.
  *      gcc defines __GNUC__.
- *      Borland Turbo C and Turbo C++ define __MSDOS__ and __TURBOC__.
- *      Borland C++ defines __BORLANDC__, __MSDOS__, and __TURBOC__.
  *      Microsoft C/C++ defines _MSC_VER and _MSDOS.
+ *
+ * The following are compilers we no longer support:
  *      Watcom C defines __WATCOMC__ and MSDOS.
  *      MetroWerks C defines __MWERKS__.
+ *      Borland Turbo C and Turbo C++ define __MSDOS__ and __TURBOC__.
+ *      Borland C++ defines __BORLANDC__, __MSDOS__, and __TURBOC__.
  *
  * We arrange to define __MSDOS__ on all the MS-DOS platforms.
  */
@@ -378,18 +380,12 @@ typedef int bool;
 
 /*
  * Define the type to be used for ordering pointers (<, >=, etc.).
- * The Borland and Microsoft large models only compare the offset part
- * of segmented pointers.  Semantically, the right type to use for the
- * comparison is char huge *, but we have no idea how expensive comparing
- * such pointers is, and any type that compares all the bits of the pointer,
- * gives the right result for pointers in the same segment, and keeps
- * different segments disjoint will do.
+ * This used to have 'unsigned long' for comparison of segment+offset,
+ * but that hasn't been an issue for YEARS. The old version was not
+ * compatible with 64-bit.
  */
-#if defined(__TURBOC__) || defined(_MSC_VER)
-typedef unsigned long ptr_ord_t;
-#else
 typedef const char *ptr_ord_t;
-#endif
+
 /* Define all the pointer comparison operations. */
 #define _PTR_CMP(p1, rel, p2)  ((ptr_ord_t)(p1) rel (ptr_ord_t)(p2))
 #define PTR_LE(p1, p2) _PTR_CMP(p1, <=, p2)

@@ -1,4 +1,4 @@
-/* Copyright (C) 2001-2019 Artifex Software, Inc.
+/* Copyright (C) 2001-2020 Artifex Software, Inc.
    All Rights Reserved.
 
    This software is provided AS-IS with no warranty, either express or
@@ -399,7 +399,7 @@ fn_Sd_evaluate_general(const gs_function_t * pfn_common, const float *in, float 
     /* Look up and interpolate the output values. */
 
     {
-        ulong factor = bps * pfn->params.n;
+        ulong factor = (ulong)bps * pfn->params.n;
 
         for (i = 0; i < pfn->params.m; factor *= pfn->params.Size[i++]) {
             int ipart = (int)encoded[i];
@@ -493,7 +493,7 @@ fn_Sd_evaluate_cubic_cached_1d(const gs_function_Sd_t *pfn, const float *in, flo
             int bps = pfn->params.BitsPerSample;
 
             p = &pfn->params.pole[i * pole_step];
-            fn_get_samples[pfn->params.BitsPerSample](pfn, i * bps * pfn->params.n, sdata);
+            fn_get_samples[pfn->params.BitsPerSample](pfn, (ulong)i * bps * pfn->params.n, sdata);
             for (k = 0; k < pfn->params.n; k++, p++)
                 *p = fn_Sd_encode(pfn, k, (double)sdata[k]);
         }
@@ -1367,6 +1367,10 @@ gs_function_Sd_free_params(gs_function_Sd_params_t * params, gs_memory_t * mem)
     gs_free_const_object(mem, params->Encode, "Encode");
     params->Encode = NULL;
     fn_common_free_params((gs_function_params_t *) params, mem);
+    if (params->DataSource.type == data_source_type_stream && params->DataSource.data.strm != NULL) {
+        s_close_filters(&params->DataSource.data.strm, params->DataSource.data.strm->strm);
+        params->DataSource.data.strm = NULL;
+    }
     gs_free_object(mem, params->pole, "gs_function_Sd_free_params");
     params->pole = NULL;
     gs_free_object(mem, params->array_step, "gs_function_Sd_free_params");

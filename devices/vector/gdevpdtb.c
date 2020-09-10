@@ -1,4 +1,4 @@
-/* Copyright (C) 2001-2019 Artifex Software, Inc.
+/* Copyright (C) 2001-2020 Artifex Software, Inc.
    All Rights Reserved.
 
    This software is provided AS-IS with no warranty, either express or
@@ -359,7 +359,7 @@ pdf_base_font_alloc(gx_device_pdf *pdev, pdf_base_font_t **ppbfont,
             font_name.size -= SUBSET_PREFIX_SIZE;
         }
     } else {
-        gs_sprintf(fnbuf, ".F%lx", (ulong)copied);
+        gs_sprintf(fnbuf, ".F" PRI_INTPTR, (intptr_t)copied);
         font_name.data = (byte *)fnbuf;
         font_name.size = strlen(fnbuf);
     }

@@ -1,4 +1,4 @@
-/* Copyright (C) 2001-2019 Artifex Software, Inc.
+/* Copyright (C) 2001-2020 Artifex Software, Inc.
    All Rights Reserved.
 
    This software is provided AS-IS with no warranty, either express or
@@ -83,7 +83,7 @@ ireclaim(gs_dual_memory_t * dmem, int space)
     ialloc_set_limit(mem);
     if (space < 0) {
         gs_memory_status_t stats;
-        ulong allocated;
+        size_t allocated;
 
         /* If the ammount still allocated after the GC is complete */
         /* exceeds the max_vm setting, then return a VMerror       */
@@ -141,7 +141,9 @@ gs_vmreclaim(gs_dual_memory_t *dmem, bool global)
          ) {
         gs_ref_memory_t *mem = dmem->spaces_indexed[i];
 
-        if (mem == 0 || (i > 0 && mem == dmem->spaces_indexed[i - 1]))
+        /* Always safe to substract 1 from i here, as i is always at
+         * least i_vm_system (1) or i_vm_local (2). */
+        if (mem == 0 || (mem == dmem->spaces_indexed[i - 1]))
             continue;
         if (mem->stable_memory != (gs_memory_t *)mem)
             ialloc_gc_prepare((gs_ref_memory_t *)mem->stable_memory);

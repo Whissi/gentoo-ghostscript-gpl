@@ -1,4 +1,4 @@
-/* Copyright (C) 2001-2019 Artifex Software, Inc.
+/* Copyright (C) 2001-2020 Artifex Software, Inc.
    All Rights Reserved.
 
    This software is provided AS-IS with no warranty, either express or
@@ -1043,9 +1043,9 @@ interp(i_ctx_t **pi_ctx_p /* context for execution, updated if resched */,
 
         osp = iosp;
         esp = iesp;
-        dmlprintf5(imemory, "d%u,e%u<%u>0x%lx(%d): ",
+        dmlprintf5(imemory, "d%u,e%u<%u>"PRI_INTPTR"(%d): ",
                   ref_stack_count(&d_stack), ref_stack_count(&e_stack),
-                  ref_stack_count(&o_stack), (ulong)IREF, icount);
+                  ref_stack_count(&o_stack), (intptr_t)IREF, icount);
         debug_print_ref(imemory, IREF);
         if (iosp >= osbot) {
             dmputs(imemory, " // ");

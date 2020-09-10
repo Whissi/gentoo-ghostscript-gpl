@@ -1,4 +1,4 @@
-/* Copyright (C) 2001-2019 Artifex Software, Inc.
+/* Copyright (C) 2001-2020 Artifex Software, Inc.
    All Rights Reserved.
 
    This software is provided AS-IS with no warranty, either express or
@@ -703,7 +703,7 @@ cff_write_Top_fdarray(cff_writer_t *pcw, gs_font_base *pbfont,
     gs_font_info_t info;
 
     cff_get_Top_info_common(pcw, pbfont, false, &info);
-    cff_write_Top_common(pcw, pbfont, false, &info);
+    cff_write_Top_common(pcw, pbfont, true, &info);
     cff_put_int(pcw, Private_size);
     cff_put_int_value(pcw, Private_offset, TOP_Private);
     if (pfname->size == 0)

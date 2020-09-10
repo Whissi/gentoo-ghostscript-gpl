@@ -1,4 +1,4 @@
-/* Copyright (C) 2001-2019 Artifex Software, Inc.
+/* Copyright (C) 2001-2020 Artifex Software, Inc.
    All Rights Reserved.
 
    This software is provided AS-IS with no warranty, either express or
@@ -21,8 +21,12 @@
 #include "gp.h"
 #include "memory_.h"
 #include "stat_.h"
+#include "gserrors.h"
 
 #include "gp_mswin.h"
+
+/* Should be in io.h */
+extern intptr_t _get_osfhandle(int fd);
 
 /* Open a file with the given name, as a stream of uninterpreted bytes. */
 FILE *
@@ -45,6 +49,54 @@ gp_fopen_impl(gs_memory_t *mem, const char *fname, const char *mode)
     gs_free_object(mem, uni, "gs_fopen_impl");
 
     return file;
+}
+
+int
+gp_unlink_impl(gs_memory_t *mem, const char *fname)
+{
+    int len = utf8_to_wchar(NULL, fname);
+    wchar_t *uni;
+    int ret;
+
+    if (len <= 0)
+        return gs_error_unknownerror;
+
+    uni = (wchar_t *)gs_alloc_bytes(mem, len*sizeof(wchar_t), "gp_unlink_impl");
+    if (uni == NULL)
+        return gs_error_VMerror;
+    utf8_to_wchar(uni, fname);
+    ret = _wunlink(uni);
+    gs_free_object(mem, uni, "gs_unlink_impl");
+
+    return ret;
+}
+
+int
+gp_rename_impl(gs_memory_t *mem, const char *from, const char *to)
+{
+    int lenf = utf8_to_wchar(NULL, from);
+    int lent = utf8_to_wchar(NULL, to);
+    wchar_t *unif, *unit;
+    int ret;
+
+    if (lenf <= 0 || lent <= 0)
+        return gs_error_unknownerror;
+
+    unif = (wchar_t *)gs_alloc_bytes(mem, lenf*sizeof(wchar_t), "gp_rename_impl");
+    if (unif == NULL)
+        return gs_error_VMerror;
+    unit = (wchar_t *)gs_alloc_bytes(mem, lent*sizeof(wchar_t), "gp_rename_impl");
+    if (unit == NULL) {
+        gs_free_object(mem, unif, "gs_unlink_impl");
+        return gs_error_VMerror;
+    }
+    utf8_to_wchar(unif, from);
+    utf8_to_wchar(unit, to);
+    ret = _wrename(unif, unit);
+    gs_free_object(mem, unif, "gs_rename_impl");
+    gs_free_object(mem, unit, "gs_rename_impl");
+
+    return ret;
 }
 
 /* Create a second open FILE on the basis of a given one */
@@ -144,11 +196,11 @@ bool gp_fseekable_impl(FILE *f)
 {
     struct __stat64 s;
     int fno;
-    
+
     fno = fileno(f);
     if (fno < 0)
         return(false);
-    
+
     if (_fstat64(fno, &s) < 0)
         return(false);
 

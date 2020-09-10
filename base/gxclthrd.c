@@ -1,4 +1,4 @@
-/* Copyright (C) 2001-2019 Artifex Software, Inc.
+/* Copyright (C) 2001-2020 Artifex Software, Inc.
    All Rights Reserved.
 
    This software is provided AS-IS with no warranty, either express or
@@ -64,7 +64,7 @@ setup_device_and_mem_for_thread(gs_memory_t *chunk_base_mem, gx_device *dev, boo
     gs_c_param_list paramlist;
     gs_devn_params *pclist_devn_params;
     gx_device_buf_space_t buf_space;
-    ulong state_size;
+    size_t min_buffer_space;
 
 
     /* Every thread will have a 'chunk allocator' to reduce the interaction
@@ -114,8 +114,9 @@ setup_device_and_mem_for_thread(gs_memory_t *chunk_base_mem, gx_device *dev, boo
      * a profile with the 'special' name "OI_PROFILE" and throw an error.
      */
     if (!gscms_is_threadsafe() || (dev->icc_struct != NULL &&
-        ((dev->icc_struct->device_profile[0] != NULL &&
-          strncmp(dev->icc_struct->device_profile[0]->name, OI_PROFILE, strlen(OI_PROFILE)) == 0)
+        ((dev->icc_struct->device_profile[GS_DEFAULT_DEVICE_PROFILE] != NULL &&
+          strncmp(dev->icc_struct->device_profile[GS_DEFAULT_DEVICE_PROFILE]->name,
+              OI_PROFILE, strlen(OI_PROFILE)) == 0)
         || (dev->icc_struct->proof_profile != NULL &&
         strncmp(dev->icc_struct->proof_profile->name, OI_PROFILE, strlen(OI_PROFILE)) == 0)))) {
         ndev->icc_struct = gsicc_new_device_profile_array(ndev->memory);
@@ -125,8 +126,8 @@ setup_device_and_mem_for_thread(gs_memory_t *chunk_base_mem, gx_device *dev, boo
                   code);
             goto out_cleanup;
         }
-        if ((code = gsicc_clone_profile(dev->icc_struct->device_profile[0],
-            &(ndev->icc_struct->device_profile[0]), ndev->memory)) < 0) {
+        if ((code = gsicc_clone_profile(dev->icc_struct->device_profile[GS_DEFAULT_DEVICE_PROFILE],
+            &(ndev->icc_struct->device_profile[GS_DEFAULT_DEVICE_PROFILE]), ndev->memory)) < 0) {
             emprintf1(dev->memory,
                 "Error setting up device profile, code=%d. Rendering threads not started.\n",
                 code);
@@ -176,10 +177,10 @@ setup_device_and_mem_for_thread(gs_memory_t *chunk_base_mem, gx_device *dev, boo
     ndev->icc_struct->supports_devn = cdev->icc_struct->supports_devn;
     ncdev->page_uses_transparency = cdev->page_uses_transparency;
     if_debug3m(gs_debug_flag_icc, cdev->memory,
-               "[icc] MT clist device = 0x%p profile = 0x%p handle = 0x%p\n",
-               ncdev,
-               ncdev->icc_struct->device_profile[0],
-               ncdev->icc_struct->device_profile[0]->profile_handle);
+               "[icc] MT clist device = "PRI_INTPTR" profile = "PRI_INTPTR" handle = "PRI_INTPTR"\n",
+               (intptr_t)ncdev,
+               (intptr_t)ncdev->icc_struct->device_profile[GS_DEFAULT_DEVICE_PROFILE],
+               (intptr_t)ncdev->icc_struct->device_profile[GS_DEFAULT_DEVICE_PROFILE]->profile_handle);
     /* If the device is_planar, then set the flag in the new_device and the procs */
     if ((ncdev->is_planar = cdev->is_planar))
         gdev_prn_set_procs_planar(ndev);
@@ -192,11 +193,12 @@ setup_device_and_mem_for_thread(gs_memory_t *chunk_base_mem, gx_device *dev, boo
     ncdev->space_params.banding_type = BandingAlways;
     code = npdev->printer_procs.buf_procs.size_buf_device
                 (&buf_space, (gx_device *)ncdev, NULL, ncdev->space_params.band.BandHeight, false);
-    /* The 100 is bogus, we are just matching what is in clist_init_states */
-    state_size = cdev->nbands * (ulong) sizeof(gx_clist_state) + sizeof(cmd_prefix) + cmd_largest_size + 100;
+    min_buffer_space = clist_minimum_buffer(cdev->nbands);
     ncdev->space_params.band.BandBufferSpace = buf_space.bits + buf_space.line_ptrs;
-    if (state_size > ncdev->space_params.band.BandBufferSpace)
-        ncdev->space_params.band.BandBufferSpace = state_size;
+    /* Check if the BandBufferSpace is large enough to allow us for clist writing */
+    /* to prevent an error from gdev_prn_allocate_memory which checks that.       */
+    if (min_buffer_space > ncdev->space_params.band.BandBufferSpace)
+        ncdev->space_params.band.BandBufferSpace = min_buffer_space;
     ncdev->space_params.band.tile_cache_size = cdev->page_info.tile_cache_size;	/* must be the same */
     ncdev->space_params.band.BandBufferSpace += cdev->page_info.tile_cache_size;
 

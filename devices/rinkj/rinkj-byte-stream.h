@@ -1,4 +1,4 @@
-/* Copyright (C) 2001-2019 Artifex Software, Inc.
+/* Copyright (C) 2001-2020 Artifex Software, Inc.
    All Rights Reserved.
 
    This software is provided AS-IS with no warranty, either express or
@@ -13,6 +13,9 @@
    CA 94945, U.S.A., +1(415)492-9861, for further information.
 */
 
+
+#ifndef rinkj_byte_stream_h_INCLUDED
+#define rinkj_byte_stream_h_INCLUDED
 
 #include "gp.h"
 
@@ -38,3 +41,5 @@ rinkj_byte_stream_close (RinkjByteStream *bs);
 
 RinkjByteStream *
 rinkj_byte_stream_file_new (gp_file *f);
+
+#endif

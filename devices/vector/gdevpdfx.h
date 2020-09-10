@@ -1,4 +1,4 @@
-/* Copyright (C) 2001-2019 Artifex Software, Inc.
+/* Copyright (C) 2001-2020 Artifex Software, Inc.
    All Rights Reserved.
 
    This software is provided AS-IS with no warranty, either express or
@@ -41,7 +41,11 @@
  * Windows and Linux fail with coordinates outside +/- 16383. Hence, we
  * limit coordinates to 16k, with a little slop.
  */
-#define MAX_USER_COORD 16300
+/* 28/05/2020 This was only being applied to text and a subset of paths. Since
+ * Acrobat 4 is now more than 20 years old, lets just drop support for it. The
+ * PDF specification never had this limit, just Adobe's software.
+ */
+/* #define MAX_USER_COORD 16300 */
 
 /* ---------------- Statically allocated sizes ---------------- */
 /* These should really be dynamic.... */
@@ -1168,7 +1172,12 @@ int pdf_copy_data_safe(stream *s, gp_file *file, gs_offset_t position, long coun
 /* Add the encryption filter. */
 int pdf_begin_encrypt(gx_device_pdf * pdev, stream **s, gs_id object_id);
 /* Remove the encryption filter. */
-void pdf_end_encrypt(gx_device_pdf * pdev);
+static int inline pdf_end_encrypt(gx_device_pdf *pdev)
+{
+    if (pdev->KeyLength)
+        return 1;
+    return 0;
+}
 /* Initialize encryption. */
 int pdf_encrypt_init(const gx_device_pdf * pdev, gs_id object_id, stream_arcfour_state *psarc4);
 

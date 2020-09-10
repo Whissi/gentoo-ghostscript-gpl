@@ -1,4 +1,4 @@
-/* Copyright (C) 2001-2019 Artifex Software, Inc.
+/* Copyright (C) 2001-2020 Artifex Software, Inc.
    All Rights Reserved.
 
    This software is provided AS-IS with no warranty, either express or
@@ -196,6 +196,15 @@ gsapi_set_stdio(void *instance,
     int (GSDLLCALLPTR stdout_fn)(void *caller_handle, const char *str, int len),
     int (GSDLLCALLPTR stderr_fn)(void *caller_handle, const char *str, int len));
 
+/* Does the same as the above, but using the caller_handle given here,
+ * rather than the default one specified at gsapi_new_instance time. */
+GSDLLEXPORT int GSDLLAPI
+gsapi_set_stdio_with_handle(void *instance,
+    int (GSDLLCALLPTR stdin_fn)(void *caller_handle, char *buf, int len),
+    int (GSDLLCALLPTR stdout_fn)(void *caller_handle, const char *str, int len),
+    int (GSDLLCALLPTR stderr_fn)(void *caller_handle, const char *str, int len),
+    void *caller_handle);
+
 /* Set the callback function for polling.
  * This is used for handling window events or cooperative
  * multitasking.  This function will only be called if
@@ -208,13 +217,51 @@ gsapi_set_stdio(void *instance,
 GSDLLEXPORT int GSDLLAPI gsapi_set_poll(void *instance,
     int (GSDLLCALLPTR poll_fn)(void *caller_handle));
 
+/* Does the same as the above, but using the caller_handle given here,
+ * rather than the default one specified at gsapi_new_instance time. */
+GSDLLEXPORT int GSDLLAPI gsapi_set_poll_with_handle(void *instance,
+    int (GSDLLCALLPTR poll_fn)(void *caller_handle), void *caller_handle);
+
 /* Set the display device callback structure.
  * If the display device is used, this must be called
  * after gsapi_new_instance() and before gsapi_init_with_args().
  * See gdevdisp.h for more details.
+ * DEPRECATED: Use the gsapi_register_callback mechanism instead.
  */
 GSDLLEXPORT int GSDLLAPI gsapi_set_display_callback(
    void *instance, display_callback *callback);
+
+/* The callout mechanism allows devices to query "callers" (users of the
+ * DLL) in device specific ways. The callout function pointer type will
+ * be called with:
+ *   callout_handle = the value given at registration
+ *   device_name    = the name of the current device
+ *   id             = An integer, guaranteed to be unique within the
+ *                    callouts from a given device, identifying the
+ *                    purpose of this call.
+ *   size           = device/id specific, but typically the size of 'data'.
+ *   data           = device/id specific, but typically the pointer to
+ *                    an in/out data block.
+ *  Returns an error code (gs_error_unknownerror (-1) if unclaimed,
+ *  non-negative on success, standard gs error numbers recommended).
+ */
+typedef int (*gs_callout)(void *instance,
+                          void *callout_handle,
+                          const char *device_name,
+                          int id,
+                          int size,
+                          void *data);
+
+/* Register a handler for gs callouts.
+ * This must be called after gsapi_new_instance() and (typically)
+ * before gsapi_init_with_args().
+ */
+GSDLLEXPORT int GSDLLAPI gsapi_register_callout(
+   void *instance, gs_callout callout, void *callout_handle);
+
+/* Deregister a handler for gs callouts. */
+GSDLLEXPORT void GSDLLAPI gsapi_deregister_callout(
+   void *instance, gs_callout callout, void *callout_handle);
 
 /* Set the string containing the list of default device names
  * for example "display x11alpha x11 bbox". Allows the calling
@@ -225,7 +272,7 @@ GSDLLEXPORT int GSDLLAPI gsapi_set_display_callback(
  * gsapi_init_with_args().
  */
 GSDLLEXPORT int GSDLLAPI
-gsapi_set_default_device_list(void *instance, char *list, int listlen);
+gsapi_set_default_device_list(void *instance, const char *list, int listlen);
 
 /* Returns a pointer to the current default device string
  * *Must* be called after gsapi_new_instance().
@@ -325,13 +372,63 @@ gsapi_exit(void *instance);
 typedef enum {
     gs_spt_invalid = -1,
     gs_spt_null    = 0,   /* void * is NULL */
-    gs_spt_bool    = 1,   /* void * is NULL (false) or non-NULL (true) */
+    gs_spt_bool    = 1,   /* void * is a pointer to an int (0 false,
+                           * non-zero true). */
     gs_spt_int     = 2,   /* void * is a pointer to an int */
     gs_spt_float   = 3,   /* void * is a float * */
     gs_spt_name    = 4,   /* void * is a char * */
-    gs_spt_string  = 5    /* void * is a char * */
+    gs_spt_string  = 5,   /* void * is a char * */
+    gs_spt_long    = 6,   /* void * is a long * */
+    gs_spt_i64     = 7,   /* void * is an int64_t * */
+    gs_spt_size_t  = 8,   /* void * is a size_t * */
+    gs_spt_parsed  = 9,   /* void * is a pointer to a char * to be parsed */
+
+    /* Setting a typed param causes it to be instantly fed to to the
+     * device. This can cause the device to reinitialise itself. Hence,
+     * setting a sequence of typed params can cause the device to reset
+     * itself several times. Accordingly, if you OR the type with
+     * gs_spt_more_to_come, the param will held ready to be passed into
+     * the device, and will only actually be sent when the next typed
+     * param is set without this flag (or on device init). Not valid
+     * for get_typed_param. */
+    gs_spt_more_to_come = 1<<31
 } gs_set_param_type;
-GSDLLEXPORT int GSDLLAPI gsapi_set_param(void *instance, gs_set_param_type type, const char *param, const void *value);
+/* gs_spt_parsed allows for a string such as "<< /Foo 0 /Bar true >>" or
+ * "[ 1 2 3 ]" etc to be used so more complex parameters can be set. */
+
+GSDLLEXPORT int GSDLLAPI gsapi_set_param(void *instance, const char *param, const void *value, gs_set_param_type type);
+
+/* Called to get a value. value points to storage of the appropriate
+ * type. If value is passed as NULL on entry, then the return code is
+ * the number of bytes storage required for the type. Thus to read a
+ * name/string/parsed value, call once with value=NULL, then obtain
+ * the storage, and call again with value=the storage to get a nul
+ * terminated string. (nul terminator is included in the count - hence
+ * an empty string requires 1 byte storage). Returns gs_error_undefined
+ * (-21) if not found. */
+GSDLLEXPORT int GSDLLAPI gsapi_get_param(void *instance, const char *param, void *value, gs_set_param_type type);
+
+/* Enumerator to list all the parameters.
+ * Caller defines void *iter = NULL, and calls with &iter.
+ * Each call, iter is updated to reflect the position within the
+ * enumeration, so passing iterator back in gets the next key. The call
+ * returns negative values for errors, 0 for success, and 1 for "no more
+ * keys".
+ *
+ *  void *iter = NULL;
+ *  gs_set_param_type type;
+ *  const char *key;
+ *  int code;
+ *  while ((code = gsapi_enumerate_params(inst, &iter, &key, &type)) == 0) {
+ *      // Process key
+ *  }
+ *
+ * Note that the ordering of enumerations is NOT defined. key is valid
+ * until the next call to gsapi_enumerate_params. Only one enumeration
+ * at a time (starting a new enumeration will invalidate any previous
+ * enumeration).
+ */
+GSDLLEXPORT int GSDLLAPI gsapi_enumerate_params(void *instance, void **iterator, const char **key, gs_set_param_type *type);
 
 enum {
     GS_PERMIT_FILE_READING = 0,
@@ -455,7 +552,7 @@ typedef int (GSDLLAPIPTR PFN_gsapi_run_fileW)(void *instance,
     const wchar_t *file_name, int user_errors, int *pexit_code);
 #endif
 typedef int (GSDLLAPIPTR PFN_gsapi_exit)(void *instance);
-typedef int (GSDLLAPIPTR PFN_gsapi_set_param)(void *instance, gs_set_param_type type, const char *param, const void *value);
+typedef int (GSDLLAPIPTR PFN_gsapi_set_param)(void *instance, const char *param, const void *value, gs_set_param_type type);
 
 typedef int (GSDLLAPIPTR PFN_gsapi_add_control_path)(void *instance, int type, const char *path);
 typedef int (GSDLLAPIPTR PFN_gsapi_remove_control_path)(void *instance, int type, const char *path);

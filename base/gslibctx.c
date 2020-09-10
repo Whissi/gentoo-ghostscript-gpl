@@ -1,4 +1,4 @@
-/* Copyright (C) 2001-2019 Artifex Software, Inc.
+/* Copyright (C) 2001-2020 Artifex Software, Inc.
    All Rights Reserved.
 
    This software is provided AS-IS with no warranty, either express or
@@ -86,7 +86,7 @@ gs_lib_ctx_set_icc_directory(const gs_memory_t *mem_gc, const char* pname,
     result = (char*) gs_alloc_bytes(p_ctx_mem, dir_namelen+1,
                                      "gs_lib_ctx_set_icc_directory");
     if (result == NULL) {
-        return -1;
+        return gs_error_VMerror;
     }
     strcpy(result, pname);
     p_ctx->profiledir = result;
@@ -388,6 +388,7 @@ void gs_lib_ctx_fin(gs_memory_t *mem)
     gs_memory_t *ctx_mem;
     int refs, i;
     gs_fs_list_t *fs;
+    gs_callout_list_t *entry;
 
     if (!mem || !mem->gs_lib_ctx)
         return;
@@ -419,6 +420,7 @@ void gs_lib_ctx_fin(gs_memory_t *mem)
 #ifdef WITH_CAL
         cal_fin(ctx->core->cal_ctx, ctx->core->memory);
 #endif
+        gs_purge_scratch_files(ctx->core->memory);
         gs_purge_control_paths(ctx->core->memory, gs_permit_file_reading);
         gs_purge_control_paths(ctx->core->memory, gs_permit_file_writing);
         gs_purge_control_paths(ctx->core->memory, gs_permit_file_control);
@@ -428,6 +430,13 @@ void gs_lib_ctx_fin(gs_memory_t *mem)
             gs_fs_list_t *next = fs->next;
             gs_free_object(fs->memory, fs, "gs_lib_ctx_fin");
             fs = next;
+        }
+
+        entry = ctx->core->callouts;
+        while (entry) {
+            gs_callout_list_t *next = entry->next;
+            gs_free_object(mem->non_gc_memory, entry, "gs_callout_list_t");
+            entry = next;
         }
 
         for (i = 0; i < ctx->core->argc; i++)
@@ -486,7 +495,7 @@ int outwrite(const gs_memory_t *mem, const char *str, int len)
         code = gp_fwrite(str, 1, len, core->fstdout2);
         gp_fflush(core->fstdout2);
     } else if (core->stdout_fn) {
-        return (*core->stdout_fn)(core->caller_handle, str, len);
+        return (*core->stdout_fn)(core->std_caller_handle, str, len);
     } else {
         code = fwrite(str, 1, len, core->fstdout);
         fflush(core->fstdout);
@@ -522,7 +531,7 @@ int errwrite(const gs_memory_t *mem, const char *str, int len)
       return 0;
     core = ctx->core;
     if (core->stderr_fn)
-        return (*core->stderr_fn)(core->caller_handle, str, len);
+        return (*core->stderr_fn)(core->std_caller_handle, str, len);
 
     code = fwrite(str, 1, len, core->fstderr);
     fflush(core->fstderr);
@@ -638,7 +647,7 @@ gs_add_outputfile_control_path(gs_memory_t *mem, const char *fname)
     char *fp, f[gp_file_name_sizeof];
     const int pipe = 124; /* ASCII code for '|' */
     const int len = strlen(fname);
-    int i;
+    int i, code;
 
     /* Be sure the string copy will fit */
     if (len >= gp_file_name_sizeof)
@@ -649,8 +658,6 @@ gs_add_outputfile_control_path(gs_memory_t *mem, const char *fname)
     rewrite_percent_specifiers(f);
     for (i = 0; i < len; i++) {
         if (f[i] == pipe) {
-           int code;
-
            fp = &f[i + 1];
            /* Because we potentially have to check file permissions at two levels
               for the output file (gx_device_open_output_file and the low level
@@ -661,11 +668,17 @@ gs_add_outputfile_control_path(gs_memory_t *mem, const char *fname)
            code = gs_add_control_path(mem, gs_permit_file_writing, f);
            if (code < 0)
                return code;
+           code = gs_add_control_path(mem, gs_permit_file_control, f);
+           if (code < 0)
+               return code;
            break;
         }
         if (!IS_WHITESPACE(f[i]))
             break;
     }
+    code = gs_add_control_path(mem, gs_permit_file_control, fp);
+    if (code < 0)
+        return code;
     return gs_add_control_path(mem, gs_permit_file_writing, fp);
 }
 
@@ -675,7 +688,7 @@ gs_remove_outputfile_control_path(gs_memory_t *mem, const char *fname)
     char *fp, f[gp_file_name_sizeof];
     const int pipe = 124; /* ASCII code for '|' */
     const int len = strlen(fname);
-    int i;
+    int i, code;
 
     /* Be sure the string copy will fit */
     if (len >= gp_file_name_sizeof)
@@ -685,8 +698,6 @@ gs_remove_outputfile_control_path(gs_memory_t *mem, const char *fname)
     /* Try to rewrite any %d (or similar) in the string */
     for (i = 0; i < len; i++) {
         if (f[i] == pipe) {
-           int code;
-
            fp = &f[i + 1];
            /* Because we potentially have to check file permissions at two levels
               for the output file (gx_device_open_output_file and the low level
@@ -697,11 +708,17 @@ gs_remove_outputfile_control_path(gs_memory_t *mem, const char *fname)
            code = gs_remove_control_path(mem, gs_permit_file_writing, f);
            if (code < 0)
                return code;
+           code = gs_remove_control_path(mem, gs_permit_file_control, f);
+           if (code < 0)
+               return code;
            break;
         }
         if (!IS_WHITESPACE(f[i]))
             break;
     }
+    code = gs_remove_control_path(mem, gs_permit_file_control, fp);
+    if (code < 0)
+        return code;
     return gs_remove_control_path(mem, gs_permit_file_writing, fp);
 }
 
@@ -726,6 +743,12 @@ gs_add_explicit_control_path(gs_memory_t *mem, const char *arg, gs_path_control_
 
 int
 gs_add_control_path_len(const gs_memory_t *mem, gs_path_control_t type, const char *path, size_t len)
+{
+    return gs_add_control_path_len_flags(mem, type, path, len, 0);
+}
+
+int
+gs_add_control_path_len_flags(const gs_memory_t *mem, gs_path_control_t type, const char *path, size_t len, int flags)
 {
     gs_path_control_set_t *control;
     unsigned int n, i;
@@ -766,33 +789,34 @@ gs_add_control_path_len(const gs_memory_t *mem, gs_path_control_t type, const ch
     n = control->num;
     for (i = 0; i < n; i++)
     {
-        if (strncmp(control->paths[i], buffer, rlen) == 0 &&
-            control->paths[i][rlen] == 0) {
+        if (strncmp(control->entry[i].path, buffer, rlen) == 0 &&
+            control->entry[i].path[rlen] == 0) {
             gs_free_object(core->memory, buffer, "gs_add_control_path_len");
             return 0; /* Already there! */
         }
     }
 
     if (control->num == control->max) {
-        char **p;
+        gs_path_control_entry_t *p;
 
         n = control->max * 2;
         if (n == 0) {
             n = 4;
-            p = (char **)gs_alloc_bytes(core->memory, sizeof(*p)*n, "gs_lib_ctx(paths)");
+            p = (gs_path_control_entry_t *)gs_alloc_bytes(core->memory, sizeof(*p)*n, "gs_lib_ctx(entries)");
         } else
-            p = (char **)gs_resize_object(core->memory, control->paths, sizeof(*p)*n, "gs_lib_ctx(paths)");
+            p = (gs_path_control_entry_t *)gs_resize_object(core->memory, control->entry, sizeof(*p)*n, "gs_lib_ctx(entries)");
         if (p == NULL) {
             gs_free_object(core->memory, buffer, "gs_add_control_path_len");
             return gs_error_VMerror;
         }
-        control->paths = p;
+        control->entry = p;
         control->max = n;
     }
 
     n = control->num;
-    control->paths[n] = buffer;
-    control->paths[n][len] = 0;
+    control->entry[n].path = buffer;
+    control->entry[n].path[len] = 0;
+    control->entry[n].flags = flags;
     control->num++;
 
     return 0;
@@ -801,14 +825,23 @@ gs_add_control_path_len(const gs_memory_t *mem, gs_path_control_t type, const ch
 int
 gs_add_control_path(const gs_memory_t *mem, gs_path_control_t type, const char *path)
 {
-    if (path == NULL)
-        return 0;
+    return gs_add_control_path_len_flags(mem, type, path, strlen(path), 0);
+}
 
-    return gs_add_control_path_len(mem, type, path, strlen(path));
+int
+gs_add_control_path_flags(const gs_memory_t *mem, gs_path_control_t type, const char *path, int flags)
+{
+    return gs_add_control_path_len_flags(mem, type, path, strlen(path), flags);
 }
 
 int
 gs_remove_control_path_len(const gs_memory_t *mem, gs_path_control_t type, const char *path, size_t len)
+{
+    return gs_remove_control_path_len_flags(mem, type, path, len, 0);
+}
+
+int
+gs_remove_control_path_len_flags(const gs_memory_t *mem, gs_path_control_t type, const char *path, size_t len, int flags)
 {
     gs_path_control_set_t *control;
     unsigned int n, i;
@@ -848,17 +881,18 @@ gs_remove_control_path_len(const gs_memory_t *mem, gs_path_control_t type, const
 
     n = control->num;
     for (i = 0; i < n; i++) {
-        if (strncmp(control->paths[i], buffer, len) == 0 &&
-            control->paths[i][len] == 0)
+        if (control->entry[i].flags == flags &&
+            strncmp(control->entry[i].path, buffer, len) == 0 &&
+            control->entry[i].path[len] == 0)
             break;
     }
     gs_free_object(core->memory, buffer, "gs_remove_control_path_len");
     if (i == n)
         return 0;
 
-    gs_free_object(core->memory, control->paths[i], "gs_lib_ctx(path)");
+    gs_free_object(core->memory, control->entry[i].path, "gs_lib_ctx(path)");
     for (;i < n-1; i++)
-        control->paths[i] = control->paths[i+1];
+        control->entry[i] = control->entry[i+1];
     control->num = n-1;
 
     return 0;
@@ -870,14 +904,23 @@ gs_remove_control_path(const gs_memory_t *mem, gs_path_control_t type, const cha
     if (path == NULL)
         return 0;
 
-    return gs_remove_control_path_len(mem, type, path, strlen(path));
+    return gs_remove_control_path_len_flags(mem, type, path, strlen(path), 0);
+}
+
+int
+gs_remove_control_path_flags(const gs_memory_t *mem, gs_path_control_t type, const char *path, int flags)
+{
+    if (path == NULL)
+        return 0;
+
+    return gs_remove_control_path_len_flags(mem, type, path, strlen(path), flags);
 }
 
 void
 gs_purge_control_paths(const gs_memory_t *mem, gs_path_control_t type)
 {
     gs_path_control_set_t *control;
-    unsigned int n, i;
+    unsigned int n, in, out;
     gs_lib_ctx_core_t *core;
 
     if (mem == NULL || mem->gs_lib_ctx == NULL ||
@@ -899,13 +942,70 @@ gs_purge_control_paths(const gs_memory_t *mem, gs_path_control_t type)
     }
 
     n = control->num;
-    for (i = 0; i < n; i++) {
-        gs_free_object(core->memory, control->paths[i], "gs_lib_ctx(path)");
+    for (in = out = 0; in < n; in++) {
+        if (control->entry[in].flags & gs_path_control_flag_is_scratch_file) {
+            /* Don't purge scratch files! */
+            control->entry[out++] = control->entry[in];
+        } else
+            gs_free_object(core->memory, control->entry[in].path, "gs_lib_ctx(path)");
     }
-    gs_free_object(core->memory, control->paths, "gs_lib_ctx(paths)");
-    control->paths = NULL;
-    control->num = 0;
-    control->max = 0;
+    control->num = out;
+    if (out == 0) {
+        gs_free_object(core->memory, control->entry, "gs_lib_ctx(paths)");
+        control->entry = NULL;
+        control->max = 0;
+    }
+}
+
+void
+gs_purge_scratch_files(const gs_memory_t *mem)
+{
+    gs_path_control_set_t *control;
+    gs_path_control_t type;
+    int n, in, out;
+    gs_lib_ctx_core_t *core;
+
+    if (mem == NULL || mem->gs_lib_ctx == NULL ||
+        (core = mem->gs_lib_ctx->core) == NULL)
+        return;
+
+    for (type = gs_permit_file_reading; type <= gs_permit_file_control; type++)
+    {
+        switch(type) {
+            default:
+            case gs_permit_file_reading:
+                control = &core->permit_reading;
+                break;
+            case gs_permit_file_writing:
+                control = &core->permit_writing;
+                break;
+            case gs_permit_file_control:
+                control = &core->permit_control;
+                break;
+        }
+
+        n = control->num;
+        for (in = out = 0; in < n; in++) {
+            if ((control->entry[in].flags & gs_path_control_flag_is_scratch_file) == 0) {
+                /* Only purge scratch files! */
+                control->entry[out++] = control->entry[in];
+            } else {
+                if (type == gs_permit_file_reading) {
+                    /* Call gp_unlink_impl, as we don't want gp_unlink
+                     * to go looking in the lists we are currently
+                     * manipulating! */
+                    gp_unlink_impl(core->memory, control->entry[in].path);
+                }
+                gs_free_object(core->memory, control->entry[in].path, "gs_lib_ctx(path)");
+            }
+        }
+        control->num = out;
+        if (out == 0) {
+            gs_free_object(core->memory, control->entry, "gs_lib_ctx(paths)");
+            control->entry = NULL;
+            control->max = 0;
+        }
+    }
 }
 
 void
@@ -971,7 +1071,7 @@ gs_remove_fs(const gs_memory_t *mem,
         return;
 
     pfs = &core->fs;
-    while (pfs)
+    while (*pfs)
     {
         gs_fs_list_t *fs = *pfs;
         if (fs->fs.open_file == rfs->open_file &&
@@ -1073,7 +1173,7 @@ gs_lib_ctx_stash_sanitized_arg(gs_lib_ctx_t *ctx, const char *arg)
     core = ctx->core;
     if (elide)
         len = p-arg;
-    else 
+    else
         len = strlen(arg);
 
     if (core->arg_max == core->argc) {
@@ -1178,4 +1278,72 @@ int gs_lib_ctx_get_args(gs_lib_ctx_t *ctx, const char * const **argv)
     core = ctx->core;
     *argv = (const char * const *)core->argv;
     return core->argc;
+}
+
+int gs_lib_ctx_register_callout(gs_memory_t *mem, gs_callout_fn fn, void *arg)
+{
+    gs_lib_ctx_core_t *core;
+    gs_callout_list_t *entry;
+
+    if (mem == NULL || mem->gs_lib_ctx == NULL ||
+        mem->gs_lib_ctx->core == NULL || fn == NULL)
+        return 0;
+
+   core = mem->gs_lib_ctx->core;
+   entry = (gs_callout_list_t *)gs_alloc_bytes(core->memory,
+                                               sizeof(*entry),
+                                               "gs_callout_list_t");
+   if (entry == NULL)
+       return_error(gs_error_VMerror);
+   entry->next = core->callouts;
+   entry->callout = fn;
+   entry->handle = arg;
+   core->callouts = entry;
+
+   return 0;
+}
+
+void gs_lib_ctx_deregister_callout(gs_memory_t *mem, gs_callout_fn fn, void *arg)
+{
+    gs_lib_ctx_core_t *core;
+    gs_callout_list_t **entry;
+
+    if (mem == NULL || mem->gs_lib_ctx == NULL ||
+        mem->gs_lib_ctx->core == NULL || fn == NULL)
+        return;
+
+   core = mem->gs_lib_ctx->core;
+   entry = &core->callouts;
+   while (*entry) {
+        if ((*entry)->callout == fn && (*entry)->handle == arg) {
+            gs_callout_list_t *next = (*entry)->next;
+            gs_free_object(core->memory, *entry, "gs_callout_list_t");
+            *entry = next;
+        } else {
+            entry = &(*entry)->next;
+        }
+   }
+}
+
+int gs_lib_ctx_callout(gs_memory_t *mem, const char *dev_name,
+                       int id, int size, void *data)
+{
+    gs_lib_ctx_core_t *core;
+    gs_callout_list_t *entry;
+
+    if (mem == NULL || mem->gs_lib_ctx == NULL || mem->gs_lib_ctx->core == NULL)
+        return -1;
+
+    core = mem->gs_lib_ctx->core;
+    entry = core->callouts;
+    while (entry) {
+        int code = entry->callout(mem->gs_lib_ctx->top_of_system,
+                                  entry->handle, dev_name, id, size, data);
+        if (code >= 0)
+            return code;
+        if (code != gs_error_unknownerror)
+            return code;
+        entry = entry->next;
+    }
+    return -1;
 }

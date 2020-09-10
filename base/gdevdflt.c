@@ -1,4 +1,4 @@
-/* Copyright (C) 2001-2019 Artifex Software, Inc.
+/* Copyright (C) 2001-2020 Artifex Software, Inc.
    All Rights Reserved.
 
    This software is provided AS-IS with no warranty, either express or
@@ -1026,6 +1026,8 @@ gx_default_dev_spec_op(gx_device *pdev, int dev_spec_op, void *data, int size)
         case gxdso_supports_saved_pages:
         case gxdso_needs_invariant_palette:
         case gxdso_supports_iccpostrender:
+        case gxdso_supports_alpha:
+        case gxdso_pdf14_sep_device:
             return 0;
         case gxdso_pattern_shfill_doesnt_need_path:
             return (dev_proc(pdev, fill_path) == gx_default_fill_path);
@@ -1873,7 +1875,8 @@ transform_pixel_region_render_portrait(gx_device *dev, gx_default_transform_pixe
         byte *out;
         int depth = spp;
         if (state->line == NULL) {
-            state->line = gs_alloc_bytes(state->mem, dev->width * depth,
+            state->line = gs_alloc_bytes(state->mem,
+                                         (size_t)dev->width * depth,
                                          "image line");
             if (state->line == NULL)
                 return gs_error_VMerror;
@@ -1969,7 +1972,7 @@ transform_pixel_region_render_portrait(gx_device *dev, gx_default_transform_pixe
                 goto err;
         }
     }
-    return (code < 0 ? code : 1);
+    return 1;
     /* Save position if error, in case we resume. */
 err:
     buffer[0] = run;

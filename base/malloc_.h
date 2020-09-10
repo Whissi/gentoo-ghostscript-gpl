@@ -1,4 +1,4 @@
-/* Copyright (C) 2001-2019 Artifex Software, Inc.
+/* Copyright (C) 2001-2020 Artifex Software, Inc.
    All Rights Reserved.
 
    This software is provided AS-IS with no warranty, either express or
@@ -27,25 +27,21 @@
 #include "bobbin.h"
 #include "memento.h"
 
-#ifdef __TURBOC__
-#  include <alloc.h>
-#else
-#  if defined(BSD4_2) || defined(apollo) || defined(vax) || defined(sequent) || defined(UTEK)
-#    if defined(_POSIX_SOURCE) || (defined(__STDC__) && (!defined(sun) || defined(__svr4__)))	/* >>> */
-#      include <stdlib.h>
-#    else			/* Ancient breakage */
+#if defined(BSD4_2) || defined(apollo) || defined(vax) || defined(sequent) || defined(UTEK)
+#  if defined(_POSIX_SOURCE) || (defined(__STDC__) && (!defined(sun) || defined(__svr4__)))   /* >>> */
+#    include <stdlib.h>
+#  else                       /* Ancient breakage */
 extern char *malloc();
 extern void free();
 
-#    endif
+#  endif
+#else
+#  if defined(_HPUX_SOURCE) || defined(__CONVEX__) || defined(__convex__) || defined(__OSF__) || defined(__386BSD__) || defined(_POSIX_SOURCE) || defined(__STDC__) || defined(VMS)
+#    include <stdlib.h>
 #  else
-#    if defined(_HPUX_SOURCE) || defined(__CONVEX__) || defined(__convex__) || defined(__OSF__) || defined(__386BSD__) || defined(_POSIX_SOURCE) || defined(__STDC__) || defined(VMS)
-#      include <stdlib.h>
-#    else
-#      include <malloc.h>
-#    endif			/* !_HPUX_SOURCE, ... */
-#  endif			/* !BSD4_2, ... */
-#endif /* !__TURBOC__ */
+#    include <malloc.h>
+#  endif                      /* !_HPUX_SOURCE, ... */
+#endif                        /* !BSD4_2, ... */
 
 /* (At least some versions of) Linux don't have a working realloc.... */
 #ifdef linux

@@ -1,4 +1,4 @@
-# Copyright (C) 2001-2019 Artifex Software, Inc.
+# Copyright (C) 2001-2020 Artifex Software, Inc.
 # All Rights Reserved.
 #
 # This software is provided AS-IS with no warranty, either express or
@@ -48,7 +48,7 @@ DEBUGSYM=1
 DEBUG=0
 !endif
 !ifndef TDEBUG
-TDEBUG=0
+TDEBUG=1
 !endif
 !ifndef DEBUGSYM
 DEBUGSYM=1
@@ -620,13 +620,9 @@ WITH_CUPS=0
 
 # Define the directory where the FreeType2 library sources are stored.
 # See freetype.mak for more information.
-
-!ifdef UFST_BRIDGE
-!if "$(UFST_BRIDGE)"=="1"
-FT_BRIDGE=0
-!endif
-!endif
-
+# Note that FT_BRIDGE=1 is now the only support configuration for anything
+# other than testing purposes (even when UFST_BRIDGE=1 - we require Freetype
+# for embedded/downloaded fonts.
 !ifndef FT_BRIDGE
 FT_BRIDGE=1
 !endif
@@ -681,6 +677,19 @@ ZSRCDIR=.\zlib
 !if exist("luratech\ldf_jb2")
 JBIG2_LIB=luratech
 !endif
+!endif
+
+!if exist("leptonica")
+LEPTONICADIR=leptonica
+!endif
+!if exist("tesseract")
+TESSERACTDIR=tesseract
+TESSCXXFLAGS=-DHAVE_AVX -DHAVE_AVX2 -DHAVE_SSE4_1 -DHAVE_FMA -D__AVX__ -D__AVX2__ -D__FMA__ -D__SSE4_1__ /EHsc /std:c++17
+!endif
+!if defined(TESSERACTDIR) && defined(LEPTONICADIR)
+OCR_VERSION=1
+!else
+OCR_VERSION=0
 !endif
 
 !ifndef JBIG2_LIB
@@ -972,6 +981,25 @@ MS_TOOLSET_VERSION=14.24.28315
 # VS2019 (Toolset v142 - update)
 MSVC_VERSION=16
 MS_TOOLSET_VERSION=14.24.28316
+!endif
+!if "$(_NMAKE_VER)" == "14.25.28614.0"
+# VS2019 (Toolset v142 - update)
+MSVC_VERSION=16
+MS_TOOLSET_VERSION=14.25.28614
+!endif
+!if "$(_NMAKE_VER)" == "14.26.28805.0"
+# VS2019 (Toolset v142 - update)
+MSVC_VERSION=16
+MS_TOOLSET_VERSION=14.26.28805
+!endif
+!if "$(_NMAKE_VER)" == "14.26.28806.0"
+# VS2019 (Toolset v142 - update)
+MSVC_VERSION=16
+MS_TOOLSET_VERSION=14.26.28806
+!endif
+!if "$(_NMAKE_VER)" == "14.27.29111.0"
+# VS2019 (Toolset v142)
+MSVC_VERSION=16
 !endif
 !endif
 
@@ -1634,6 +1662,10 @@ DEVICE_DEVS16=$(DEVICE_DEVS16) $(DD)cups.dev
 !if "$(WITH_URF)" == "1"
 DEVICE_DEVS16=$(DEVICE_DEVS16) $(DD)urfgray.dev $(DD)urfrgb.dev $(DD)urfcmyk.dev
 !endif
+!if "$(OCR_VERSION)" == "0"
+!else
+DEVICE_DEVS16=$(DEVICE_DEVS16) $(DD)ocr.dev $(DD)hocr.dev $(DD)pdfocr8.dev $(DD)pdfocr24.dev $(DD)pdfocr32.dev
+!endif
 # Overflow for DEVS3,4,5,6,9
 DEVICE_DEVS17=$(DD)ljet3.dev $(DD)ljet3d.dev $(DD)ljet4.dev $(DD)ljet4d.dev
 DEVICE_DEVS18=$(DD)pj.dev $(DD)pjxl.dev $(DD)pjxl300.dev $(DD)jetp3852.dev $(DD)r4081.dev
@@ -1702,6 +1734,7 @@ BEGINFILES2=$(BEGINFILES2) $(BSCFILE)
 
 !include $(GLSRCDIR)\msvctail.mak
 !include $(PSSRCDIR)\winint.mak
+
 # ----------------------------- Main program ------------------------------ #
 
 GSCONSOLE_XE=$(BINDIR)\$(GSCONSOLE).exe

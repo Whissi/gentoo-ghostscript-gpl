@@ -1,4 +1,4 @@
-/* Copyright (C) 2001-2019 Artifex Software, Inc.
+/* Copyright (C) 2001-2020 Artifex Software, Inc.
    All Rights Reserved.
 
    This software is provided AS-IS with no warranty, either express or
@@ -14,6 +14,9 @@
 */
 
 
+#ifndef rinkj_config_h_INCLUDED
+#define rinkj_config_h_INCLUDED
+
 /* Support for reading Rinkj config files. */
 
 char *
@@ -24,3 +27,5 @@ rinkj_config_get (const char *config, const char *key);
 
 char *
 rinkj_config_keyval (const char *config, char **p_val, const char **p_next);
+
+#endif

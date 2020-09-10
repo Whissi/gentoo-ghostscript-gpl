@@ -1,4 +1,4 @@
-/* Copyright (C) 2001-2019 Artifex Software, Inc.
+/* Copyright (C) 2001-2020 Artifex Software, Inc.
    All Rights Reserved.
 
    This software is provided AS-IS with no warranty, either express or
@@ -395,8 +395,8 @@ zop_init(i_ctx_t *i_ctx_p)
         if (def->proc != 0) {
             code = def->proc(i_ctx_p);
             if (code < 0) {
-                lprintf2("op_init proc 0x%lx returned error %d!\n",
-                         (ulong)def->proc, code);
+                lprintf2("op_init proc "PRI_INTPTR" returned error %d!\n",
+                         (intptr_t)def->proc, code);
                 return code;
             }
         }

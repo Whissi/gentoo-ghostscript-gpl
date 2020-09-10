@@ -1,4 +1,4 @@
-/* Copyright (C) 2001-2019 Artifex Software, Inc.
+/* Copyright (C) 2001-2020 Artifex Software, Inc.
    All Rights Reserved.
 
    This software is provided AS-IS with no warranty, either express or
@@ -966,10 +966,10 @@ do_init(stream_state        *st,
                                                     sizeof(CONTRIB), "image_scale contrib_dst[*]");
     /* Allocate buffers for 1 row of source and destination. */
     ss->dst = 
-        gs_alloc_byte_array(mem, limited_WidthOut * ss->params.spp_interp,
+        gs_alloc_byte_array(mem, (size_t)limited_WidthOut * ss->params.spp_interp,
                             ss->sizeofPixelOut, "image_scale dst");
     ss->src = 
-        gs_alloc_byte_array(mem, ss->params.WidthIn * ss->params.spp_interp,
+        gs_alloc_byte_array(mem, (size_t)ss->params.WidthIn * ss->params.spp_interp,
                             ss->sizeofPixelIn, "image_scale src");
     if (ss->tmp == 0 || ss->contrib == 0 || ss->items == 0 ||
         ss->dst_items == 0 || ss->dst == 0 || ss->src == 0

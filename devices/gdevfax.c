@@ -1,4 +1,4 @@
-/* Copyright (C) 2001-2019 Artifex Software, Inc.
+/* Copyright (C) 2001-2020 Artifex Software, Inc.
    All Rights Reserved.
 
    This software is provided AS-IS with no warranty, either express or
@@ -239,14 +239,14 @@ gdev_fax_print_strip(gx_device_printer * pdev, gp_file * prn_stream,
         int status;
 
         if_debug7m('w', mem,
-                   "[w]lnum=%d r=0x%lx,0x%lx,0x%lx w=0x%lx,0x%lx,0x%lx\n", lnum,
-                   (ulong)in, (ulong)r.ptr, (ulong)r.limit,
-                   (ulong)out, (ulong)w.ptr, (ulong)w.limit);
+                   "[w]lnum=%d r="PRI_INTPTR","PRI_INTPTR","PRI_INTPTR" w="PRI_INTPTR","PRI_INTPTR","PRI_INTPTR"\n", lnum,
+                   (intptr_t)in, (intptr_t)r.ptr, (intptr_t)r.limit,
+                   (intptr_t)out, (intptr_t)w.ptr, (intptr_t)w.limit);
         status = temp->process(ss, &r, &w, lnum == row_end);
         if_debug7m('w', mem,
-                   "...%d, r=0x%lx,0x%lx,0x%lx w=0x%lx,0x%lx,0x%lx\n", status,
-                   (ulong)in, (ulong)r.ptr, (ulong)r.limit,
-                   (ulong)out, (ulong)w.ptr, (ulong)w.limit);
+                   "...%d, r="PRI_INTPTR","PRI_INTPTR","PRI_INTPTR" w="PRI_INTPTR","PRI_INTPTR","PRI_INTPTR"\n", status,
+                   (intptr_t)in, (intptr_t)r.ptr, (intptr_t)r.limit,
+                   (intptr_t)out, (intptr_t)w.ptr, (intptr_t)w.limit);
         switch (status) {
             case 0:             /* need more input data */
                 if (lnum == row_end)

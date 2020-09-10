@@ -1,4 +1,4 @@
-dnl Copyright (C) 2001-2019 Artifex Software, Inc.
+dnl Copyright (C) 2001-2020 Artifex Software, Inc.
 dnl All Rights Reserved.
 dnl
 dnl This software is provided AS-IS with no warranty, either express or
@@ -248,7 +248,7 @@ INSTALL_CONTRIB="install-contrib-extras"
 
 if test x"$enable_contrib" = x; then
     case $host in
-      *-mingw*|*-msys*|*-cygwin*)
+      *-mingw*|*-msys*)
         AC_MSG_WARN([disabling contrib devices])
         enable_contrib=no
       ;;
@@ -279,33 +279,38 @@ dnl Set build flags based on environment
 dnl --------------------------------------------------
 
 CC_OPT_FLAGS_TO_TRY="-O -DNDEBUG"
+CC_VISIBILITY_FLAGS_TO_TRY=""
 SET_DT_SONAME="-soname="
 CFLAGS_LARGEFILE=""
 
 case $host in
         *-linux*|*-gnu)
-        if test $ac_cv_prog_gcc = yes; then
+        if test $GCC = yes; then
             CC_OPT_FLAGS_TO_TRY="-O2 -DNDEBUG"
             CC_DBG_FLAGS_TO_TRY="-gdwarf-2 -g3 -O0"
+            CC_VISIBILITY_FLAGS_TO_TRY="-fvisibility=hidden"
         fi
         ;;
         *bsd*)
-        if test $ac_cv_prog_gcc = yes; then
+        if test $GCC = yes; then
             CC_OPT_FLAGS_TO_TRY="-O2 -DNDEBUG"
             CC_DBG_FLAGS_TO_TRY="-gdwarf-2 -g3 -O0"
+            CC_VISIBILITY_FLAGS_TO_TRY="-fvisibility=hidden"
         fi
         ;;
         *-darwin*)
-        if test $ac_cv_prog_gcc = yes; then
+        if test $GCC = yes; then
             CC_OPT_FLAGS_TO_TRY="-O2 -DNDEBUG"
             CC_DBG_FLAGS_TO_TRY="-gdwarf-2 -g3 -O0"
+            CC_VISIBILITY_FLAGS_TO_TRY="-fvisibility=hidden"
         fi
         SET_DT_SONAME=""
         ;;
-        *-mingw*|*-msys*|*-cygwin*)
-        if test $ac_cv_prog_gcc = yes; then
+        *-mingw*|*-msys*)
+        if test $GCC = yes; then
             CC_OPT_FLAGS_TO_TRY="-O2 -DNDEBUG"
             CC_DBG_FLAGS_TO_TRY="-gdwarf-2 -g3 -O0"
+            CC_VISIBILITY_FLAGS_TO_TRY="-fvisibility=hidden"
         fi
         SET_DT_SONAME=""
         ;;
@@ -313,21 +318,23 @@ case $host in
         CC_OPT_FLAGS_TO_TRY="-O2 -DNDEBUG"
         CFLAGS_LARGEFILE="-D_LARGEFILE_SOURCE -D_LARGEFILE64_SOURCE -D_FILE_OFFSET_BITS=64"
         # the trailing space is required!
-        if test $ac_cv_prog_gcc = no; then
+        if test $GCC = no; then
             SET_DT_SONAME="-h "
         fi
-        if test $ac_cv_prog_gcc = yes; then
+        if test $GCC = yes; then
             CC_OPT_FLAGS_TO_TRY="-O2 -DNDEBUG"
             CC_DBG_FLAGS_TO_TRY="-gdwarf-2 -g3 -O0"
+            CC_VISIBILITY_FLAGS_TO_TRY="-fvisibility=hidden"
         else
             CC_DBG_FLAGS_TO_TRY="-g -O0"
         fi
         ;;
         *-aix*)
-        if test $ac_cv_prog_gcc = yes; then
+        if test $GCC = yes; then
             CC_OPT_FLAGS_TO_TRY="-O2 -DNDEBUG"
             CC_DBG_FLAGS_TO_TRY="-gdwarf-2 -g3 -O0"
             SET_DT_SONAME="so"
+            CC_VISIBILITY_FLAGS_TO_TRY="-fvisibility=hidden"
         fi
         ;;
 esac
@@ -335,7 +342,7 @@ esac
 AC_SUBST(SET_DT_SONAME)
 
 
-if test $ac_cv_prog_gcc = yes; then
+if test $GCC = yes; then
     cflags_to_try="-Wall -Wstrict-prototypes -Wundef \
 -Wmissing-declarations -Wmissing-prototypes -Wwrite-strings \
 -fno-strict-aliasing -Werror=declaration-after-statement \
@@ -365,8 +372,14 @@ void test (char * __restrict p){}
                  return 1;
                ],[
                CFLAGS="$CFLAGS -DHAVE_RESTRICT=1"
+               if test x"$host" = x"$build" ; then
+                   CFLAGSAUX="$CFLAGSAUX -DHAVE_RESTRICT=1"
+               fi
                AC_MSG_RESULT([yes])],[
                CFLAGS="$CFLAGS -DHAVE_RESTRICT=0"
+               if test x"$host" = x"$build" ; then
+                   CFLAGSAUX="$CFLAGSAUX -DHAVE_RESTRICT=0"
+               fi
                AC_MSG_RESULT([no])])
 
 
@@ -378,10 +391,10 @@ ARCH_CONF_HEADER=
 
 if test x"$with_arch_h" = x""; then
     case $host in
-          x86_64*-mingw*|x86_64*-msys*|x86_64*-cygwin*)
+          x86_64*-mingw*|x86_64*-msys*)
             ARCH_CONF_HEADER="\$(GLSRCDIR)/../arch/windows-x64-msvc.h"
           ;;
-          *-mingw*|*-msys*|*-cygwin*)
+          *-mingw*|*-msys*)
             ARCH_CONF_HEADER="\$(GLSRCDIR)/../arch/windows-x86-msvc.h"
           ;;
           *-darwin*)
@@ -442,6 +455,17 @@ for flag in $dbgflags_to_try; do
     CFLAGS=$old_cflags
 done
 
+CFLAGS_VISIBILITY=""
+
+for flag in $CC_VISIBILITY_FLAGS_TO_TRY; do
+    CFLAGS="$CFLAGS $flag"
+    AC_TRY_COMPILE(, [return 0;], [
+        echo "   $flag"
+        CFLAGS_VISIBILITY="$CFLAGS_VISIBILITY $flag"
+    ])
+    CFLAGS=$old_cflags
+done
+
 AC_MSG_RESULT([ ...done.])
 
 dnl ----------------------------
@@ -459,7 +483,7 @@ AC_LINK_IFELSE(
   [AC_LANG_PROGRAM([#include <stdio.h>], [
   return(0);
   ])],
-  [CFLAGS_SANITIZE="$CFLAGS"], [CFLAGS_SANITIZE="****************ADDRESS_SANITIZER_NOT_SUPPORTED*********************"])
+  [CFLAGS_SANITIZE="$CFLAGS"], [CFLAGS_SANITIZE="'****************ADDRESS_SANITIZER_NOT_SUPPORTED*********************'"])
 
 CFLAGS="$CFLAGS_SAVED"
 
@@ -793,6 +817,163 @@ fi
 AC_SUBST(SYNC)
 AC_SUBST(PTHREAD_LIBS)
 AC_SUBST(RECURSIVE_MUTEXATTR)
+
+dnl Tesseract/Leptonica detection
+TESSERACTDIR=tesseract
+LEPTONICADIR=leptonica
+OCR_VERSION=0
+LEPTONICAINCLUDE=
+TESSERACTINCLUDE=
+TESSERACT_LIBS=
+OCR_DEVS=
+
+AC_ARG_WITH([tesseract], AC_HELP_STRING([--without-tesseract],
+    [do not try to use the Tesseract library for OCR]))
+
+if test x$with_tesseract != xno; then
+  AC_MSG_CHECKING([for local Tesseract library source])
+  if test -d $srcdir/tesseract && test -d $srcdir/leptonica; then
+    AC_MSG_RESULT([yes])
+    AC_LANG_PUSH(C++)
+    AC_TRY_COMPILE([],
+                   [return 0;],
+                   [HAVE_CXX_COMPILER=yes],
+                   [HAVE_CXX_COMPILER=no])
+    if test x$HAVE_CXX_COMPILER != xyes; then
+      AC_MSG_WARN([Disabling tesseract as no working C++ compiler])
+    else
+      dnl --------------------------------------------------
+      dnl check for sse4.1, avx, avx2 or fma
+      dnl --------------------------------------------------
+      AC_MSG_CHECKING([sse4.1 support])
+      save_cxxflags=$CXXFLAGS
+      TESS_CXXFLAGS=""
+      CXXFLAGS="$CXXFLAGS -msse4.1"
+
+      TESS_SSE4_1=""
+      AC_LINK_IFELSE(
+        [AC_LANG_PROGRAM([#include <emmintrin.h>
+                          #include <smmintrin.h>],
+                         [__m128i input1;
+                          unsigned char buf1[[128]];
+                          input1 = _mm_loadu_si128((const __m128i *)buf1);
+                          input1 = _mm_hadd_epi32(input1, input1);
+                          return(0);
+                         ])],
+        [TESS_SSE4_1="-msse4.1"],
+        [TESS_SSE4_1=""])
+
+      if test "x$TESS_SSE4_1" != x; then
+        AC_MSG_RESULT(yes)
+        TESS_CXXFLAGS="$TESS_CXXFLAGS -DHAVE_SSE4_1"
+      else
+        AC_MSG_RESULT(no)
+      fi
+
+      AC_MSG_CHECKING([avx support])
+      CXXFLAGS="$save_cxxflags -mavx"
+
+      TESS_AVX=""
+      AC_LINK_IFELSE(
+        [AC_LANG_PROGRAM([#include <immintrin.h>],
+	                 [__m256d input1 = _mm256_setzero_pd();
+                          input1 = _mm256_hadd_pd(input1, input1);
+                          return(0);])],
+        [TESS_AVX="-mavx"],
+        [TESS_AVX=""])
+
+      if test "x$TESS_AVX" != x; then
+        AC_MSG_RESULT(yes)
+        TESS_CXXFLAGS="$TESS_CXXFLAGS -DHAVE_AVX"
+      else
+        AC_MSG_RESULT(no)
+      fi
+
+      AC_MSG_CHECKING([avx2 support])
+      CXXFLAGS="$save_cxxflags -mavx2"
+
+      TESS_AVX2=""
+      AC_LINK_IFELSE(
+        [AC_LANG_PROGRAM([#include <immintrin.h>],
+	                 [__m256i input1;
+                          unsigned char buf1[[256]];
+                          input1 = _mm256_loadu_si256((const __m256i *)buf1);
+                          input1 = _mm256_adds_epu8(input1, input1);
+                          return(0);])],
+        [TESS_AVX2="-mavx2"],
+        [TESS_AVX2=""])
+
+      if test "x$TESS_AVX2" != x; then
+        AC_MSG_RESULT(yes)
+        TESS_CXXFLAGS="$TESS_CXXFLAGS -DHAVE_AVX2"
+      else
+        AC_MSG_RESULT(no)
+      fi
+
+      AC_MSG_CHECKING([fma support])
+      CXXFLAGS="$save_cxxflags -mfma"
+
+      TESS_FMA=""
+      AC_LINK_IFELSE(
+        [AC_LANG_PROGRAM([#include <immintrin.h>],
+	                 [__m256d input1 = _mm256_setzero_pd();
+                          input1 = _mm256_fmadd_pd(input1, input1, input1);
+                          return(0);])],
+        [TESS_FMA="-mfma"],
+        [TESS_FMA=""])
+
+      if test "x$TESS_FMA" != x; then
+        AC_MSG_RESULT(yes)
+        TESS_CXXFLAGS="$TESS_CXXFLAGS -DHAVE_FMA"
+      else
+        AC_MSG_RESULT(no)
+      fi
+
+      AC_MSG_CHECKING([neon support])
+      CXXFLAGS="$save_cxxflags -mfpu=neon -mcpu=cortex-a53"
+
+      TESS_NEON=""
+      AC_LINK_IFELSE(
+       [AC_LANG_PROGRAM([#include "arm_neon.h"],
+                        [int32x4_t round = vdupq_n_s32(10);
+                         return(0);])],
+       [TESS_NEON="-mfpu=neon -mcpu=cortex-a53 -D__ARM_NEON__"],
+       [TESS_NEON=""])
+
+      if test "x$TESS_NEON" != x; then
+        AC_MSG_RESULT(yes)
+        TESS_CXXFLAGS="$TESS_CXXFLAGS -DHAVE_NEON"
+      else
+        AC_MSG_RESULT(no)
+      fi
+
+      CXXFLAGS="$save_cxxflags"
+
+      OCR_VERSION=1
+      OCR_DEVS="\$(DD)ocr.dev \$(DD)hocr.dev \$(DD)pdfocr8.dev \$(DD)pdfocr24.dev \$(DD)pdfocr32.dev"
+      LEPTONICAINCLUDE="include base/leptonica.mak"
+      TESSERACTINCLUDE="include base/tesseract.mak"
+      TESSERACT_LIBS="-lstdc++"
+    fi
+    AC_LANG_POP()
+  else
+    AC_MSG_RESULT([no])
+  fi
+fi
+
+AC_SUBST(TESSERACT_LIBS)
+AC_SUBST(LEPTONICAINCLUDE)
+AC_SUBST(TESSERACTINCLUDE)
+AC_SUBST(LEPTONICADIR)
+AC_SUBST(TESSERACTDIR)
+AC_SUBST(OCR_DEVS)
+AC_SUBST(OCR_VERSION)
+AC_SUBST(TESS_AVX)
+AC_SUBST(TESS_AVX2)
+AC_SUBST(TESS_FMA)
+AC_SUBST(TESS_SSE4_1)
+AC_SUBST(TESS_NEON)
+AC_SUBST(TESS_CXXFLAGS)
 
 dnl Tests for iconv (Needed for OpenPrinting Vector, "opvp" output device)
 AC_ARG_WITH(libiconv,
@@ -1197,7 +1378,7 @@ else
         SHARE_ZLIB=0
         ZLIBDIR=$srcdir/zlib
 
-        if test x"$ac_cv_prog_gcc" = x"yes"; then
+        if test x"$GCC" = x"yes"; then
           ZLIBCFLAGS="-Wno-write-strings"
         fi
   else
@@ -1246,7 +1427,24 @@ else
           SHARE_LIBPNG=0
           LIBPNGDIR=$srcdir/libpng
           PNGDEVS="$PNGDEVS_ALL"
-  else
+          case $host in
+            *powerpc*)
+                # Building on PPC with gcc, disable libpng's PPC specific
+                # optimizations: we don't include the source file for it
+                # and it only applies to reading, which we don't use.
+                if test $GCC = yes; then
+                  CFLAGS="$CFLAGS -DPNG_POWERPC_VSX_OPT=0"
+                fi
+            ;;
+            *arm64*|*aarch64*)
+                # Building on arm64 with gcc, disable libpng's neon
+                # optimizations.
+                if test $GCC = yes; then
+                  CFLAGS="$CFLAGS -DPNG_ARM_NEON_OPT=0"
+                fi
+            ;;
+          esac
+ else
           AC_MSG_RESULT([no])
           AC_CHECK_LIB(png, png_create_write_struct, [
             AC_CHECK_HEADERS(png.h, [
@@ -1419,6 +1617,11 @@ case "x$with_system_libtiff" in
         ;;
 esac
 
+
+if test x"$SHARE_LIBTIFF" != x"$SHARE_LIBJPEG" ; then
+    AC_MSG_ERROR([Mixing local libtiff with shared libjpeg not supported])
+fi
+
 CGLAGS_STORE=$CFLAGS
 CFLAGS=-Wno-misleading-indentation
 AC_TRY_COMPILE([], [return 0;],
@@ -1443,7 +1646,7 @@ if test x"$SHARE_LIBTIFF" = x"0" ; then
       fi
       cd "$olddir"
 
-      if test x"$ac_cv_prog_gcc" = x"yes"; then
+      if test x"$GCC" = x"yes"; then
         TIFFCFLAGS="-Wno-write-strings $CFLAGS_NMI $CFLAGS_NUD -DJPEG_LIB_MK1_OR_12BIT=0"
       fi
       # if we're building with our own libjpeg, or we have another libjpeg available, allow jpeg compression in TIFF
@@ -1669,7 +1872,7 @@ AC_ARG_WITH([ijs], AC_HELP_STRING([--without-ijs],
     [disable IJS driver support]))
 
 case $host in
-    *-mingw*|*-msys*|*-cygwin*)
+    *-mingw*|*-msys*)
         AC_MSG_WARN([disabling the ijs device])
         with_ijs=no
     ;;
@@ -1735,7 +1938,7 @@ if test x$with_luratech != xno; then
           JBIG2_AUTOCONF_CFLAGS="-DUSE_LDF_JB2 -DMAC -DMAC_OS_X_BUILD -fsigned-char"
         ;;
         *-aix*)
-          if test $ac_cv_prog_gcc = yes; then
+          if test $GCC = yes; then
             JBIG2_AUTOCONF_CFLAGS="-DUSE_LDF_JB2 -fsigned-char -DLINUX=1 -DFORTE"
           else
             JBIG2_AUTOCONF_CFLAGS="-DUSE_LDF_JB2 -qchars=signed -DLINUX=1 -DFORTE"
@@ -1755,7 +1958,7 @@ if test x$with_luratech != xno; then
 fi
 
 JB2_STDINT_TYPES_IN=
-JBIG2DEC_REQ=0.16
+JBIG2DEC_REQ=0.19
 
 if test "x$JBIG2_DECODER" = x; then
   dnl look for jbig2dec
@@ -1876,7 +2079,7 @@ if test x$with_luratech != xno; then
           JPX_AUTOCONF_CFLAGS="-DUSE_LWF_JP2 -DMAC -DMAC_OS_X_BUILD"
         ;;
         *-aix*)
-          if test $ac_cv_prog_gcc = yes; then
+          if test $GCC = yes; then
             JPX_AUTOCONF_CFLAGS="-DUSE_LWF_JP2 -fsigned-char -DLINUX=1 -DFORTE"
           else
             JPX_AUTOCONF_CFLAGS="-DUSE_LWF_JP2 -qchars=signed -DLINUX=1 -DFORTE"
@@ -1917,7 +2120,7 @@ AC_CHECK_FUNCS([fseeko], [CFLAGS_OPJ_HAVE_FSEEKO="-DOPJ_HAVE_FSEEKO=1"], [CFLAGS
 JPX_SSE_CFLAGS=""
 
 if test "x$HAVE_SSE2" = "x" ; then
-  if test $ac_cv_prog_gcc = yes; then
+  if test $GCC = yes; then
     JPX_SSE_CFLAGS="-U__SSE__"
   fi
 fi
@@ -2003,10 +2206,10 @@ if test x$with_urf != xno; then
     AC_MSG_RESULT([yes])
     ENABLEURF="\$(D_)URF_INCLUDED\$(_D)"
     URF_DEVS='urfgray urfrgb urfcmyk'
-    GPDL_URF_TOP_OBJ=$(GPDLOBJ)/$(GPDL_URF_TOP_OBJ_FILE)
-    URF_INCLUDE=$(I_)$(URFSRCDIR)$(_I)
-    URF_DEV=$(GLD)urfd.dev
-    SURFX_H=SURFX_H=$(URFSRCDIR)$(D)surfx.h
+    GPDL_URF_TOP_OBJ="\$(GPDLOBJ)/\$(GPDL_URF_TOP_OBJ_FILE)"
+    URF_INCLUDE="\$(I_)\$(URFSRCDIR)\$(_I)"
+    URF_DEV="\$(GLD)urfd.dev"
+    SURFX_H="\$(URFSRCDIR)\$(D)surfx.h"
 fi
 fi
 
@@ -2412,7 +2615,8 @@ IBM_DEVS='ibmpro jetp3852'
 OKI_DEVS='oki182 okiibm oki4w'
 JAPAN_DEVS='lips4 lips4v ljet4pjl lj4dithp dj505j picty180 lips2p bjc880j pr201 pr150 pr1000 pr1000_4 jj100 bj10v bj10vh mj700v2c mj500c mj6000c mj8000c fmpr fmlbp ml600 lbp310 lbp320 md50Mono md50Eco md1xMono escpage lp2000 npdl rpdl'
 MISC_PDEVS='uniprint ap3250 atx23 atx24 atx38 itk24i itk38 coslw2p coslwxl declj250 fs600 imagen lj250 m8510 necp6 oce9050 r4081 sj48 tek4696 t4693d2 t4693d4 t4693d8 dl2100 la50 la70 la75 la75plus ln03 xes md2k md5k gdi samsunggdi'
-OPVP_DEVS='opvp oprp'
+
+AC_ARG_WITH([openprinting],, OPVP_DEVS='opvp oprp', OPVP_DEVS='')
 
 ETS_HALFTONING_DEVS='rinkj'
 
@@ -2452,10 +2656,12 @@ while test -n "$drivers"; do
         PRINTERS)
                 P_DEVS0="$P_DEVS0 $CANON_DEVS $EPSON_DEVS $HP_DEVS $LEXMARK_DEVS $BROTHER_DEVS $APPLE_DEVS $IBM_DEVS $OKI_DEVS $JAPAN_DEVS $MISC_PDEVS $ETS_HALFTONING_DEVS $URF_DEVS"
                 IJS_DEVS0="$IJSDEVS"
-                if test x$ac_cv_lib_dl_dlopen != xno -a x$found_iconv != xno; then
-                        P_DEVS0="$P_DEVS0 $OPVP_DEVS"
-                else
-                        AC_MSG_WARN(Unable to include opvp/oprp driver due to missing or disabled prerequisites...)
+                if test x"$OPVP_DEVS" != x"" ; then
+                  if test x$ac_cv_lib_dl_dlopen != xno -a x$found_iconv != xno; then
+                    P_DEVS0="$P_DEVS0 $OPVP_DEVS"
+                  else
+                    AC_MSG_ERROR(Unable to include opvp/oprp driver due to missing or disabled prerequisites...)
+                  fi
                 fi
                 ;;
         FILES)
@@ -2718,7 +2924,7 @@ AC_ARG_ENABLE([hidden-visibility],
         [hide all shared library symbols which are not part of its public API]),
     [hide_symbols=yes])
 
-if test x$hide_symbols = xyes -a $ac_cv_prog_gcc = yes; then
+if test x$hide_symbols = xyes -a $GCC = yes; then
     attr_default="__attribute__((visibility(\\\"default\\\")))"
     attr_hidden="__attribute__((visibility(\\\"hidden\\\")))"
 fi
@@ -2730,7 +2936,7 @@ case $host in
       PCL_DYNAMIC_LDFLAGS="-shared -Wl,\$(LD_SET_DT_SONAME)\$(LDFLAGS_SO_PREFIX)\$(PCL_SONAME_MAJOR)"
       XPS_DYNAMIC_LDFLAGS="-shared -Wl,\$(LD_SET_DT_SONAME)\$(LDFLAGS_SO_PREFIX)\$(XPS_SONAME_MAJOR)"
       PDL_DYNAMIC_LDFLAGS="-shared -Wl,\$(LD_SET_DT_SONAME)\$(LDFLAGS_SO_PREFIX)\$(GPDL_SONAME_MAJOR)"
-      if test $ac_cv_prog_gcc = yes; then
+      if test $GCC = yes; then
         # GCC high level flag
         DYNAMIC_LIBS="-rdynamic"
       else
@@ -2738,7 +2944,7 @@ case $host in
       fi
       SO_LIB_EXT=".so"
     ;;
-    *-mingw*|*-msys*|*-cygwin*)
+    *-mingw*|*-msys*)
       if test x$hide_symbols = xyes; then
         attr_default="__declspec(dllexport)"
         attr_hidden=""
@@ -2767,6 +2973,32 @@ case $host in
       GPDL_SONAME_MAJOR="lib\$(GPDL${libname3}"
       GPDL_SONAME_MAJOR_MINOR="lib\$(GPDL${libname2}"
     ;;
+    *-cygwin*)
+      if test x$hide_symbols = xyes; then
+        attr_default="__declspec(dllexport)"
+        attr_hidden=""
+      fi
+      GS_DYNAMIC_LDFLAGS="-shared -Wl,--out-implib=\$(BINDIR)/lib\$(GS_SO_BASE).dll.a $_ldflags"
+      PCL_DYNAMIC_LDFLAGS="-shared -Wl,--out-implib=\$(BINDIR)/lib\$(PCL_SO_BASE).dll.a $_ldflags"
+      XPS_DYNAMIC_LDFLAGS="-shared -Wl,--out-implib=\$(BINDIR)/lib\$(XPS_SO_BASE).dll.a $_ldflags"
+      PDL_DYNAMIC_LDFLAGS="-shared -Wl,--out-implib=\$(BINDIR)/lib\$(PDL_SO_BASE).dll.a $_ldflags"
+      SO_LIB_EXT=""
+      DLL_EXT=".dll"
+      SO_LIB_VERSION_SEPARATOR="-"
+      # make sure the import library doesn't link a program against the DLL with the minor version in it
+      GS_SONAME="lib\$(GS${libname1}"
+      GS_SONAME_MAJOR="lib\$(GS${libname3}"
+      GS_SONAME_MAJOR_MINOR="cyg\$(GS${libname2}"
+      PCL_SONAME="lib\$(PCL${libname1}"
+      PCL_SONAME_MAJOR="lib\$(PCL${libname3}"
+      PCL_SONAME_MAJOR_MINOR="cyg\$(PCL${libname2}"
+      XPS_SONAME="lib\$(XPS${libname1}"
+      XPS_SONAME_MAJOR="lib\$(XPS${libname3}"
+      XPS_SONAME_MAJOR_MINOR="cyg\$(XPS${libname2}"
+      GPDL_SONAME="lib\$(GPDL${libname1}"
+      GPDL_SONAME_MAJOR="lib\$(GPDL${libname3}"
+      GPDL_SONAME_MAJOR_MINOR="cyg\$(GPDL${libname2}"
+    ;;
     *bsd*)
       DYNAMIC_CFLAGS="-fPIC $DYNAMIC_CFLAGS"
       GS_DYNAMIC_LDFLAGS="-shared -Wl,\$(LD_SET_DT_SONAME)\$(LDFLAGS_SO_PREFIX)\$(GS_SONAME_MAJOR)"
@@ -2777,15 +3009,15 @@ case $host in
     ;;
     *-darwin*)
       DYNAMIC_CFLAGS="-fPIC $DYNAMIC_CFLAGS"
-      GS_DYNAMIC_LDFLAGS="-dynamiclib -install_name \$(GS_SONAME_MAJOR_MINOR)"
-      PCL_DYNAMIC_LDFLAGS="-dynamiclib -install_name \$(PCL_SONAME_MAJOR_MINOR)"
-      XPS_DYNAMIC_LDFLAGS="-dynamiclib -install_name \$(XPS_SONAME_MAJOR_MINOR)"
-      PDL_DYNAMIC_LDFLAGS="-dynamiclib -install_name \$(GPDL_SONAME_MAJOR_MINOR)"
+      GS_DYNAMIC_LDFLAGS="-dynamiclib -install_name $DARWIN_LDFLAGS_SO_PREFIX\$(GS_SONAME_MAJOR_MINOR)"
+      PCL_DYNAMIC_LDFLAGS="-dynamiclib -install_name $DARWIN_LDFLAGS_SO_PREFIX\$(PCL_SONAME_MAJOR_MINOR)"
+      XPS_DYNAMIC_LDFLAGS="-dynamiclib -install_name $DARWIN_LDFLAGS_SO_PREFIX\$(XPS_SONAME_MAJOR_MINOR)"
+      PDL_DYNAMIC_LDFLAGS="-dynamiclib -install_name $DARWIN_LDFLAGS_SO_PREFIX\$(GPDL_SONAME_MAJOR_MINOR)"
       DYNAMIC_LIBS=""
       SO_LIB_EXT=".dylib"
     ;;
     *-sun*|*-solaris*)
-      if test $ac_cv_prog_gcc = yes; then
+      if test $GCC = yes; then
         DYNAMIC_CFLAGS="-fPIC $DYNAMIC_CFLAGS"
       else
         DYNAMIC_CFLAGS="-KPIC $DYNAMIC_CFLAGS"
@@ -2804,7 +3036,7 @@ case $host in
       SO_LIB_EXT=".so"
     ;;
     *-aix*)
-      if test $ac_cv_prog_gcc = yes; then
+      if test $GCC = yes; then
         DYNAMIC_CFLAGS="-fPIC $DYNAMIC_CFLAGS"
         GCFLAGS="-Wl,-brtl -D_LARGE_FILES $GCFLAGS"
         GS_DYNAMIC_LDFLAGS="-shared -Wl,-brtl,-G -fPIC"
@@ -2823,7 +3055,7 @@ case $host in
 esac
 
 if test x$hide_symbols = xyes ; then
-  if test $ac_cv_prog_gcc = yes; then
+  if test $GCC = yes; then
     DYNAMIC_CFLAGS="$DYNAMIC_CFLAGS -fvisibility=hidden"
   fi
   DYNAMIC_CFLAGS="$DYNAMIC_CFLAGS -DGSDLLEXPORT=\"$attr_default\""
@@ -3210,7 +3442,7 @@ AC_SUBST(AUXDIRPOSTFIX)
 EXEEXT=""
 
 case $host in
-    *-mingw*|*-msys*|*-cygwin*)
+    *-mingw*|*-msys*)
       EXEEXT=".exe"
     ;;
     *)
@@ -3230,7 +3462,7 @@ AC_SUBST(EXEEXT)
 AUXEXEEXT=""
 
 case $build in
-    *-mingw*|*-msys*|*-cygwin*)
+    *-mingw*|*-msys*)
       AUXEXEEXT=".exe"
     ;;
     *)
@@ -3271,15 +3503,20 @@ AC_SUBST(VERSIONED_PATH)
 # NOTE: Strict aliasing can cause some parts
 #       of Ghostscript to malfunction.
 # --------------------------------------------------
-if test $ac_cv_prog_gcc = yes; then
+if test $GCC = yes; then
   AC_MSG_CHECKING([whether to explicitly disable strict aliasing])
   CFLAGS_backup="$CFLAGS"
+  CFLAGSAUX_backup="$CFLAGSAUX"
   CFLAGS="$CFLAGS -fno-strict-aliasing"
   AC_TRY_COMPILE(, [return 0;], [
     AC_MSG_RESULT([yes])
     CFLAGS_backup="$CFLAGS"
+    if test x"$host" = x"$build" ; then
+      CFLAGSAUX_backup="$CFLAGSAUX -fno-strict-aliasing"
+    fi
   ])
   CFLAGS="$CFLAGS_backup"
+  CFLAGSAUX="$CFLAGSAUX_backup"
 fi
 
 # --------------------------------------------------
@@ -3427,6 +3664,13 @@ AC_ARG_ENABLE([mkromfs-quiet], AC_HELP_STRING([--enable-mkromfs-quiet],
 
 AC_SUBST(MKROMFS_FLAGS)
 
+
+if test x"$GCFLAGSAUX" = x"\$(GCFLAGS)" ; then
+    GCFLAGSAUX="$GCFLAGS"
+fi
+
+CFLAGSAUX=$(echo $CFLAGSAUX | sed -e 's/-DGS_NO_FILESYSTEM//g')
+
 dnl --------------------------------------------------
 dnl Do substitutions
 dnl --------------------------------------------------
@@ -3440,6 +3684,7 @@ AC_SUBST(STRIP_XE)
 AC_SUBST(JPX_SSE_CFLAGS)
 
 AC_SUBST(CCAUX)
+AC_SUBST(CFLAGSAUX)
 AC_SUBST(GCFLAGSAUX)
 AC_SUBST(CAPOPTAUX)
 AC_SUBST(CFLAGSAUX_STANDARD)
@@ -3448,6 +3693,7 @@ AC_SUBST(CFLAGSAUX_PROFILE)
 AC_SUBST(LDFLAGSAUX)
 AC_SUBST(AUXEXTRALIBS)
 AC_SUBST(ARCH_AUTOCONF_HEADER)
+AC_SUBST(CFLAGS_VISIBILITY)
 
 CONFIG_FILES_LIST="$CONFIG_FILES_LIST $THEMAKEFILE"
 

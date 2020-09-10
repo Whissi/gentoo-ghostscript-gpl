@@ -1,4 +1,4 @@
-/* Copyright (C) 2001-2019 Artifex Software, Inc.
+/* Copyright (C) 2001-2020 Artifex Software, Inc.
    All Rights Reserved.
 
    This software is provided AS-IS with no warranty, either express or
@@ -66,6 +66,18 @@ const char *pprintld1(stream * s, const char *format, long v);
 const char *pprintld2(stream * s, const char *format, long v1, long v2);
 const char *pprintld3(stream * s, const char *format,
                       long v1, long v2, long v3);
+
+/* Print a size_t value using a format. */
+const char *pprintzd1(stream *s, const char *format, size_t v);
+const char *pprintzd2(stream *s, const char *format, size_t v1, size_t v2);
+const char *pprintzd3(stream *s, const char *format,
+                      size_t v1, size_t v2, size_t v3);
+
+/* Print an int64_t value using a format. */
+const char *pprinti64d1(stream *s, const char *format, int64_t v);
+const char *pprinti64d2(stream *s, const char *format, int64_t v1, int64_t v2);
+const char *pprinti64d3(stream *s, const char *format,
+                        int64_t v1, int64_t v2, int64_t v3);
 
 /* Print (a) string(s) using a format. */
 const char *pprints1(stream * s, const char *format, const char *str);

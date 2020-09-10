@@ -1,4 +1,4 @@
-/* Copyright (C) 2001-2019 Artifex Software, Inc.
+/* Copyright (C) 2001-2020 Artifex Software, Inc.
    All Rights Reserved.
 
    This software is provided AS-IS with no warranty, either express or
@@ -718,7 +718,7 @@ gxht_thresh_image_init(gx_image_enum *penum)
 
         penum->ht_buffer =
                         gs_alloc_bytes(penum->memory,
-                           penum->ht_stride * max_height * spp_out,
+                           (size_t)penum->ht_stride * max_height * spp_out,
                            "gxht_thresh");
         penum->ht_plane_height = penum->ht_stride * max_height;
         /* We want to have 128 bit alignement for our contone and
@@ -744,7 +744,7 @@ gxht_thresh_image_init(gx_image_enum *penum)
         penum->line = gs_alloc_bytes(penum->memory, penum->line_size * spp_out,
                                      "gxht_thresh");
         penum->thresh_buffer = gs_alloc_bytes(penum->memory,
-                                              penum->line_size * max_height,
+                                              (size_t)penum->line_size * max_height,
                                               "gxht_thresh");
         if (penum->line == NULL || penum->thresh_buffer == NULL ||
             penum->ht_buffer == NULL) {

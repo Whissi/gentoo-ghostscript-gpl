@@ -1,4 +1,4 @@
-/* Copyright (C) 2001-2019 Artifex Software, Inc.
+/* Copyright (C) 2001-2020 Artifex Software, Inc.
    All Rights Reserved.
 
    This software is provided AS-IS with no warranty, either express or
@@ -338,9 +338,9 @@ accum_close(gx_device * dev)
             (adev->list.count <= 1 ? &adev->list.single : adev->list.head);
 
         dmlprintf6(dev->memory,
-                   "[q]list at 0x%lx, count=%d, head=0x%lx, tail=0x%lx, xrange=(%d,%d):\n",
-                   (ulong) & adev->list, adev->list.count,
-                   (ulong) adev->list.head, (ulong) adev->list.tail,
+                   "[q]list at "PRI_INTPTR", count=%d, head="PRI_INTPTR", tail="PRI_INTPTR", xrange=(%d,%d):\n",
+                   (intptr_t)&adev->list, adev->list.count,
+                   (intptr_t)adev->list.head, (intptr_t)adev->list.tail,
                    adev->list.xmin, adev->list.xmax);
         while (rp != 0) {
             clip_rect_print('q', "   ", rp);
@@ -348,7 +348,7 @@ accum_close(gx_device * dev)
         }
     }
     if (!clip_list_validate(&adev->list)) {
-        mlprintf1(dev->memory, "[q]Bad clip list 0x%lx!\n", (ulong) & adev->list);
+        mlprintf1(dev->memory, "[q]Bad clip list "PRI_INTPTR"!\n", (intptr_t)&adev->list);
         return_error(gs_error_Fatal);
     }
 #endif
@@ -431,9 +431,8 @@ accum_alloc_rect(gx_device_cpath_accum * adev)
 #define ACCUM_ALLOC(s, ar, px, py, qx, qy)\
         if (++(adev->list.count) == 1)\
           ar = &adev->list.single;\
-        else if ((ar = accum_alloc_rect(adev)) == 0)\
-          return_error(gs_error_VMerror);\
-        ACCUM_SET(s, ar, px, py, qx, qy)
+        ar = accum_alloc_rect(adev);\
+        if (ar) ACCUM_SET(s, ar, px, py, qx, qy)
 #define ACCUM_SET(s, ar, px, py, qx, qy)\
         (ar)->xmin = px, (ar)->ymin = py, (ar)->xmax = qx, (ar)->ymax = qy;\
         clip_rect_print('Q', s, ar)
@@ -537,6 +536,7 @@ top:
             return 0;
         }
         ACCUM_ALLOC("app.y", nr, x, y, xe, ye);
+        if (!nr) return_error(gs_error_VMerror);
         ACCUM_ADD_LAST(nr);
         return 0;
     } else if (y == rptr->ymin && ye == rptr->ymax && x >= rptr->xmin) {
@@ -546,10 +546,12 @@ top:
             return 0;
         }
         ACCUM_ALLOC("app.x", nr, x, y, xe, ye);
+        if (!nr) return_error(gs_error_VMerror);
         ACCUM_ADD_LAST(nr);
         return 0;
     }
     ACCUM_ALLOC("accum", nr, x, y, xe, ye);
+    if (!nr) return_error(gs_error_VMerror);
     /* Previously we used to always search back from the tail here. Now we
      * base our search on the previous insertion point, in the hopes that
      * locality of reference will save us time. */
@@ -579,6 +581,10 @@ top:
         }
         /* Split off the top part of the new rectangle. */
         ACCUM_ALLOC("a.top", ar, x, ymax, xe, ye);
+        if (!ar) {
+            if (nr != &adev->list.single) ACCUM_FREE("free", nr);
+            return_error(gs_error_VMerror);
+        }
         ACCUM_ADD_AFTER(ar, rptr);
         ye = nr->ymax = ymax;
         clip_rect_print('Q', " ymax", nr);
@@ -592,6 +598,10 @@ top:
 
         while (rsplit->ymax == ymax) {
             ACCUM_ALLOC("s.top", ar, rsplit->xmin, ye, rsplit->xmax, ymax);
+            if (!ar) {
+                if (nr != &adev->list.single) ACCUM_FREE("free", nr);
+                return_error(gs_error_VMerror);
+            }
             ACCUM_ADD_AFTER(ar, rptr);
             rsplit->ymax = ye;
             rsplit = rsplit->prev;
@@ -606,6 +616,10 @@ top:
             rbot = rbot->prev;
         for (rsplit = rbot;;) {
             ACCUM_ALLOC("s.bot", ar, rsplit->xmin, ymin, rsplit->xmax, y);
+            if (!ar) {
+                if (nr != &adev->list.single) ACCUM_FREE("free", nr);
+                return_error(gs_error_VMerror);
+            }
             ACCUM_ADD_BEFORE(ar, rbot);
             rsplit->ymin = y;
             if (rsplit == rptr)

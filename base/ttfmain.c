@@ -1,4 +1,4 @@
-/* Copyright (C) 2001-2019 Artifex Software, Inc.
+/* Copyright (C) 2001-2020 Artifex Software, Inc.
    All Rights Reserved.
 
    This software is provided AS-IS with no warranty, either express or
@@ -493,7 +493,6 @@ static FontError ttfOutliner__BuildGlyphOutlineAux(ttfOutliner *self, int glyphI
     short count;
     unsigned int i;
     unsigned short nAdvance;
-    unsigned int nNextGlyphPtr = 0;
     unsigned int nPosBeg;
     TExecution_Context *exec = pFont->exec;
     TGlyph_Zone *pts = &exec->pts;
@@ -605,11 +604,10 @@ retry:
             e->flags = flags;
             nUsage++;
         } while (flags & MORE_COMPONENTS);
-        /* Some fonts have bad WE_HAVE_INSTRUCTIONS, so use nNextGlyphPtr : */
         if (r->Error(r))
             goto errex;
         nPos = r->Tell(r);
-        n_ins = ((!r->Eof(r) && (bHaveInstructions || nPos < nNextGlyphPtr)) ? ttfReader__UShort(r) : 0);
+        n_ins = ((!r->Eof(r) && (bHaveInstructions)) ? ttfReader__UShort(r) : 0);
         nPos = r->Tell(r);
         r->ReleaseGlyph(r, glyphIndex);
         glyph = NULL;
@@ -722,7 +720,7 @@ retry:
             Clear_CodeRange(exec, TT_CodeRange_Glyph);
         }
     } else if (gOutline->contourCount > 0) {
-        uint16 i;
+        int i;
         bool bInsOK;
         byte *onCurve, *stop, flag;
         short *endPoints;
@@ -796,7 +794,7 @@ retry:
         MoveGlyphOutline(pts, 0, gOutline, m_orig);
         self->nContoursTotal += gOutline->contourCount;
         self->nPointsTotal += nPoints;
-        if (execute_bytecode && !skip_instructions && 
+        if (execute_bytecode && !skip_instructions &&
                 !r->Error(r) && n_ins && bInsOK && !(pFont->inst->GS.instruct_control & 1)) {
             TGlyph_Zone *pts = &exec->pts;
             int k;
@@ -848,7 +846,6 @@ ex:;
 
     if (error == fBadInstruction && execute_bytecode) {
         /* reset a load of stuff so we can try again without hinting */
-        nNextGlyphPtr = 0;
         exec = pFont->exec;
         pts = &exec->pts;
         usage = tti->usage + tti->usage_top;

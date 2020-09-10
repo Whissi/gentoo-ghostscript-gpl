@@ -1,4 +1,4 @@
-/* Copyright (C) 2001-2019 Artifex Software, Inc.
+/* Copyright (C) 2001-2020 Artifex Software, Inc.
    All Rights Reserved.
 
    This software is provided AS-IS with no warranty, either express or
@@ -219,11 +219,11 @@ gs_type2_interpret(gs_type1_state * pcis, const gs_glyph_data_t *pgd,
             {char2_command_names};
 
             if (c2names[c] == 0)
-                dmlprintf2(pfont->memory, "[1]0x%lx: %02x??\n",
-                           (ulong) (cip - 1), c);
+                dmlprintf2(pfont->memory, "[1]"PRI_INTPTR": %02x??\n",
+                           (intptr_t)(cip - 1), c);
             else
-                dmlprintf3(pfont->memory, "[1]0x%lx: %02x %s\n",
-                           (ulong) (cip - 1), c, c2names[c]);
+                dmlprintf3(pfont->memory, "[1]"PRI_INTPTR": %02x %s\n",
+                           (intptr_t)(cip - 1), c, c2names[c]);
         }
 #endif
         switch ((char_command) c) {
@@ -593,11 +593,11 @@ gs_type2_interpret(gs_type1_state * pcis, const gs_glyph_data_t *pgd,
                     {char2_extended_command_names};
 
                     if (ce2names[c] == 0)
-                        dmlprintf2(pfont->memory, "[1]0x%lx: %02x??\n",
-                                   (ulong) (cip - 1), c);
+                        dmlprintf2(pfont->memory, "[1]"PRI_INTPTR": %02x??\n",
+                                   (intptr_t)(cip - 1), c);
                     else
-                        dmlprintf3(pfont->memory, "[1]0x%lx: %02x %s\n",
-                                   (ulong) (cip - 1), c, ce2names[c]);
+                        dmlprintf3(pfont->memory, "[1]"PRI_INTPTR": %02x %s\n",
+                                   (intptr_t)(cip - 1), c, ce2names[c]);
                 }
 #endif
                 switch ((char2_extended_command) c) {

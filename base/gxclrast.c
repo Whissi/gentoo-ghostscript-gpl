@@ -1,4 +1,4 @@
-/* Copyright (C) 2001-2019 Artifex Software, Inc.
+/* Copyright (C) 2001-2020 Artifex Software, Inc.
    All Rights Reserved.
 
    This software is provided AS-IS with no warranty, either express or
@@ -510,8 +510,8 @@ clist_playback_band(clist_playback_action playback_action,
     } clip_save;
     bool in_clip = false;
     gs_gstate gs_gstate;
-    gx_device_color fill_color;
-    gx_device_color stroke_color;
+    gx_device_color fill_color = { 0 };
+    gx_device_color stroke_color = { 0 };
     float dash_pattern[cmd_max_dash];
     gx_fill_params fill_params;
     gx_stroke_params stroke_params;
@@ -612,6 +612,8 @@ in:                             /* Initialize for a new page. */
     memset(&gs_gstate, 0, sizeof(gs_gstate));
     GS_STATE_INIT_VALUES_CLIST((&gs_gstate));
     code = gs_gstate_initialize(&gs_gstate, mem);
+    if (code < 0)
+        goto out;
     gs_gstate.device = tdev;
     gs_gstate.view_clip = NULL; /* Avoid issues in pdf14 fill stroke */
     gs_gstate.clip_path = &clip_path;
@@ -620,11 +622,39 @@ in:                             /* Initialize for a new page. */
         code = gs_note_error(gs_error_VMerror);
         goto out;
     }
-    pcs->type->install_cspace(pcs, &gs_gstate);
-    gs_gstate.color[0].color_space = pcs;
-    rc_increment_cs(pcs);
+    code = pcs->type->install_cspace(pcs, &gs_gstate);
+    if (code < 0)
+        goto out;
+    gs_gstate.color[0].color_space = pcs; /* we already have one ref */
     gs_gstate.color[1].color_space = pcs;
-    rc_increment_cs(pcs);
+    rc_increment_cs(pcs); /* increment for second ref */
+    /* Initialize client color and device color */
+    gs_gstate.color[0].ccolor =
+        gs_alloc_struct(mem, gs_client_color, &st_client_color, "clist_playback_band");
+    gs_gstate.color[1].ccolor =
+        gs_alloc_struct(mem, gs_client_color, &st_client_color, "clist_playback_band");
+    gs_gstate.color[0].dev_color =
+        gs_alloc_struct(mem, gx_device_color, &st_device_color, "clist_playback_band");
+    gs_gstate.color[1].dev_color =
+        gs_alloc_struct(mem, gx_device_color, &st_device_color, "clist_playback_band");
+    if (gs_gstate.color[0].ccolor == 0 || gs_gstate.color[0].dev_color == 0 ||
+        gs_gstate.color[1].ccolor == 0 || gs_gstate.color[1].dev_color == 0
+        ) {
+        gs_free_object(mem, gs_gstate.color[1].ccolor, "clist_playback_band");
+        gs_free_object(mem, gs_gstate.color[0].dev_color, "clist_playback_band");
+        gs_free_object(mem, gs_gstate.color[1].dev_color, "clist_playback_band");
+        return_error(gs_error_VMerror);
+    }
+    gs_gstate.color[0].color_space->pclient_color_space_data =
+        pcs->pclient_color_space_data;
+    cs_full_init_color(gs_gstate.color[0].ccolor, pcs);
+    gx_unset_dev_color(&gs_gstate);
+
+    gs_gstate.color[1].color_space->pclient_color_space_data =
+        pcs->pclient_color_space_data;
+    cs_full_init_color(gs_gstate.color[1].ccolor, pcs);
+    gx_unset_dev_color(&gs_gstate);
+
     /* Remove the ICC link cache and replace with the device link cache
        so that we share the cache across bands */
     rc_decrement(gs_gstate.icc_link_cache,"clist_playback_band");
@@ -1993,18 +2023,22 @@ idata:                  data_size = 0;
                             /* if the color is a pattern, it may have had the "is_locked" flag set	*/
                             /* clear those now (see do_fill_stroke).					*/
                             if (gx_dc_is_pattern1_color(&stroke_color)) {
-                                gs_id id = stroke_color.colors.pattern.p_tile->id;
+                                if (stroke_color.colors.pattern.p_tile != NULL) {
+                                    gs_id id = stroke_color.colors.pattern.p_tile->id;
 
-                                code = gx_pattern_cache_entry_set_lock(&gs_gstate, id, false);
-                                if (code < 0)
-                                    return code;	/* unlock failed -- should not happen */
+                                    code = gx_pattern_cache_entry_set_lock(&gs_gstate, id, false);
+                                    if (code < 0)
+                                        return code;	/* unlock failed -- should not happen */
+                                }
                             }
                             if (gx_dc_is_pattern1_color(&fill_color)) {
-                                gs_id id = fill_color.colors.pattern.p_tile->id;
+                                if (fill_color.colors.pattern.p_tile != NULL) {
+                                    gs_id id = fill_color.colors.pattern.p_tile->id;
 
-                                code = gx_pattern_cache_entry_set_lock(&gs_gstate, id, false);
-                                if (code < 0)
-                                    return code;	/* unlock failed -- should not happen */
+                                    code = gx_pattern_cache_entry_set_lock(&gs_gstate, id, false);
+                                    if (code < 0)
+                                        return code;	/* unlock failed -- should not happen */
+                                }
                             }
                             break;
                         case cmd_opv_stroke:
@@ -2353,6 +2387,14 @@ idata:                  data_size = 0;
         gx_pattern_cache_free(gs_gstate.pattern_cache);
         gs_gstate.pattern_cache = NULL;
     }
+    /* Free the client color and device colors allocated upon entry */
+    gs_free_object(mem, gs_gstate.color[0].ccolor, "clist_playback_band");
+    gs_free_object(mem, gs_gstate.color[1].ccolor, "clist_playback_band");
+    gs_free_object(mem, gs_gstate.color[0].dev_color, "clist_playback_band");
+    gs_free_object(mem, gs_gstate.color[1].dev_color, "clist_playback_band");
+    gs_gstate.color[0].ccolor = gs_gstate.color[1].ccolor = NULL;
+    gs_gstate.color[0].dev_color = gs_gstate.color[1].dev_color = NULL;
+
     /* The imager state release will decrement the icc link cache.  To avoid
        race conditions lock the cache */
     gx_monitor_enter(cdev->icc_cache_cl->lock);
@@ -2379,6 +2421,9 @@ idata:                  data_size = 0;
     if (code < 0) {
         if (pfs.dev != NULL)
             term_patch_fill_state(&pfs);
+        rc_decrement(gs_gstate.color[0].color_space, "clist_playback_band");
+        rc_decrement(gs_gstate.color[1].color_space, "clist_playback_band");
+        gs_free_object(mem, cbuf_storage, "clist_playback_band(cbuf_storage)");
         gx_cpath_free(&clip_path, "clist_playback_band");
         if (pcpath != &clip_path)
             gx_cpath_free(pcpath, "clist_playback_band");
@@ -2391,7 +2436,8 @@ idata:                  data_size = 0;
         goto in;
     if (pfs.dev != NULL)
         term_patch_fill_state(&pfs);
-    gs_free_object(mem, pcs, "clist_playback_band(pcs)");
+    rc_decrement(gs_gstate.color[0].color_space, "clist_playback_band");
+    rc_decrement(gs_gstate.color[1].color_space, "clist_playback_band");
     gs_free_object(mem, cbuf_storage, "clist_playback_band(cbuf_storage)");
     gx_cpath_free(&clip_path, "clist_playback_band");
     if (pcpath != &clip_path)
@@ -2749,17 +2795,17 @@ read_set_misc2(command_buf_t *pcb, gs_gstate *pgs, segment_notes *pnotes)
         *pnotes = (segment_notes)(cb & 0x3f);
         if_debug1m('L', pgs->memory, " notes=%d\n", *pnotes);
     }
-    if (mask & opacity_alpha_known) {
-        cmd_get_value(pgs->opacity.alpha, cbp);
-        if_debug1m('L', pgs->memory, " opacity.alpha=%g\n", pgs->opacity.alpha);
+    if (mask & ais_known) {
+        cmd_get_value(pgs->alphaisshape, cbp);
+        if_debug1m('L', pgs->memory, " alphaisshape=%d\n", pgs->alphaisshape);
     }
-    if (mask & shape_alpha_known) {
-        cmd_get_value(pgs->shape.alpha, cbp);
-        if_debug1m('L', pgs->memory, " shape.alpha=%g\n", pgs->shape.alpha);
+    if (mask & stroke_alpha_known) {
+        cmd_get_value(pgs->strokeconstantalpha, cbp);
+        if_debug1m('L', pgs->memory, " strokeconstantalpha=%g\n", pgs->strokeconstantalpha);
     }
-    if (mask & alpha_known) {
-        cmd_get_value(pgs->alpha, cbp);
-        if_debug1m('L', pgs->memory, " alpha=%u\n", pgs->alpha);
+    if (mask & fill_alpha_known) {
+        cmd_get_value(pgs->fillconstantalpha, cbp);
+        if_debug1m('L', pgs->memory, " fillconstantalpha=%u\n", (uint)(pgs->fillconstantalpha));
     }
     pcb->ptr = cbp;
     return 0;

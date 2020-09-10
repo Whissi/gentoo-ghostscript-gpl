@@ -1,4 +1,4 @@
-/* Copyright (C) 2001-2019 Artifex Software, Inc.
+/* Copyright (C) 2001-2020 Artifex Software, Inc.
    All Rights Reserved.
 
    This software is provided AS-IS with no warranty, either express or
@@ -154,6 +154,6 @@ os2_printer_fclose(gx_io_device * iodev, FILE * file)
     os2_printer_t *pr = (os2_printer_t *)iodev->state;
     fclose(file);
     pm_spool(pr->memory, pr->filename, pr->queue);
-    unlink(pr->filename);
+    unlink(pr->filename); /* unlink, not gp_unlink */
     return 0;
 }

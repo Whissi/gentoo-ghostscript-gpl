@@ -1,4 +1,4 @@
-/* Copyright (C) 2001-2019 Artifex Software, Inc.
+/* Copyright (C) 2001-2020 Artifex Software, Inc.
    All Rights Reserved.
 
    This software is provided AS-IS with no warranty, either express or
@@ -103,8 +103,9 @@ InitFont(Bitstream_server * server, FAPI_font * ff)
             own_font_data = gs_malloc(mem, 1, length, "Type 42 fotn copy");
             if (!own_font_data)
                 return_error(gs_error_VMerror);
-            if (ff->serialize_tt_font(ff, own_font_data, length))
-                return_error(gs_error_invalidfont);
+            error = ff->serialize_tt_font(ff, own_font_data, length);
+            if (error < 0)
+                return error;
         }
     }
     face->font_data = own_font_data;

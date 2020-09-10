@@ -1,5 +1,5 @@
 /**
- * Copyright (C) 2001-2019 Artifex Software, Inc.
+ * Copyright (C) 2001-2020 Artifex Software, Inc.
  *
  * Permission is hereby granted, free of charge, to any person
  * obtaining a copy of this software and associated documentation
@@ -21,6 +21,9 @@
  * CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
  * SOFTWARE.
 **/
+
+#ifndef ijs_client_h_INCLUDED
+#define ijs_client_h_INCLUDED
 
 #ifdef __cplusplus
 extern "C" {
@@ -93,4 +96,6 @@ ijs_client_get_version (IjsClientCtx *ctx);
 
 #ifdef __cplusplus
 }
+#endif
+
 #endif

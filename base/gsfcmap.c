@@ -1,4 +1,4 @@
-/* Copyright (C) 2001-2019 Artifex Software, Inc.
+/* Copyright (C) 2001-2020 Artifex Software, Inc.
    All Rights Reserved.
 
    This software is provided AS-IS with no warranty, either express or
@@ -581,13 +581,14 @@ gs_cmap_ToUnicode_alloc(gs_memory_t *mem, int id, int num_codes, int key_size, i
               0, cmap_name, name_len, NULL, 0, &gs_cmap_ToUnicode_procs, mem);
     if (code < 0)
         return code;
-    map = (uchar *)gs_alloc_bytes(mem, num_codes * (value_size + 2),
+    map = (uchar *)gs_alloc_bytes(mem,
+                                  (size_t)num_codes * (value_size + 2),
                                   "gs_cmap_ToUnicode_alloc");
     if (map == NULL) {
         gs_cmap_free(*ppcmap, mem);
         return_error(gs_error_VMerror);
     }
-    memset(map, 0, num_codes * (value_size + 2));
+    memset(map, 0, (size_t)num_codes * (value_size + 2));
     cmap = (gs_cmap_ToUnicode_t *)*ppcmap;
     cmap->glyph_name_data = map;
     cmap->CMapType = 2;
@@ -621,13 +622,15 @@ gs_cmap_ToUnicode_realloc(gs_memory_t *mem, int new_value_size, gs_cmap_t **ppcm
     uchar *new_ptr, *new_map, *old_map = cmap->glyph_name_data;
     int i;
 
-    new_map = (uchar *)gs_alloc_bytes(mem, cmap->num_codes * (new_value_size + 2),
-                                  "gs_cmap_ToUnicode_alloc");
+    new_map = (uchar *)gs_alloc_bytes(mem,
+                                      (size_t)cmap->num_codes *
+                                                   (new_value_size + 2),
+                                      "gs_cmap_ToUnicode_alloc");
     if (new_map == NULL) {
         return_error(gs_error_VMerror);
     }
     new_ptr = new_map;
-    memset(new_map, 0, cmap->num_codes * (new_value_size + 2));
+    memset(new_map, 0, (size_t)cmap->num_codes * (new_value_size + 2));
 
     for (i=0;i<cmap->num_codes;i++) {
         memcpy(new_ptr, old_map, cmap->value_size + 2);

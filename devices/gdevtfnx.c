@@ -1,4 +1,4 @@
-/* Copyright (C) 2001-2019 Artifex Software, Inc.
+/* Copyright (C) 2001-2020 Artifex Software, Inc.
    All Rights Reserved.
 
    This software is provided AS-IS with no warranty, either express or
@@ -102,7 +102,7 @@ static void
 tiff_set_rgb_fields(gx_device_tiff *tfdev)
 {
     /* Put in a switch statement in case we want to have others */
-    switch (tfdev->icc_struct->device_profile[0]->data_cs) {
+    switch (tfdev->icc_struct->device_profile[GS_DEFAULT_DEVICE_PROFILE]->data_cs) {
         case gsRGB:
             TIFFSetField(tfdev->tif, TIFFTAG_PHOTOMETRIC, PHOTOMETRIC_RGB);
             break;

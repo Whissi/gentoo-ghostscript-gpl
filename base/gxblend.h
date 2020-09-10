@@ -1,4 +1,4 @@
-/* Copyright (C) 2001-2019 Artifex Software, Inc.
+/* Copyright (C) 2001-2020 Artifex Software, Inc.
    All Rights Reserved.
 
    This software is provided AS-IS with no warranty, either express or
@@ -392,10 +392,6 @@ void gx_blend_image_buffer16(byte *buf_ptr, int width, int height,
     int rowstride, int planestride, int num_comp, uint16_t bg);
 void gx_blend_image_buffer8to16(const byte *buf_ptr, unsigned short *buf_ptr_out,
     int width, int height, int rowstride, int planestride, int num_comp, byte bg);
-int gx_put_blended_image_cmykspot(gx_device *target, byte *buf_ptr,
-                      int planestride, int rowstride,
-                      int x0, int y0, int width, int height, int num_comp, uint16_t bg,
-                      bool has_tags, gs_int_rect rect, gs_separations *pseparations, bool deep);
 int gx_put_blended_image_custom(gx_device *target, byte *buf_ptr,
                       int planestride, int rowstride,
                       int x0, int y0, int width, int height, int num_comp, uint16_t bg, bool deep);

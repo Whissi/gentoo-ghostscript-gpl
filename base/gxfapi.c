@@ -1,4 +1,4 @@
-/* Copyright (C) 2001-2019 Artifex Software, Inc.
+/* Copyright (C) 2001-2020 Artifex Software, Inc.
    All Rights Reserved.
 
    This software is provided AS-IS with no warranty, either express or
@@ -809,7 +809,7 @@ fapi_image_uncached_glyph(gs_font *pfont, gs_gstate *pgs, gs_show_enum *penum,
              * compression ratios) we therefore set such bytes to zero. It would
              * be nicer if this was fixed in future.
              */
-            r = gs_alloc_bytes(penum->memory, dstr * rast->height,
+            r = gs_alloc_bytes(penum->memory, (size_t)dstr * rast->height,
                                "fapi_finish_render_aux");
             if (!r) {
                 return_error(gs_error_VMerror);
@@ -1687,12 +1687,12 @@ gs_fapi_do_char(gs_font *pfont, gs_gstate *pgs, gs_text_enum_t *penum, char *fon
 
     if (bCID) {
         code =
-            I->ff.fapi_set_cache(penum, pbfont, &enc_char_name_string, index,
+            I->ff.fapi_set_cache(penum, pbfont, &enc_char_name_string, index + GS_MIN_CID_GLYPH,
                                  sbw + 2, &char_bbox, sbwp, &imagenow);
     }
     else {
         code =
-            I->ff.fapi_set_cache(penum, pbfont, &enc_char_name_string, -1,
+            I->ff.fapi_set_cache(penum, pbfont, &enc_char_name_string, index,
                                  sbw + 2, &char_bbox, sbwp, &imagenow);
     }
     

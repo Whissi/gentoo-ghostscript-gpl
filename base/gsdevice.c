@@ -1,4 +1,4 @@
-/* Copyright (C) 2001-2019 Artifex Software, Inc.
+/* Copyright (C) 2001-2020 Artifex Software, Inc.
    All Rights Reserved.
 
    This software is provided AS-IS with no warranty, either express or
@@ -417,6 +417,11 @@ gs_copydevice2(gx_device ** pnew_dev, const gx_device * dev, bool keep_open,
      */
     new_dev->is_open = dev->is_open && keep_open;
     fill_dev_proc(new_dev, finish_copydevice, gx_default_finish_copydevice);
+    /* We really want to be able to interrogate the device for capabilities
+     * and/or preferences right from when it is created, so set dev_spec_op
+     * now (if not already set).
+     */
+    fill_dev_proc(new_dev, dev_spec_op, gx_default_dev_spec_op);
     code = dev_proc(new_dev, finish_copydevice)(new_dev, dev);
     if (code < 0) {
         gs_free_object(mem, new_dev, "gs_copydevice(device)");
@@ -1180,7 +1185,7 @@ int gx_device_delete_output_file(const gx_device * dev, const char *fname)
         parsed.len = strlen(parsed.fname);
     }
     if (parsed.iodev)
-        code = parsed.iodev->procs.delete_file((gx_io_device *)(&parsed.iodev), (const char *)parsed.fname);
+        code = parsed.iodev->procs.delete_file((gx_io_device *)(parsed.iodev), (const char *)parsed.fname);
     else
         code = gs_note_error(gs_error_invalidfileaccess);
 
@@ -1345,4 +1350,34 @@ bool gx_color_info_equal(const gx_device_color_info * p1, const gx_device_color_
     if (p1->use_antidropout_downscaler != p2->use_antidropout_downscaler)
         return false;
     return true;
+}
+
+int gx_callout(gx_device *dev, int id, int size, void *data)
+{
+    return gs_lib_ctx_callout(dev->memory, dev->dname,
+                              id, size, data);
+}
+
+/* compare two space_params, we can't do this with memcmp since there is padding in the structure */
+int
+gdev_space_params_cmp(const gdev_space_params sp1,
+                      const gdev_space_params sp2) {
+  if (sp1.MaxBitmap != sp2.MaxBitmap)
+    return(1);
+  if (sp1.BufferSpace != sp2.BufferSpace)
+    return(1);
+  if (sp1.band.BandWidth != sp2.band.BandWidth)
+    return(1);
+  if (sp1.band.BandHeight != sp2.band.BandHeight)
+    return(1);
+  if (sp1.band.BandBufferSpace != sp2.band.BandBufferSpace)
+    return(1);
+  if (sp1.band.tile_cache_size != sp2.band.tile_cache_size)
+    return(1);
+  if (sp1.params_are_read_only != sp2.params_are_read_only)
+    return(1);
+  if (sp1.banding_type != sp2.banding_type)
+    return(1);
+
+  return(0);
 }

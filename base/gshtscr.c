@@ -1,4 +1,4 @@
-/* Copyright (C) 2001-2019 Artifex Software, Inc.
+/* Copyright (C) 2001-2020 Artifex Software, Inc.
    All Rights Reserved.
 
    This software is provided AS-IS with no warranty, either express or
@@ -209,8 +209,8 @@ gs_screen_order_alloc(gx_ht_order *porder, gs_memory_t *mem)
 
     if (!FORCE_STRIP_HALFTONES &&
         ((ulong)porder->params.W1 * bitmap_raster(porder->params.W) +
-           num_levels * sizeof(*porder->levels) +
-           porder->params.W * porder->params.W1 * sizeof(gx_ht_bit)) <=
+           (ulong)num_levels * sizeof(*porder->levels) +
+           (ulong)porder->params.W * porder->params.W1 * sizeof(gx_ht_bit)) <=
         porder->screen_params.max_size) {
         /*
          * Allocate an order for the entire tile, but only sample one
@@ -389,11 +389,13 @@ pick_cell_size(gs_screen_halftone * ph, const gs_matrix * pmat, ulong max_size,
                 /* Compute the corresponding values of F and A. */
 
                 if (landscape)
-                    ar = atan2(p.M * pmat->xy, p.N * pmat->yx),
+                    ar = atan2(p.M * (double)pmat->xy,
+                               p.N * (double)pmat->yx),
                         fr = 72.0 * (p.M == 0 ? pmat->xy / p.N * cos(ar) :
                                      pmat->yx / p.M * sin(ar));
                 else
-                    ar = atan2(p.N * pmat->xx, p.M * pmat->yy),
+                    ar = atan2(p.N * (double)pmat->xx,
+                               p.M * (double)pmat->yy),
                         fr = 72.0 * (p.M == 0 ? pmat->yy / p.N * sin(ar) :
                                      pmat->xx / p.M * cos(ar));
                 ft = fabs(fr) * rt;

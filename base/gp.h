@@ -1,4 +1,4 @@
-/* Copyright (C) 2001-2019 Artifex Software, Inc.
+/* Copyright (C) 2001-2020 Artifex Software, Inc.
    All Rights Reserved.
 
    This software is provided AS-IS with no warranty, either express or
@@ -191,7 +191,7 @@ struct gp_file_s {
 /* Allocate a structure based on a gp_file, initialise it with the
  * given prototype, and zero the rest of it. Returns NULL on failure
  * to allocate. */
-gp_file *gp_file_alloc(gs_memory_t *mem, const gp_file_ops_t *prototype, size_t size, const char *cname);
+gp_file *gp_file_alloc(const gs_memory_t *mem, const gp_file_ops_t *prototype, size_t size, const char *cname);
 
 /* Called automatically by gp_fclose. May be needed for implementers to
  * clear up allocations if errors occur while opening files. */
@@ -252,7 +252,7 @@ gp_feof(gp_file *f) {
 
 static inline int
 gp_fclose(gp_file *f) {
-    int ret = (f->ops.close)(f);
+    int ret = (f->ops.close ? (f->ops.close)(f) : 0);
     gp_file_dealloc(f);
     return ret;
 }
@@ -297,6 +297,8 @@ gp_fflush(gp_file *f) {
 
 static inline int
 gp_ferror(gp_file *f) {
+    if (f->ops.ferror == NULL)
+        return 0;
     return (f->ops.ferror)(f);
 }
 
@@ -428,6 +430,12 @@ gp_file *gp_open_scratch_file_rm(const gs_memory_t *mem,
                                  const char        *prefix,
                                        char         fname[gp_file_name_sizeof],
                                  const char        *mode);
+
+/* Unlink utf-8 filename, subject to 'control' path permissions */
+int gp_unlink(gs_memory_t *mem, const char *fname);
+
+/* Rename utf-8 filename, subject to 'control' path permissions */
+int gp_rename(gs_memory_t *mem, const char *from, const char *to);
 
 /* gp_stat is defined in stat_.h rather than here due to macro problems */
 
@@ -621,6 +629,10 @@ FILE *gp_fopen_impl(gs_memory_t *mem, const char *fname, const char *mode);
 
 FILE *gp_fdup_impl(FILE *f, const char *mode);
 
+int gp_unlink_impl(gs_memory_t *mem, const char *fname);
+
+int gp_rename_impl(gs_memory_t *mem, const char *from, const char *to);
+
 int gp_pread_impl(char *buf, size_t count, gs_offset_t offset, FILE *f);
 
 int gp_pwrite_impl(const char *buf, size_t count, gs_offset_t offset, FILE *f);
@@ -644,7 +656,8 @@ gp_open_printer_impl(gs_memory_t *mem,
                      int         *binary_mode,
                      int          (**close)(FILE *));
 
-/* Create a scratch file (utf8) (self-deleting if remove) */
+/* Create a scratch file (utf8) (self-deleting if remove). If remove
+ * is requested, but cannot be honoured, the file is NOT opened. */
 FILE *gp_open_scratch_file_impl(const gs_memory_t *mem,
                                 const char        *prefix,
                                       char         fname[gp_file_name_sizeof],

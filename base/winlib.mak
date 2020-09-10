@@ -1,4 +1,4 @@
-# Copyright (C) 2001-2019 Artifex Software, Inc.
+# Copyright (C) 2001-2020 Artifex Software, Inc.
 # All Rights Reserved.
 #
 # This software is provided AS-IS with no warranty, either express or
@@ -135,6 +135,12 @@ BEGINFILES=$(GLGENDIR)\ccf32.tr\
 #!include $(COMMONDIR)/pcdefs.mak
 #!include $(COMMONDIR)/generic.mak
 !include $(GLSRCDIR)\gs.mak
+
+!if "$(OCR_VERSION)"=="1"
+!include $(GLSRCDIR)\leptonica.mak
+!include $(GLSRCDIR)\tesseract.mak
+!endif
+
 !include $(GLSRCDIR)\lib.mak
 !include $(GLSRCDIR)\freetype.mak
 !if "$(UFST_BRIDGE)"=="1"
@@ -150,6 +156,7 @@ BEGINFILES=$(GLGENDIR)\ccf32.tr\
 !include $(GLSRCDIR)\lwf_jp2.mak
 !include $(GLSRCDIR)\openjpeg.mak
 !include $(GLSRCDIR)\cal.mak
+!include $(GLSRCDIR)\ocr.mak
 
 !include $(GLSRCDIR)\expat.mak
 !include $(GLSRCDIR)\jpegxr.mak
@@ -159,7 +166,7 @@ BEGINFILES=$(GLGENDIR)\ccf32.tr\
 !include $(GLSRCDIR)\lcups.mak
 !include $(GLSRCDIR)\lcupsi.mak
 !include $(DEVSRCDIR)\devs.mak
-!include $(DEVSRCDIR)\contrib.mak
+!include $(DEVSRCDIR)\dcontrib.mak
 !include $(CONTRIBDIR)\contrib.mak
 
 # Define the compilation rule for Windows devices.
@@ -201,7 +208,7 @@ $(GLOBJ)gp_mswin.$(OBJ): $(GLSRC)gp_mswin.c $(AK) $(gp_mswin_h) \
 
 $(GLOBJ)gp_winfs.$(OBJ): $(GLSRC)gp_winfs.c $(AK) $(gp_mswin_h) \
  $(memory__h) $(stdio__h) $(windows__h) $(gp_h) $(gserrors_h) \
- $(WINLIB_MAK)
+ $(gserrors_h) $(WINLIB_MAK)
 	$(GLCCWIN) $(GLO_)gp_winfs.$(OBJ) $(C_) $(GLSRC)gp_winfs.c
 
 $(AUX)gp_winfs.$(OBJ): $(GLSRC)gp_winfs.c $(AK) $(gp_mswin_h) \

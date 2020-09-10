@@ -1,4 +1,4 @@
-/* Copyright (C) 2001-2019 Artifex Software, Inc.
+/* Copyright (C) 2001-2020 Artifex Software, Inc.
    All Rights Reserved.
 
    This software is provided AS-IS with no warranty, either express or
@@ -766,7 +766,7 @@ int wmain(int argc, wchar_t *argv[], wchar_t *envp[]) {
     }
     code = main_utf8(argc, nargv);
 
-    if (0) {
+     if (0) {
 err:
         fprintf(stderr,
                 "Ghostscript failed to initialise due to malloc failure\n");

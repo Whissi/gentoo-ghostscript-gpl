@@ -1,4 +1,4 @@
-/* Copyright (C) 2001-2019 Artifex Software, Inc.
+/* Copyright (C) 2001-2020 Artifex Software, Inc.
    All Rights Reserved.
 
    This software is provided AS-IS with no warranty, either express or
@@ -43,7 +43,7 @@
 
     again:
     for (; ; kp-- ) {
-        if_debug2('D', "[D]probe 0x%lx: 0x%x\n", (ulong)kp, *kp);
+        if_debug2('D', "[D]probe "PRI_INTPTR": 0x%x\n", (intptr_t)kp, *kp);
         if ( *kp == kpack ) {
             found;
         } else if ( !r_packed_is_name(kp) ) {

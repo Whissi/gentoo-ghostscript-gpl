@@ -1,4 +1,4 @@
-/* Copyright (C) 2001-2019 Artifex Software, Inc.
+/* Copyright (C) 2001-2020 Artifex Software, Inc.
    All Rights Reserved.
 
    This software is provided AS-IS with no warranty, either express or
@@ -978,8 +978,8 @@ set_tile(gx_device * dev, const gx_strip_bitmap * tile)
     if (gs_debug['H']) {
         int i;
 
-        dmlprintf4(xdev->memory, "[H] 0x%lx: width=%d height=%d raster=%d\n",
-              (ulong) tile->data, tile->size.x, tile->size.y, tile->raster);
+        dmlprintf4(xdev->memory, "[H] "PRI_INTPTR": width=%d height=%d raster=%d\n",
+              (intptr_t)tile->data, tile->size.x, tile->size.y, tile->raster);
         dmlputs(xdev->memory, "");
         for (i = 0; i < tile->raster * tile->size.y; i++)
             dmprintf1(xdev->memory, " %02x", tile->data[i]);

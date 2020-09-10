@@ -1,4 +1,4 @@
-/* Copyright (C) 2001-2019 Artifex Software, Inc.
+/* Copyright (C) 2001-2020 Artifex Software, Inc.
    All Rights Reserved.
 
    This software is provided AS-IS with no warranty, either express or
@@ -353,14 +353,12 @@ fe:
         while (exp10 > NUM_POWERS_10)
             dval *= powers_10[NUM_POWERS_10],
                 exp10 -= NUM_POWERS_10;
-        if (exp10 > 0)
-            dval *= powers_10[exp10];
+        dval *= powers_10[exp10];
     } else if (exp10 < 0) {
         while (exp10 < -NUM_POWERS_10)
             dval /= powers_10[NUM_POWERS_10],
                 exp10 += NUM_POWERS_10;
-        if (exp10 < 0)
-            dval /= powers_10[-exp10];
+        dval /= powers_10[-exp10];
     }
     /*
      * Check for an out-of-range result.  Currently we don't check for

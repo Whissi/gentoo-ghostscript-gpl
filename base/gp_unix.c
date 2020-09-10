@@ -1,4 +1,4 @@
-/* Copyright (C) 2001-2019 Artifex Software, Inc.
+/* Copyright (C) 2001-2020 Artifex Software, Inc.
    All Rights Reserved.
 
    This software is provided AS-IS with no warranty, either express or
@@ -373,6 +373,9 @@ void *gp_enumerate_fonts_init(gs_memory_t *mem)
     pat = FcPatternBuild(NULL,
             FC_OUTLINE, FcTypeBool, 1,
             FC_SCALABLE, FcTypeBool, 1,
+#if defined(FC_MAJOR) && FC_MAJOR >= 2 && defined(FC_MINOR) && FC_MINOR >= 13
+            FC_VARIABLE, FcTypeBool, 0,
+#endif
             NULL);
     os = FcObjectSetBuild(FC_FILE, FC_OUTLINE,
             FC_FAMILY, FC_WEIGHT, FC_SLANT,
@@ -411,42 +414,50 @@ int gp_enumerate_fonts_next(void *enum_state, char **fontname, char **path)
         return 0;   /* gp_enumerate_fonts_init failed for some reason */
     }
 
-    if (state->index == state->font_list->nfont) {
-        return 0; /* we've run out of fonts */
-    }
+    /* We use the loop so we can skip over fonts that return errors */
+    while(1) {
+        if (state->index == state->font_list->nfont) {
+            return 0; /* we've run out of fonts */
+        }
 
-    /* Bits of the following were borrowed from Red Hat's
-     * fontconfig patch for Ghostscript 7 */
-    font = state->font_list->fonts[state->index];
+        /* Bits of the following were borrowed from Red Hat's
+         * fontconfig patch for Ghostscript 7 */
+        font = state->font_list->fonts[state->index];
+        state->index++;
 
-    result = FcPatternGetString (font, FC_FAMILY, 0, &family_fc);
-    if (result != FcResultMatch || family_fc == NULL) {
-        dmlprintf(state->mem, "DEBUG: FC_FAMILY mismatch\n");
-        return 0;
-    }
+        /* We do the FC_FILE first because this *should* never fail
+         * and it gives us a string to use in later debug prints
+         */
+        result = FcPatternGetString (font, FC_FILE, 0, &file_fc);
+        if (result != FcResultMatch || file_fc == NULL) {
+            dmlprintf(state->mem, "DEBUG: FC_FILE mismatch\n");
+            continue;
+        }
 
-    result = FcPatternGetString (font, FC_FILE, 0, &file_fc);
-    if (result != FcResultMatch || file_fc == NULL) {
-        dmlprintf(state->mem, "DEBUG: FC_FILE mismatch\n");
-        return 0;
-    }
+        result = FcPatternGetString (font, FC_FAMILY, 0, &family_fc);
+        if (result != FcResultMatch || family_fc == NULL) {
+            dmlprintf1(state->mem, "DEBUG: FC_FAMILY mismatch in %s\n", (char *)file_fc);
+            continue;
+        }
 
-    result = FcPatternGetBool (font, FC_OUTLINE, 0, &outline_fc);
-    if (result != FcResultMatch) {
-        dmlprintf1(state->mem, "DEBUG: FC_OUTLINE failed to match on %s\n", (char*)family_fc);
-        return 0;
-    }
+        result = FcPatternGetBool (font, FC_OUTLINE, 0, &outline_fc);
+        if (result != FcResultMatch) {
+            dmlprintf2(state->mem, "DEBUG: FC_OUTLINE failed to match on %s in %s\n", (char*)family_fc, (char *)file_fc);
+            continue;
+        }
 
-    result = FcPatternGetInteger (font, FC_SLANT, 0, &slant_fc);
-    if (result != FcResultMatch) {
-        dmlprintf(state->mem, "DEBUG: FC_SLANT didn't match\n");
-        return 0;
-    }
+        result = FcPatternGetInteger (font, FC_SLANT, 0, &slant_fc);
+        if (result != FcResultMatch) {
+            dmlprintf1(state->mem, "DEBUG: FC_SLANT didn't match in %s\n", (char *)file_fc);
+            continue;
+        }
 
-    result = FcPatternGetInteger (font, FC_WEIGHT, 0, &weight_fc);
-    if (result != FcResultMatch) {
-        dmlprintf(state->mem, "DEBUG: FC_WEIGHT didn't match\n");
-        return 0;
+        result = FcPatternGetInteger (font, FC_WEIGHT, 0, &weight_fc);
+        if (result != FcResultMatch) {
+            dmlprintf1(state->mem, "DEBUG: FC_WEIGHT didn't match in %s\n", (char *)file_fc);
+            continue;
+        }
+        break;
     }
 
     /* Gross hack to work around Fontconfig's inability to tell
@@ -459,7 +470,6 @@ int gp_enumerate_fonts_next(void *enum_state, char **fontname, char **path)
     /* return the font path straight out of fontconfig */
     *path = (char*)file_fc;
 
-    state->index ++;
     return 1;
 #else
     return 0;

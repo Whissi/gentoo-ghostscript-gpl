@@ -1,4 +1,4 @@
-/* Copyright (C) 2001-2019 Artifex Software, Inc.
+/* Copyright (C) 2001-2020 Artifex Software, Inc.
    All Rights Reserved.
 
    This software is provided AS-IS with no warranty, either express or
@@ -1467,7 +1467,7 @@ int pdf_reset_color(gx_device_pdf * pdev, const gs_gstate * pgs,
                      * unlike shading patterns we have no fallback.
                      */
                     if (pdev->CompatibilityLevel < 1.2) {
-		      return_error(gs_error_undefined);
+                        return_error(gs_error_undefined);
                     }
                     code = pdf_put_colored_pattern(pdev, pdc, pcs,
                                 ppscc, pgs, &pres);
@@ -2426,7 +2426,8 @@ pdf_write_spot_halftone(gx_device_pdf *pdev, const gs_spot_halftone *psht,
             if (compare_gx_ht_order_levels(&order,porder))
                 continue;
             if (memcmp(order.bit_data, porder->bit_data,
-                       order.num_bits * porder->procs->bit_data_elt_size))
+                       (size_t)order.num_bits *
+                                      porder->procs->bit_data_elt_size))
                 continue;
             /* We have a match. */
             break;
@@ -2609,7 +2610,7 @@ pdf_get_halftone_component_index(const gs_multiple_halftone *pmht,
     return j;
 }
 static int
-pdf_write_multiple_halftone(gx_device_pdf *pdev,
+pdf_write_multiple_halftone(gx_device_pdf *pdev, gs_gstate *pgs,
                             const gs_multiple_halftone *pmht,
                             const gx_device_halftone *pdht, long *pid)
 {
@@ -2679,7 +2680,7 @@ pdf_write_multiple_halftone(gx_device_pdf *pdev,
             done_Default = true;
         }
         phtc = &pmht->components[code];
-        if ((code = pmht->get_colorname_string(pdev->memory, phtc->cname, &str, &len)) < 0 ||
+        if ((code = pmht->get_colorname_string(pgs, phtc->cname, &str, &len)) < 0 ||
             (code = pdf_string_to_cos_name(pdev, str, len, &value)) < 0)
             return code;
         cos_value_write(&value, pdev);
@@ -2739,7 +2740,7 @@ pdf_update_halftone(gx_device_pdf *pdev, const gs_gstate *pgs,
         break;
     case ht_type_multiple:
     case ht_type_multiple_colorscreen:
-        code = pdf_write_multiple_halftone(pdev, &pht->params.multiple,
+        code = pdf_write_multiple_halftone(pdev, (gs_gstate *)pgs, &pht->params.multiple,
                                            pdht, &id);
         break;
     default:

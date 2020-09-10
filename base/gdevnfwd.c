@@ -1,4 +1,4 @@
-/* Copyright (C) 2001-2019 Artifex Software, Inc.
+/* Copyright (C) 2001-2020 Artifex Software, Inc.
    All Rights Reserved.
 
    This software is provided AS-IS with no warranty, either express or
@@ -1084,6 +1084,7 @@ static dev_proc_strip_copy_rop(null_strip_copy_rop);
 static dev_proc_strip_copy_rop2(null_strip_copy_rop2);
 static dev_proc_strip_tile_rect_devn(null_strip_tile_rect_devn);
 static dev_proc_fill_rectangle_hl_color(null_fill_rectangle_hl_color);
+static dev_proc_dev_spec_op(null_spec_op);
 
 #define null_procs(get_initial_matrix, get_page_device) {\
         gx_default_open_device,\
@@ -1151,7 +1152,7 @@ static dev_proc_fill_rectangle_hl_color(null_fill_rectangle_hl_color);
         NULL, /* push_transparency_state */\
         NULL, /* pop_transparency_state */\
         NULL, /* put_image */\
-        gx_default_dev_spec_op, /* dev_spec_op */\
+        null_spec_op, /* dev_spec_op */\
         NULL, /* copy_planes */\
         NULL, /* get_profile */\
         NULL, /* set_graphics_type_tag */\
@@ -1222,11 +1223,19 @@ null_copy_color(gx_device * dev, const byte * data,
 static int
 null_put_params(gx_device * dev, gs_param_list * plist)
 {
+    int code;
+    cmm_dev_profile_t *iccs = dev->icc_struct;
+
     /*
      * If this is not a page device, we must defeat attempts to reset
      * the size; otherwise this is equivalent to gx_forward_put_params.
+     * Equally, we don't want it to unexpectectly error out on certain
+     * ICC parameters - so defeat those, too.
      */
-    int code = gx_forward_put_params(dev, plist);
+    dev->icc_struct = NULL;
+    code = gx_forward_put_params(dev, plist);
+    rc_decrement(dev->icc_struct, "null_put_params");
+    dev->icc_struct = iccs;
 
     if (code < 0 || dev_proc(dev, get_page_device)(dev) == dev)
         return code;
@@ -1346,6 +1355,18 @@ static int null_fill_rectangle_hl_color(gx_device *pdev,
     return 0;
 }
 
+static int
+null_spec_op(gx_device *pdev, int dev_spec_op, void *data, int size)
+{
+    /* Defeat the ICC profile components check, which we want to do since
+       we also short-circuit ICC device parameters - see null_put_params.
+     */
+    if (dev_spec_op == gxdso_skip_icc_component_validation) {
+        return 1;
+    }
+    return gx_default_dev_spec_op(pdev, dev_spec_op, data, size);
+}
+
 bool
 fwd_uses_fwd_cmap_procs(gx_device * dev)
 {
@@ -1385,7 +1406,7 @@ static void do_device_dump(gx_device *dev, int n)
         dmlprintf(dev->memory, "NULL\n");
         return;
     }
-    dmlprintf3(dev->memory, "%p(%ld) = '%s'\n", dev, dev->rc.ref_count, dev->dname);
+    dmlprintf3(dev->memory, PRI_INTPTR"(%ld) = '%s'\n", (intptr_t)dev, dev->rc.ref_count, dev->dname);
 
     data.n = 0;
     do {

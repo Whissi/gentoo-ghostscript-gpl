@@ -1,4 +1,4 @@
-/* Copyright (C) 2001-2019 Artifex Software, Inc.
+/* Copyright (C) 2001-2020 Artifex Software, Inc.
    All Rights Reserved.
 
    This software is provided AS-IS with no warranty, either express or
@@ -148,6 +148,14 @@ zdiv(i_ctx_t *i_ctx_p)
                     break;
                 case t_integer:
                     result = (double)op1->value.intval / op->value.realval;
+#ifdef HAVE_ISINF
+                    if (isinf(result))
+                        return_error(gs_error_undefinedresult);
+#endif
+#ifdef HAVE_ISNAN
+                    if (isnan(result))
+                        return_error(gs_error_undefinedresult);
+#endif
                     make_real(op1, result);
             }
             break;

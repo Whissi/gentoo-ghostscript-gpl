@@ -1,4 +1,4 @@
-/* Copyright (C) 2001-2019 Artifex Software, Inc.
+/* Copyright (C) 2001-2020 Artifex Software, Inc.
    All Rights Reserved.
 
    This software is provided AS-IS with no warranty, either express or
@@ -74,7 +74,7 @@ tiff_close(gx_device * pdev)
     gx_device_tiff *const tfdev = (gx_device_tiff *)pdev;
 
     if (tfdev->tif)
-        TIFFCleanup(tfdev->tif);
+        TIFFClose(tfdev->tif);
 
     if (tfdev->icclink != NULL)
     {
@@ -328,8 +328,8 @@ int gdev_tiff_begin_page(gx_device_tiff *tfdev,
                     &rendering_params);
             } else {
                 tfdev->icclink = gsicc_alloc_link_dev(pdev->memory,
-                    profile_struct->device_profile[0], profile_struct->postren_profile,
-                    &rendering_params);
+                    profile_struct->device_profile[GS_DEFAULT_DEVICE_PROFILE],
+                    profile_struct->postren_profile, &rendering_params);
             }
             if (tfdev->icclink == NULL) {
                 return_error(gs_error_VMerror);
@@ -390,13 +390,17 @@ int tiff_set_fields_for_printer(gx_device_printer *pdev,
     TIFFSetField(tif, TIFFTAG_YRESOLUTION, (float)ypi);
 
     {
-        char revs[10];
+        char revs[32];
 #define maxSoftware 40
         char softwareValue[maxSoftware];
+        int revision = gs_revision_number();
+        int major = (int)(revision / 1000);
+        int minor = (int)(revision - (major * 1000)) / 10;
+        int patch =  revision % 10;
 
         strncpy(softwareValue, gs_product, maxSoftware);
         softwareValue[maxSoftware - 1] = 0;
-        gs_sprintf(revs, " %1.2f", gs_revision / 100.0);
+        gs_sprintf(revs, " %d.%2d.%d", major, minor, patch);
         strncat(softwareValue, revs,
                 maxSoftware - strlen(softwareValue) - 1);
 
@@ -437,7 +441,7 @@ int tiff_set_fields_for_printer(gx_device_printer *pdev,
         else if (pdev->icc_struct->oi_profile != NULL)
             icc_profile = pdev->icc_struct->oi_profile;
         else
-            icc_profile = pdev->icc_struct->device_profile[0];
+            icc_profile = pdev->icc_struct->device_profile[GS_DEFAULT_DEVICE_PROFILE];
 
         if (icc_profile->num_comps == pdev->color_info.num_components &&
             icc_profile->data_cs != gsCIELAB && !(pdev->icc_struct->usefastcolor)) {
@@ -536,10 +540,9 @@ static int tiff_chunky_post_cm(void  *arg, byte **dst, byte **src, int w, int h,
 /* Special version, called with 8 bit grey input to be downsampled to 1bpp
  * output. */
 int
-tiff_downscale_and_print_page(gx_device_printer *dev, TIFF *tif, int factor,
-                              int mfs, int aw, int bpc, int num_comps,
-                              int trap_w, int trap_h, const int *trap_order,
-                              int ets)
+tiff_downscale_and_print_page(gx_device_printer *dev, TIFF *tif,
+                              gx_downscaler_params *params,
+                              int aw, int bpc, int num_comps)
 {
     gx_device_tiff *const tfdev = (gx_device_tiff *)dev;
     int code = 0;
@@ -547,6 +550,7 @@ tiff_downscale_and_print_page(gx_device_printer *dev, TIFF *tif, int factor,
     int size = gdev_mem_bytes_per_scan_line((gx_device *)dev);
     int max_size = max(size, TIFFScanlineSize(tif));
     int row;
+    int factor = params->downscale_factor;
     int height = dev->height/factor;
     gx_downscaler_t ds;
 
@@ -554,24 +558,20 @@ tiff_downscale_and_print_page(gx_device_printer *dev, TIFF *tif, int factor,
     if (code < 0)
         return code;
 
-    if (num_comps == 4) {
-        if (tfdev->icclink == NULL) {
-            code = gx_downscaler_init_trapped_ets(&ds, (gx_device *)dev, 8, bpc, num_comps,
-                factor, mfs, &fax_adjusted_width, aw, trap_w, trap_h, trap_order, ets);
-        } else {
-            code = gx_downscaler_init_trapped_cm_ets(&ds, (gx_device *)dev, 8, bpc, num_comps,
-                factor, mfs, &fax_adjusted_width, aw, trap_w, trap_h, trap_order,
-                tiff_chunky_post_cm, tfdev->icclink, tfdev->icclink->num_output, ets);
-        }
+    if (num_comps == 4)
+        params->trap_w = params->trap_h = 1;
+    if (tfdev->icclink == NULL) {
+        code = gx_downscaler_init(&ds, (gx_device *)dev,
+                                  8, bpc, num_comps,
+                                  params,
+                                  &fax_adjusted_width, aw);
     } else {
-        if (tfdev->icclink == NULL) {
-            code = gx_downscaler_init_ets(&ds, (gx_device *)dev, 8, bpc, num_comps,
-                factor, mfs, &fax_adjusted_width, aw, ets);
-        } else {
-            code = gx_downscaler_init_cm_ets(&ds, (gx_device *)dev, 8, bpc, num_comps,
-                factor, mfs, &fax_adjusted_width, aw, tiff_chunky_post_cm, tfdev->icclink,
-                tfdev->icclink->num_output, ets);
-        }
+        code = gx_downscaler_init_cm(&ds, (gx_device *)dev,
+                                     8, bpc, num_comps,
+                                     params,
+                                     &fax_adjusted_width, aw,
+                                     tiff_chunky_post_cm, tfdev->icclink,
+                                     tfdev->icclink->num_output);
     }
     if (code < 0)
         return code;

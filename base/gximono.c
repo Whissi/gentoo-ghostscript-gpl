@@ -1,4 +1,4 @@
-/* Copyright (C) 2001-2019 Artifex Software, Inc.
+/* Copyright (C) 2001-2020 Artifex Software, Inc.
    All Rights Reserved.
 
    This software is provided AS-IS with no warranty, either express or
@@ -140,7 +140,7 @@ halftone_init(gx_image_enum *penum)
                                     penum->pgs->dev_ht->components[k].corder.threshold_inverted,
                                     penum->pgs->dev_ht->components[k].corder.width,
                                     penum->pgs->dev_ht->components[k].corder.full_height,
-                                    -penum->pgs->screen_phase[k].x,
+                                    penum->pgs->screen_phase[k].x,
                                     -penum->pgs->screen_phase[k].y,
                                     penum->pgs->dev_ht->components[k].corder.threshold) < 0)
             goto fail;
@@ -1072,7 +1072,7 @@ image_render_mono_ht(gx_image_enum * penum_orig, const byte * buffer, int data_x
                                       penum->ht_offset_bits)) & 15;
             for (k = 0; k < spp_out; k ++) {
                 offset_contone[k]   = (- (((long)(penum->line)) +
-                                          contone_stride * k +
+                                          (long)contone_stride * k +
                                           penum->ht_offset_bits)) & 15;
             }
             data_length = dest_width;
@@ -1098,7 +1098,7 @@ image_render_mono_ht(gx_image_enum * penum_orig, const byte * buffer, int data_x
             offset_threshold = (-(long)(penum->thresh_buffer)) & 15;
             for (k = 0; k < spp_out; k ++) {
                 offset_contone[k] = (- ((long)(penum->line) +
-                                          contone_stride * k)) & 15;
+                                        (long)contone_stride * k)) & 15;
             }
             /* In the landscaped case, we want to accumulate multiple columns
                of data before sending to the device.  We want to have a full

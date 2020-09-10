@@ -1,4 +1,4 @@
-/* Copyright (C) 2001-2019 Artifex Software, Inc.
+/* Copyright (C) 2001-2020 Artifex Software, Inc.
    All Rights Reserved.
 
    This software is provided AS-IS with no warranty, either express or
@@ -22,6 +22,7 @@
 
 #include "iref.h"
 #include "imain.h"
+#include "gsparam.h"
 
 #ifndef display_callback_DEFINED
 # define display_callback_DEFINED
@@ -83,6 +84,16 @@ struct gs_main_instance_s {
     i_ctx_t *i_ctx_p;		/* current interpreter context state */
     char *saved_pages_initial_arg;	/* used to defer processing of --saved-pages=begin... */
     bool saved_pages_test_mode;	/* for regression testing of saved-pages */
+
+    /* Used for gsapi_set_params in the gs (not gpdl) case. */
+    gs_c_param_list *param_list;
+    int mid_run_string;
+
+    /* The state for gsapi param enumeration in the gs (not gpdl) case. */
+    gs_c_param_list enum_params;
+    gs_param_enumerator_t enum_iter;
+    char *enum_keybuf;
+    int enum_keybuf_max;
 };
 
 /*

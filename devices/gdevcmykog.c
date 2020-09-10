@@ -1,4 +1,4 @@
-/* Copyright (C) 2001-2019 Artifex Software, Inc.
+/* Copyright (C) 2001-2020 Artifex Software, Inc.
    All Rights Reserved.
 
    This software is provided AS-IS with no warranty, either express or
@@ -225,7 +225,7 @@ cmykog_dev_spec_op(gx_device *dev_, int op, void *data, int datasize)
       if (code != gs_error_undefined)
           return code;
   }
-  if (op == gxdso_supports_devn) {
+  if (op == gxdso_supports_devn || op == gxdso_skip_icc_component_validation) {
     return true;
   }
   return gdev_prn_dev_spec_op(dev_, op, data, datasize);

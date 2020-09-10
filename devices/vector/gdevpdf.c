@@ -1,4 +1,4 @@
-/* Copyright (C) 2001-2019 Artifex Software, Inc.
+/* Copyright (C) 2001-2020 Artifex Software, Inc.
    All Rights Reserved.
 
    This software is provided AS-IS with no warranty, either express or
@@ -467,6 +467,12 @@ pdf_compute_fileID(gx_device_pdf * pdev)
     pdev->KeyLength = KeyLength;
     if (code < 0)
         return code;
+    /* Generally we would call s_close_filters() here in order to free the data buffer
+     * associated with the MD5 filter, but the data buffer we passed in to s_MD5E_make_stream()
+     * is part of the device structure, so we must *NOT* free that buffer. Therefore we must
+     * instead call sclose(). This confusion over ownership of the stream buffers causes
+     * a lot of problems......
+     */
     sclose(s);
     gs_free_object(mem, s, "pdf_compute_fileID");
     return 0;
@@ -1409,6 +1415,11 @@ pdf_output_page(gx_device * dev, int num_copies, int flush)
 {
     gx_device_pdf *const pdev = (gx_device_pdf *) dev;
     int code;
+
+    if (pdev->Eps2Write && pdev->next_page != 0 && !gx_outputfile_is_separate_pages(pdev->fname, dev->memory)) {
+       emprintf(pdev->memory, "\n   *** EPS files may not contain multiple pages.\n   *** Use of the %%d filename format is required to output pages to multiple EPS files.\n");
+       return_error(gs_error_ioerror);
+    }
 
     if (pdev->ForOPDFRead) {
         code = pdf_close_page(pdev, num_copies);
@@ -2555,6 +2566,7 @@ pdf_close(gx_device * dev)
     int64_t start_section, end_section;
     char str[256];
     pdf_linearisation_t linear_params;
+    bool file_per_page = false;
 
     if (!dev->is_open)
       return_error(gs_error_undefined);
@@ -2577,26 +2589,14 @@ pdf_close(gx_device * dev)
      * marks.
      */
     if (pdev->next_page == 0) {
-        /* If we didn't get called from pdf_output_page, and we are doign file-per-page
-         * output, then the call from close_device will leave an empty file which we don't
-         * want. So here we delete teh file.
-         */
-        if (!pdev->InOutputPage && gx_outputfile_is_separate_pages(pdev->fname, pdev->memory)) {
-            code = gdev_vector_close_file((gx_device_vector *) pdev);
-            if (code != 0)
-                return code;
-            code = pdf_close_files(pdev, 0);
+        file_per_page = !pdev->InOutputPage &&
+            gx_outputfile_is_separate_pages(pdev->fname, pdev->memory);
+        if (!file_per_page) {
+            code = pdf_open_page(pdev, PDF_IN_STREAM);
+
             if (code < 0)
                 return code;
-            code = gx_device_delete_output_file((const gx_device *)pdev, pdev->fname);
-            if (code != 0)
-                return gs_note_error(gs_error_ioerror);
-            return code;
         }
-        code = pdf_open_page(pdev, PDF_IN_STREAM);
-
-        if (code < 0)
-            return code;
     }
     if (pdev->contents_id != 0)
         pdf_close_page(pdev, 1);
@@ -2943,6 +2943,14 @@ pdf_close(gx_device * dev)
         stream_puts(pdev->strm, "%%Trailer\n");
         stream_puts(pdev->strm, "end\n");
         stream_puts(pdev->strm, "%%EOF\n");
+    }
+
+    if (pdev->params.PSPageOptions.size) {
+        int ix;
+
+        for (ix = 0; ix < pdev->params.PSPageOptions.size;ix++)
+            gs_free_object(mem->non_gc_memory, (byte *)pdev->params.PSPageOptions.data[ix].data, "freeing old string array copy");
+        gs_free_object(mem->non_gc_memory, (byte *)pdev->params.PSPageOptions.data, "freeing old string array");
     }
 
     if (pdev->Linearise) {
@@ -3449,6 +3457,18 @@ pdf_close(gx_device * dev)
     code = pdf_close_files(pdev, code);
     if (code < 0)
         return code;
+
+    /* If we didn't get called from pdf_output_page, and we are doign file-per-page
+     * output, then the call from close_device will leave an empty file which we don't
+     * want. So here we delete the file.
+     * NOTE: We needed to let it process the whole page in order to make sure everything
+     * got properly freed.
+     */
+    if (file_per_page) {
+        code = gx_device_delete_output_file((const gx_device *)pdev, pdev->fname);
+        if (code != 0)
+            code = gs_note_error(gs_error_ioerror);
+    }
 
     pdf_free_pdf_font_cache(pdev);
     return code;

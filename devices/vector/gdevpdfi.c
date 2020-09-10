@@ -1,4 +1,4 @@
-/* Copyright (C) 2001-2019 Artifex Software, Inc.
+/* Copyright (C) 2001-2020 Artifex Software, Inc.
    All Rights Reserved.
 
    This software is provided AS-IS with no warranty, either express or
@@ -976,7 +976,7 @@ pdf_begin_typed_image(gx_device_pdf *pdev, const gs_gstate * pgs,
     const gs_pixel_image_t *pim;
     gs_int_rect rect;
     gs_image_format_t format;
-    const gs_color_space *pcs;
+    gs_color_space *pcs;
     int num_components;
     pdf_image_enum *pie;
     const pdf_color_space_names_t *names;
@@ -1213,6 +1213,7 @@ pdf_begin_typed_image(gx_device_pdf *pdev, const gs_gstate * pgs,
     }
 
     pcs = pim->ColorSpace;
+    rc_increment_cs(pcs);
     num_components = (is_mask ? 1 : gs_color_space_num_components(pcs));
 
     code = pdf_check_soft_mask(pdev, (gs_gstate *)pgs);
@@ -1238,6 +1239,7 @@ pdf_begin_typed_image(gx_device_pdf *pdev, const gs_gstate * pgs,
          * to DeviceGray here.
          */
         /* {csrc} make sure this gets freed */
+        rc_decrement(pcs, "pdf_begin_typed_image(pcs)");
         pcs = gs_cspace_new_DeviceGray(pdev->memory);
         if (pcs == NULL)
             code = gs_note_error(gs_error_VMerror);
@@ -1400,9 +1402,6 @@ pdf_begin_typed_image(gx_device_pdf *pdev, const gs_gstate * pgs,
 
     if (pdev->params.TransferFunctionInfo == tfi_Apply && pdev->transfer_not_identity && !is_mask)
         pdev->JPEG_PassThrough = 0;
-
-/*    if (pdev->JPEG_PassThrough)
-        uncompressed = pie->writer.binary[0].strm;*/
 
     /* Code below here deals with setting up the multiple data stream writing.
      * We can have up to 4 stream writers, which we keep in an array. We must
@@ -1612,9 +1611,11 @@ pdf_begin_typed_image(gx_device_pdf *pdev, const gs_gstate * pgs,
 
     gs_free(mem->non_gc_memory, image, 4, sizeof(image_union_t),
                                               "pdf_begin_typed_image(image)");
+    rc_decrement(pcs, "pdf_begin_typed_image(pcs)");
     return 0;
 
 fail_and_fallback:
+    rc_decrement(pcs, "pdf_begin_typed_image(pcs)");
     pdev->JPEG_PassThrough = 0;
     gs_free(mem->non_gc_memory, image, 4, sizeof(image_union_t),
                                       "pdf_begin_typed_image(image)");
@@ -1928,7 +1929,14 @@ pdf_image_end_image_data(gx_image_enum_common_t * info, bool draw_last,
     /* Clean up any outstanding streams before freeing the enumerator */
     while (pie->writer.alt_writer_count-- > 0) {
         ecode = psdf_end_binary(&(pie->writer.binary[pie->writer.alt_writer_count]));
-        if (ecode < 0 && code >= 0) code  = ecode;
+        /* If we are skipping an image (because its clipped out or similar) then we
+         * won't have written any data to it. Some filters (notably the DCTEncode filter)
+         * throw an error (premature EOD) if we close the filter without writing any data to it.
+         * So if we are skipping the image, ignore errors when closing the stream.
+         * Unfortunately we don't set pie->skipping until after begin_typed_image()
+         * or we could avoid a lot of setup....
+         */
+        if (ecode < 0 && code >= 0 && !pie->skipping) code  = ecode;
     }
 
     gx_image_free_enum(&info);

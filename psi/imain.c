@@ -1,4 +1,4 @@
-/* Copyright (C) 2001-2019 Artifex Software, Inc.
+/* Copyright (C) 2001-2020 Artifex Software, Inc.
    All Rights Reserved.
 
    This software is provided AS-IS with no warranty, either express or
@@ -130,7 +130,8 @@ gs_main_init0(gs_main_instance * minst, gp_file * in, gp_file * out, gp_file * e
     int code = 0;
 
     if (gs_debug_c(gs_debug_flag_init_details))
-        dmprintf1(minst->heap, "%% Init phase 0 started, instance 0x%p\n", minst);
+        dmprintf1(minst->heap, "%% Init phase 0 started, instance "PRI_INTPTR"\n",
+                  (intptr_t)minst);
 
     /* Do platform-dependent initialization. */
     /* We have to do this as the very first thing, */
@@ -170,7 +171,8 @@ gs_main_init0(gs_main_instance * minst, gp_file * in, gp_file * out, gp_file * e
 
 fail:
     if (gs_debug_c(gs_debug_flag_init_details))
-        dmprintf2(minst->heap, "%% Init phase 0 %s, instance 0x%p\n", code < 0 ? "failed" : "done", minst);
+        dmprintf2(minst->heap, "%% Init phase 0 %s, instance "PRI_INTPTR"\n",
+                  code < 0 ? "failed" : "done", (intptr_t)minst);
 
     return code;
 }
@@ -187,7 +189,8 @@ gs_main_init1(gs_main_instance * minst)
         return 0;
 
     if (gs_debug_c(gs_debug_flag_init_details))
-        dmprintf1(minst->heap, "%% Init phase 1 started, instance 0x%p\n", minst);
+        dmprintf1(minst->heap, "%% Init phase 1 started, instance "PRI_INTPTR"\n",
+                  (intptr_t)minst);
 
     code = ialloc_init(&idmem, minst->heap,
                        minst->memory_clump_size, gs_have_level2());
@@ -232,7 +235,8 @@ fail:
 fail_early:
 
     if (gs_debug_c(gs_debug_flag_init_details))
-        dmprintf2(minst->heap, "%% Init phase 1 %s, instance 0x%p\n", code < 0 ? "failed" : "done", minst);
+        dmprintf2(minst->heap, "%% Init phase 1 %s, instance "PRI_INTPTR"\n",
+                  code < 0 ? "failed" : "done", (intptr_t)minst);
 
     return code;
 }
@@ -302,11 +306,11 @@ int gs_main_init2aux(gs_main_instance * minst) {
         if (code < 0)
             return code;
         minst->init_done = 2;
+
         /* NB this is to be done with device parameters
          * both minst->display and  display_set_callback() are going away
         */
-        if (minst->display)
-        if ((code = display_set_callback(minst, minst->display)) < 0)
+        if ((code = reopen_device_if_required(minst)) < 0)
             return code;
 
         if ((code = gs_main_run_string(minst,
@@ -321,6 +325,132 @@ int gs_main_init2aux(gs_main_instance * minst) {
 }
 
 int
+gs_main_set_language_param(gs_main_instance *minst,
+                           gs_param_list    *plist)
+{
+    ref value;
+    int code = 0;
+    i_ctx_t *i_ctx_p = minst->i_ctx_p;
+    uint space = icurrent_space;
+    gs_param_enumerator_t enumerator;
+    gs_param_key_t key;
+    gs_lib_ctx_t *ctx = minst->heap->gs_lib_ctx;
+
+    ialloc_set_space(idmemory, avm_system);
+
+    param_init_enumerator(&enumerator);
+    while ((code = param_get_next_key(plist, &enumerator, &key)) == 0) {
+        char string_key[256];	/* big enough for any reasonable key */
+        gs_param_typed_value pvalue;
+
+        if (key.size > sizeof(string_key) - 1) {
+            code = gs_note_error(gs_error_rangecheck);
+            break;
+        }
+        memcpy(string_key, key.data, key.size);
+        string_key[key.size] = 0;
+        if ((code = param_read_typed(plist, string_key, &pvalue)) != 0) {
+            code = (code > 0 ? gs_note_error(gs_error_unknownerror) : code);
+            break;
+        }
+        switch (pvalue.type) {
+        case gs_param_type_null:
+            make_null(&value);
+            break;
+        case gs_param_type_bool:
+            if (pvalue.value.b)
+                make_true(&value);
+            else
+                make_false(&value);
+            break;
+        case gs_param_type_int:
+            make_int(&value, (ps_int)pvalue.value.i);
+            break;
+        case gs_param_type_i64:
+            make_int(&value, (ps_int)pvalue.value.i64);
+            break;
+        case gs_param_type_long:
+            make_int(&value, (ps_int)pvalue.value.l);
+            break;
+        case gs_param_type_size_t:
+            make_int(&value, (ps_int)pvalue.value.z);
+            break;
+        case gs_param_type_float:
+            make_real(&value, pvalue.value.f);
+            break;
+        case gs_param_type_dict:
+            /* We don't support dicts for now */
+            continue;
+        case gs_param_type_dict_int_keys:
+            /* We don't support dicts with int keys for now */
+            continue;
+        case gs_param_type_array:
+            /* We don't support arrays for now */
+            continue;
+        case gs_param_type_string:
+            if (pvalue.value.s.data == NULL || pvalue.value.s.size == 0)
+                make_empty_string(&value, a_readonly);
+            else {
+                size_t len = pvalue.value.s.size;
+                byte *body = ialloc_string(len, "-s");
+
+                if (body == NULL)
+                    return gs_error_Fatal;
+                memcpy(body, pvalue.value.s.data, len);
+                make_const_string(&value, a_readonly | avm_system, len, body);
+            }
+            break;
+        case gs_param_type_name:
+            code = name_ref(ctx->memory, pvalue.value.n.data, pvalue.value.n.size, &value, 1);
+            break;
+        case gs_param_type_int_array:
+            /* We don't support arrays for now */
+            continue;
+        case gs_param_type_float_array:
+            /* We don't support arrays for now */
+            continue;
+        case gs_param_type_string_array:
+            /* We don't support arrays for now */
+            continue;
+        default:
+            continue;
+        }
+        if (code < 0)
+            break;
+
+        ialloc_set_space(idmemory, space);
+        /* Enter the name in systemdict. */
+        i_initial_enter_name_copy(minst->i_ctx_p, string_key, &value);
+    }
+
+    return code;
+}
+
+static int
+gs_main_push_params(gs_main_instance *minst)
+{
+    int code;
+    gs_c_param_list *plist;
+
+    plist = minst->param_list;
+    if (!plist)
+        return 0;
+
+    code = gs_putdeviceparams(minst->i_ctx_p->pgs->device,
+                              (gs_param_list *)plist);
+    if (code < 0)
+        return code;
+
+    code = gs_main_set_language_param(minst, (gs_param_list *)plist);
+    if (code < 0)
+        return code;
+
+    gs_c_param_list_release(plist);
+
+    return code;
+}
+
+int
 gs_main_init2(gs_main_instance * minst)
 {
     i_ctx_t *i_ctx_p;
@@ -329,17 +459,22 @@ gs_main_init2(gs_main_instance * minst)
     if (code < 0)
         return code;
 
+    code = gs_main_push_params(minst);
+    if (code < 0)
+        return code;
+
     if (minst->init_done >= 2)
         return 0;
 
     if (gs_debug_c(gs_debug_flag_init_details))
-        dmprintf1(minst->heap, "%% Init phase 2 started, instance 0x%p\n", minst);
+        dmprintf1(minst->heap, "%% Init phase 2 started, instance "PRI_INTPTR"\n",
+                  (intptr_t)minst);
 
     code = gs_main_init2aux(minst);
     if (code < 0)
        goto fail;
 
-    i_ctx_p = minst->i_ctx_p; /* display_set_callback or run_string may change it */
+    i_ctx_p = minst->i_ctx_p; /* reopen_device_if_display or run_string may change it */
 
     /* Now process the initial saved-pages=... argument, if any as well as saved-pages-test */
     {
@@ -383,7 +518,8 @@ gs_main_init2(gs_main_instance * minst)
 
 fail:
     if (gs_debug_c(gs_debug_flag_init_details))
-        dmprintf2(minst->heap, "%% Init phase 2 %s, instance 0x%p\n", code < 0 ? "failed" : "done", minst);
+        dmprintf2(minst->heap, "%% Init phase 2 %s, instance "PRI_INTPTR"\n",
+                  code < 0 ? "failed" : "done", (intptr_t)minst);
 
     return code;
 }
@@ -619,7 +755,7 @@ gs_main_set_lib_paths(gs_main_instance * minst)
             break;
         }
     }
-    if (have_rom_device && code >= 0) {
+    if (have_rom_device) {
         code = lib_path_add(minst, "%rom%Resource/Init/");
         if (code < 0)
             return code;
@@ -1073,7 +1209,7 @@ gs_finit_push_systemdict(i_ctx_t *i_ctx_p)
 
 /* Free all resources and return. */
 int
-gs_main_finit(gs_main_instance * minst, int exit_status, int code)
+gs_main_finit(gs_main_instance * minst, int exit_status, int env_code)
 {
     i_ctx_t *i_ctx_p = minst->i_ctx_p;
     gs_dual_memory_t dmem = {0};
@@ -1225,7 +1361,7 @@ gs_main_finit(gs_main_instance * minst, int exit_status, int code)
     i_ctx_p = minst->i_ctx_p;		/* get current interp context */
     if (gs_debug_c(':')) {
         print_resource_usage(minst, &gs_imemory, "Final");
-        dmprintf1(minst->heap, "%% Exiting instance 0x%p\n", minst);
+        dmprintf1(minst->heap, "%% Exiting instance "PRI_INTPTR"\n", (intptr_t)minst);
     }
     /* Do the equivalent of a restore "past the bottom". */
     /* This will release all memory, close all open files, etc. */
@@ -1234,11 +1370,11 @@ gs_main_finit(gs_main_instance * minst, int exit_status, int code)
         i_plugin_holder *h = i_ctx_p->plugin_list;
 
         dmem = *idmemory;
-        code = alloc_restore_all(i_ctx_p);
-        if (code < 0)
+        env_code = alloc_restore_all(i_ctx_p);
+        if (env_code < 0)
             emprintf1(mem_raw,
                       "ERROR %d while the final restore. See gs/psi/ierrors.h for code explanation.\n",
-                      code);
+                      env_code);
         i_iodev_finit(&dmem);
         i_plugin_finit(mem_raw, h);
     }
@@ -1258,12 +1394,12 @@ gs_main_finit(gs_main_instance * minst, int exit_status, int code)
     if (tempnames) {
         char *p = tempnames;
         while (*p) {
-            unlink(p);
+            gp_unlink(minst->heap, p);
             p += strlen(p) + 1;
         }
         free(tempnames);
     }
-    gs_lib_finit(exit_status, code, minst->heap);
+    gs_lib_finit(exit_status, env_code, minst->heap);
 
     set_lib_path_length(minst, 0);
     gs_free_object(minst->heap, minst->lib_path.container.value.refs, "lib_path array");

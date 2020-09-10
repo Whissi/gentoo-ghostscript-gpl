@@ -1,4 +1,4 @@
-/* Copyright (C) 2001-2019 Artifex Software, Inc.
+/* Copyright (C) 2001-2020 Artifex Software, Inc.
    All Rights Reserved.
 
    This software is provided AS-IS with no warranty, either express or
@@ -185,7 +185,7 @@ hp:	r = *pr;
             if (count) {
                 --p;
                 status = 0;	/* reprocess error next time */
-            } else if (*p == '%')
+            } else if (p > pr->ptr && p < pr->limit && *p == '%')
                 goto hp;	/* ignore % */
         }
         p = q;

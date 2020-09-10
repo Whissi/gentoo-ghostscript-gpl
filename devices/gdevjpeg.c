@@ -1,4 +1,4 @@
-/* Copyright (C) 2001-2019 Artifex Software, Inc.
+/* Copyright (C) 2001-2020 Artifex Software, Inc.
    All Rights Reserved.
 
    This software is provided AS-IS with no warranty, either express or
@@ -437,7 +437,8 @@ jpeg_print_page(gx_device_printer * pdev, gp_file * prn_stream)
         goto fail;
     }
     code = gx_downscaler_init(&ds, (gx_device *)jdev, 8, 8,
-                              jdev->color_info.depth/8, jdev->downscale.downscale_factor, 0, NULL, 0);
+                              jdev->color_info.depth/8,
+                              &jdev->downscale, NULL, 0);
     if (code < 0) {
         gs_free_object(mem, jcdp, "jpeg_print_page(jpeg_compress_data)");
         jcdp = NULL;
@@ -462,8 +463,9 @@ jpeg_print_page(gx_device_printer * pdev, gp_file * prn_stream)
     state.data.compress = jcdp;
     /* Add in ICC profile */
     state.icc_profile = NULL; /* In case it is not set here */
-    if (pdev->icc_struct != NULL && pdev->icc_struct->device_profile[0] != NULL) {
-        cmm_profile_t *icc_profile = pdev->icc_struct->device_profile[0];
+    if (pdev->icc_struct != NULL &&
+        pdev->icc_struct->device_profile[GS_DEFAULT_DEVICE_PROFILE] != NULL) {
+        cmm_profile_t *icc_profile = pdev->icc_struct->device_profile[GS_DEFAULT_DEVICE_PROFILE];
         if (icc_profile->num_comps == pdev->color_info.num_components &&
             !(pdev->icc_struct->usefastcolor)) {
             state.icc_profile = icc_profile;

@@ -1,4 +1,4 @@
- /*
+/*
  * Testbed implementation of Even Better Screening. Please see
  * http://www.artofcode.com/eventone/ for more details.
  *
@@ -9,7 +9,18 @@
  * of ETS is for commercial licensees and is governed by the licensing
  * agreement between artofcode LLC and the licensee. Please see
  * http://www.artofcode.com/eventone/ for information on licensing.
-*/
+ *
+ * Subsequent Changes: Copyright (C) 2013-2020 Artifex Software, Inc.
+ *
+ * All Rights Reserved.
+ *
+ * This software is provided AS-IS with no warranty, either express or
+ * implied.
+ *
+ * This software is distributed under license and may not be copied,
+ * modified or distributed except as expressly authorized under the terms
+ * of the license contained in the file LICENSE in this distribution.
+ */
 
 #include <stdlib.h>
 #include <string.h>
@@ -101,7 +112,7 @@ typedef struct {
  * on an input line. Called to generate optimised versions.
  */
 static inline void
-ets_line_template(unsigned char * gs_restrict * gs_restrict dest, const ETS_SrcPixel * const gs_restrict * gs_restrict src, int n_planes, int levels, int aspect_x, int aspect_y, int elo, int ehi, int ets_bias, int r_style, int old_quant, int fancy_coupling, int * gs_restrict c_line,
+ets_line_template(unsigned char * gs_restrict * gs_restrict dest, const ETS_SrcPixel * const gs_restrict * gs_restrict src, int n_planes, int levels, int aspect_x, int aspect_y, int elo, int ehi, int ets_biasing_mode, int r_style, int old_quant, int fancy_coupling, int * gs_restrict c_line,
                   const signed char * gs_restrict tmmat, unsigned int tmwidth, unsigned int tmheight, unsigned int y, int xd, ETS_PlaneCtx * gs_restrict * gs_restrict planes, uint32 *seeds, int in_plane_step, int out_plane_step)
 {
     ETS_PixelInternals pi[M];
@@ -260,7 +271,7 @@ ets_line_template(unsigned char * gs_restrict * gs_restrict dest, const ETS_SrcP
                      *   3   like 1, but same shift either side of 0.
                      *   4+  scale the modulation down.
                      */
-                    switch (ets_bias)
+                    switch (ets_biasing_mode)
                     {
                     case ETS_BIAS_ZERO:
                         ets_bias = 0;

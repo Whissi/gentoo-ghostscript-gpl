@@ -1,4 +1,4 @@
-/* Copyright (C) 2001-2019 Artifex Software, Inc.
+/* Copyright (C) 2001-2020 Artifex Software, Inc.
    All Rights Reserved.
 
    This software is provided AS-IS with no warranty, either express or
@@ -593,9 +593,14 @@ jbig2_text_region(Jbig2Ctx *ctx, Jbig2Segment *segment, const byte *segment_data
     uint32_t table_index = 0;
     const Jbig2HuffmanParams *huffman_params = NULL;
 
+    /* zero params to ease cleanup later */
+    memset(&params, 0, sizeof(Jbig2TextRegionParams));
+
     /* 7.4.1 */
-    if (segment->data_length < 17)
-        goto too_short;
+    if (segment->data_length < 17) {
+        code = jbig2_error(ctx, JBIG2_SEVERITY_FATAL, segment->number, "segment too short");
+        goto cleanup2;
+    }
     jbig2_get_region_segment_info(&region_info, segment_data);
     offset += 17;
     /* Check for T.88 amendment 3 */
@@ -603,15 +608,14 @@ jbig2_text_region(Jbig2Ctx *ctx, Jbig2Segment *segment, const byte *segment_data
         return jbig2_error(ctx, JBIG2_SEVERITY_FATAL, segment->number, "region segment flags indicate use of colored bitmap (NYI)");
 
     /* 7.4.3.1.1 */
-    if (segment->data_length - offset < 2)
-        goto too_short;
+    if (segment->data_length - offset < 2) {
+        code = jbig2_error(ctx, JBIG2_SEVERITY_FATAL, segment->number, "segment too short");
+        goto cleanup2;
+    }
     flags = jbig2_get_uint16(segment_data + offset);
     offset += 2;
 
     jbig2_error(ctx, JBIG2_SEVERITY_DEBUG, segment->number, "text region header flags 0x%04x", flags);
-
-    /* zero params to ease cleanup later */
-    memset(&params, 0, sizeof(Jbig2TextRegionParams));
 
     params.SBHUFF = flags & 0x0001;
     params.SBREFINE = flags & 0x0002;
@@ -633,8 +637,10 @@ jbig2_text_region(Jbig2Ctx *ctx, Jbig2Segment *segment, const byte *segment_data
 
     if (params.SBHUFF) {        /* Huffman coding */
         /* 7.4.3.1.2 */
-        if (segment->data_length - offset < 2)
-            goto too_short;
+        if (segment->data_length - offset < 2) {
+            code = jbig2_error(ctx, JBIG2_SEVERITY_FATAL, segment->number, "segment too short");
+            goto cleanup2;
+        }
         huffman_flags = jbig2_get_uint16(segment_data + offset);
         offset += 2;
 
@@ -643,8 +649,10 @@ jbig2_text_region(Jbig2Ctx *ctx, Jbig2Segment *segment, const byte *segment_data
     } else {                    /* arithmetic coding */
 
         /* 7.4.3.1.3 */
-        if (segment->data_length - offset < 4)
-            goto too_short;
+        if (segment->data_length - offset < 4) {
+            code = jbig2_error(ctx, JBIG2_SEVERITY_FATAL, segment->number, "segment too short");
+            goto cleanup2;
+        }
         if ((params.SBREFINE) && !(params.SBRTEMPLATE)) {
             params.sbrat[0] = segment_data[offset];
             params.sbrat[1] = segment_data[offset + 1];
@@ -655,8 +663,10 @@ jbig2_text_region(Jbig2Ctx *ctx, Jbig2Segment *segment, const byte *segment_data
     }
 
     /* 7.4.3.1.4 */
-    if (segment->data_length - offset < 4)
-        goto too_short;
+    if (segment->data_length - offset < 4) {
+        code = jbig2_error(ctx, JBIG2_SEVERITY_FATAL, segment->number, "segment too short");
+        goto cleanup2;
+    }
     params.SBNUMINSTANCES = jbig2_get_uint32(segment_data + offset);
     offset += 4;
 
@@ -922,8 +932,10 @@ jbig2_text_region(Jbig2Ctx *ctx, Jbig2Segment *segment, const byte *segment_data
         goto cleanup2;
     }
 
-    if (offset >= segment->data_length)
-        goto too_short;
+    if (offset >= segment->data_length) {
+        code = jbig2_error(ctx, JBIG2_SEVERITY_FATAL, segment->number, "segment too short");
+        goto cleanup2;
+    }
     ws = jbig2_word_stream_buf_new(ctx, segment_data + offset, segment->data_length - offset);
     if (ws == NULL) {
         code = jbig2_error(ctx, JBIG2_SEVERITY_WARNING, segment->number, "failed to allocate word stream when handling text region image");
@@ -933,11 +945,12 @@ jbig2_text_region(Jbig2Ctx *ctx, Jbig2Segment *segment, const byte *segment_data
     as = jbig2_arith_new(ctx, ws);
     if (as == NULL) {
         code = jbig2_error(ctx, JBIG2_SEVERITY_WARNING, segment->number, "failed to allocate arithmetic coding context when handling text region image");
-        goto cleanup2;
+        goto cleanup3;
     }
 
     if (!params.SBHUFF) {
-        uint32_t SBSYMCODELEN, index;
+        uint8_t SBSYMCODELEN;
+        uint32_t index;
         uint32_t SBNUMSYMS = 0;
 
         for (index = 0; index < n_dicts; index++) {
@@ -950,12 +963,12 @@ jbig2_text_region(Jbig2Ctx *ctx, Jbig2Segment *segment, const byte *segment_data
         params.IAIT = jbig2_arith_int_ctx_new(ctx);
         if (params.IADT == NULL || params.IAFS == NULL || params.IADS == NULL || params.IAIT == NULL) {
             code = jbig2_error(ctx, JBIG2_SEVERITY_WARNING, segment->number, "failed to allocate text region image data");
-            goto cleanup3;
+            goto cleanup4;
         }
 
         /* Table 31 */
-        for (SBSYMCODELEN = 0; (1U << SBSYMCODELEN) < SBNUMSYMS; SBSYMCODELEN++) {
-        }
+        for (SBSYMCODELEN = 0; ((uint64_t) 1 << SBSYMCODELEN) < (uint64_t) SBNUMSYMS; SBSYMCODELEN++);
+
         params.IAID = jbig2_arith_iaid_ctx_new(ctx, SBSYMCODELEN);
         params.IARI = jbig2_arith_int_ctx_new(ctx);
         params.IARDW = jbig2_arith_int_ctx_new(ctx);
@@ -965,7 +978,7 @@ jbig2_text_region(Jbig2Ctx *ctx, Jbig2Segment *segment, const byte *segment_data
         if (params.IAID == NULL || params.IARI == NULL ||
             params.IARDW == NULL || params.IARDH == NULL || params.IARDX == NULL || params.IARDY == NULL) {
             code = jbig2_error(ctx, JBIG2_SEVERITY_WARNING, segment->number, "failed to allocate text region image data");
-            goto cleanup4;
+            goto cleanup5;
         }
     }
 
@@ -974,7 +987,7 @@ jbig2_text_region(Jbig2Ctx *ctx, Jbig2Segment *segment, const byte *segment_data
                                     segment_data + offset, segment->data_length - offset, GR_stats, as, ws);
     if (code < 0) {
         jbig2_error(ctx, JBIG2_SEVERITY_WARNING, segment->number, "failed to decode text region image data");
-        goto cleanup4;
+        goto cleanup5;
     }
 
     if ((segment->flags & 63) == 4) {
@@ -989,7 +1002,7 @@ jbig2_text_region(Jbig2Ctx *ctx, Jbig2Segment *segment, const byte *segment_data
             jbig2_error(ctx, JBIG2_SEVERITY_WARNING, segment->number, "unable to add text region to page");
     }
 
-cleanup4:
+cleanup5:
     if (!params.SBHUFF) {
         jbig2_arith_iaid_ctx_free(ctx, params.IAID);
         jbig2_arith_int_ctx_free(ctx, params.IARI);
@@ -999,13 +1012,15 @@ cleanup4:
         jbig2_arith_int_ctx_free(ctx, params.IARDY);
     }
 
-cleanup3:
+cleanup4:
     if (!params.SBHUFF) {
         jbig2_arith_int_ctx_free(ctx, params.IADT);
         jbig2_arith_int_ctx_free(ctx, params.IAFS);
         jbig2_arith_int_ctx_free(ctx, params.IADS);
         jbig2_arith_int_ctx_free(ctx, params.IAIT);
     }
+
+cleanup3:
     jbig2_free(ctx->allocator, as);
     jbig2_word_stream_buf_free(ctx, ws);
 
@@ -1027,7 +1042,4 @@ cleanup1:
     jbig2_free(ctx->allocator, dicts);
 
     return code;
-
-too_short:
-    return jbig2_error(ctx, JBIG2_SEVERITY_FATAL, segment->number, "segment too short");
 }

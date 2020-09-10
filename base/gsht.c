@@ -1,4 +1,4 @@
-/* Copyright (C) 2001-2019 Artifex Software, Inc.
+/* Copyright (C) 2001-2020 Artifex Software, Inc.
    All Rights Reserved.
 
    This software is provided AS-IS with no warranty, either express or
@@ -322,7 +322,7 @@ gx_ht_copy_ht_order(gx_ht_order * pdest, gx_ht_order * psrc, gs_memory_t * mem)
         memcpy(pdest->levels, psrc->levels, psrc->num_levels * sizeof(uint));
     if (pdest->bit_data != 0)
         memcpy(pdest->bit_data, psrc->bit_data,
-                psrc->num_bits * psrc->procs->bit_data_elt_size);
+               (size_t)psrc->num_bits * psrc->procs->bit_data_elt_size);
     pdest->transfer = psrc->transfer;
     rc_increment(pdest->transfer);
     return 0;
@@ -548,7 +548,7 @@ gx_ht_construct_bits(gx_ht_order * porder)
         gx_ht_construct_bit(phb, porder->width, phb->offset);
 #ifdef DEBUG
     if (gs_debug_c('H')) {
-        dmlprintf1(porder->data_memory, "[H]Halftone order bits 0x%lx:\n", (ulong)porder->bit_data);
+        dmlprintf1(porder->data_memory, "[H]Halftone order bits "PRI_INTPTR":\n", (intptr_t)porder->bit_data);
         for (i = 0, phb = (gx_ht_bit *)porder->bit_data;
              i < porder->num_bits;
              i++, phb++)
@@ -1364,7 +1364,7 @@ gx_ht_construct_threshold( gx_ht_order *d_order, gx_device *dev,
     shift = d_order->shift;
 
     if (d_order->threshold != NULL) return 0;
-    thresh = (byte *)gs_malloc(memory, d_order->width * d_order->full_height, 1,
+    thresh = (byte *)gs_malloc(memory, (size_t)d_order->width * d_order->full_height, 1,
                               "gx_ht_construct_threshold");
     if (thresh == NULL) {
         return -1 ;         /* error if allocation failed   */

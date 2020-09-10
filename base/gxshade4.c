@@ -1,4 +1,4 @@
-/* Copyright (C) 2001-2019 Artifex Software, Inc.
+/* Copyright (C) 2001-2020 Artifex Software, Inc.
    All Rights Reserved.
 
    This software is provided AS-IS with no warranty, either express or
@@ -196,7 +196,9 @@ gs_shading_LfGt_fill_rectangle(const gs_shading_t * psh0, const gs_rect * rect,
         code = gs_note_error(gs_error_VMerror);
         goto out;
     }
-    color_buffer = gs_alloc_bytes(pgs->memory, pfs.color_stack_step * per_row, "gs_shading_LfGt_fill_rectangle");
+    color_buffer = gs_alloc_bytes(pgs->memory,
+                                  (size_t)pfs.color_stack_step * per_row,
+                                  "gs_shading_LfGt_fill_rectangle");
     if (color_buffer == NULL) {
         code = gs_note_error(gs_error_VMerror);
         goto out;

@@ -1,4 +1,4 @@
-/* Copyright (C) 2001-2019 Artifex Software, Inc.
+/* Copyright (C) 2001-2020 Artifex Software, Inc.
    All Rights Reserved.
 
    This software is provided AS-IS with no warranty, either express or
@@ -526,6 +526,7 @@ c_param_read_typed(gs_param_list * plist, gs_param_name pkey,
         fa.data = (float *)pparam->alternate_typed_data;
 
         pvalue->value.fa = fa;
+        pvalue->type = req_type;
         return 0;
     }
     return code;

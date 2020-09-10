@@ -1,4 +1,4 @@
-/* Copyright (C) 2001-2019 Artifex Software, Inc.
+/* Copyright (C) 2001-2020 Artifex Software, Inc.
    All Rights Reserved.
 
    This software is provided AS-IS with no warranty, either express or
@@ -499,7 +499,7 @@ gs_image_class_0_interpolate(gx_image_enum * penum, irender_proc_t *render_fn)
             iss.BitsPerComponentIn = sizeof(frac) * 8;
             iss.MaxValueIn = frac_1;
         }
-        in_size = round_up(iss.WidthIn * iss.spp_decode * sizeof(frac),
+        in_size = round_up(iss.WidthIn * iss.spp_decode * (int)sizeof(frac),
                            align_bitmap_mod);
         /* Size to allocate space to store the input as frac type */
     }
@@ -1079,12 +1079,13 @@ get_color_handler(gx_image_enum *penum, int spp_decode,
     /* If we are in a non device space then work from the pcs not from the
     concrete space also handle index case, where base case was device type */
     /* We'll have done the interpolation in the base space, not the indexed
-     * space, so allow for that here. */
+     * space, so allow for that here. Also avoid problems with separation
+     * color spaces with check for presence of ICC profile */
     if (is_index_space)
         pcs = pcs->base_space;
-    if (dev_profile->usefastcolor &&
+    if (dev_profile->usefastcolor && pcs->cmm_icc_profile_data != NULL &&
         gsicc_is_default_profile(pcs->cmm_icc_profile_data) &&
-        dev_profile->device_profile[0]->num_comps == spp_decode) {
+        dev_profile->device_profile[GS_DEFAULT_DEVICE_PROFILE]->num_comps == spp_decode) {
         const gs_color_space * pconcs = cs_concrete_space(pcs, pgs);
         if (pconcs && pconcs == pcs) {
             *pconc = pconcs;
@@ -2159,7 +2160,7 @@ image_render_interpolate_icc(gx_image_enum * penum, const byte * buffer,
             /* Get the buffers set up. */
             p_cm_buff =
                 (byte *) gs_alloc_bytes(pgs->memory,
-                                        num_bytes_decode * width_in * spp_cm,
+                                        (size_t)num_bytes_decode * width_in * spp_cm,
                                         "image_render_interpolate_icc");
             /* Set up the buffer descriptors. We keep the bytes the same */
             gsicc_init_buffer(&input_buff_desc, spp_decode, num_bytes_decode,
@@ -2183,6 +2184,9 @@ image_render_interpolate_icc(gx_image_enum * penum, const byte * buffer,
                 p_cm_buff = (byte *) gs_alloc_bytes(pgs->memory,
                     sizeof(unsigned short) * width * spp_cm,
                     "image_render_interpolate_icc");
+                if (!p_cm_buff) {
+                    return gs_error_VMerror;
+                }
                 /* Set up the buffer descriptors. */
                 gsicc_init_buffer(&input_buff_desc, spp_decode, 2,
                               false, false, false, 0, width * spp_decode,
@@ -2645,7 +2649,7 @@ image_render_interpolate_landscape_icc(gx_image_enum * penum,
             /* Get the buffers set up. */
             p_cm_buff =
                 (byte *) gs_alloc_bytes(pgs->memory,
-                                        num_bytes_decode * width_in * spp_cm,
+                                        (size_t)num_bytes_decode * width_in * spp_cm,
                                         "image_render_interpolate_icc");
             /* Set up the buffer descriptors. We keep the bytes the same */
             gsicc_init_buffer(&input_buff_desc, spp_decode, num_bytes_decode,

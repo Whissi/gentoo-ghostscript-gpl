@@ -1,4 +1,4 @@
-/* Copyright (C) 2001-2019 Artifex Software, Inc.
+/* Copyright (C) 2001-2020 Artifex Software, Inc.
    All Rights Reserved.
 
    This software is provided AS-IS with no warranty, either express or
@@ -1580,7 +1580,7 @@ gsicc_set_device_profile_colorants(gx_device *dev, char *name_str)
             /* Create a default name string that we can use */
             int total_len;
             int kk;
-            int num_comps = profile_struct->device_profile[0]->num_comps;
+            int num_comps = profile_struct->device_profile[GS_DEFAULT_DEVICE_PROFILE]->num_comps;
             char temp_str[DEFAULT_ICC_COLORANT_LENGTH+2];
 
             /* If names are already set then we do not want to set default ones */
@@ -1837,16 +1837,16 @@ gsicc_verify_device_profiles(gx_device * pdev)
 {
     int k;
     cmm_dev_profile_t *dev_icc = pdev->icc_struct;
-    bool is_sep = false;
+    bool check_components = true;
     bool can_postrender = false;
     bool objects = false;
 
-    if (pdev->procs.dev_spec_op != NULL) {
-        is_sep = dev_proc(pdev, dev_spec_op)(pdev, gxdso_supports_devn, NULL, 0);
+    if (dev_proc(pdev, dev_spec_op) != NULL) {
+        check_components = !(dev_proc(pdev, dev_spec_op)(pdev, gxdso_skip_icc_component_validation, NULL, 0));
         can_postrender = dev_proc(pdev, dev_spec_op)(pdev, gxdso_supports_iccpostrender, NULL, 0);
     }
 
-    if (dev_icc->device_profile[0] == NULL)
+    if (dev_icc->device_profile[GS_DEFAULT_DEVICE_PROFILE] == NULL)
         return 0;
 
     if (dev_icc->postren_profile != NULL && dev_icc->link_profile != NULL) {
@@ -1864,7 +1864,7 @@ gsicc_verify_device_profiles(gx_device * pdev)
         if (!can_postrender) {
             return gs_rethrow(-1, "Post render profile not supported by device");
         }
-        if (!is_sep) {
+        if (check_components) {
             if (dev_icc->postren_profile->num_comps !=
                 pdev->color_info.num_components) {
                 return gs_rethrow(-1, "Post render profile does not match the device color model");
@@ -1883,33 +1883,37 @@ gsicc_verify_device_profiles(gx_device * pdev)
 
     if (dev_icc->link_profile == NULL) {
         if (!objects) {
-            if (!is_sep && dev_icc->device_profile[0]->num_comps !=
+            if (check_components && dev_icc->device_profile[GS_DEFAULT_DEVICE_PROFILE]->num_comps !=
                 pdev->color_info.num_components)
                 return gs_rethrow(-1, "Mismatch of ICC profiles and device color model");
             else
                 return 0;  /* Currently sep devices have some leeway here */
         } else {
-            for (k = 1; k < NUM_DEVICE_PROFILES; k++)
-                if (!is_sep && dev_icc->device_profile[k] != NULL) {
-                    if (dev_icc->device_profile[k]->num_comps !=
-                        pdev->color_info.num_components)
-                        return gs_rethrow(-1, "Mismatch of object dependent ICC profiles and device color model");
-                }
+            if (check_components) {
+                for (k = 1; k < NUM_DEVICE_PROFILES; k++)
+                    if (dev_icc->device_profile[k] != NULL) {
+                        if (dev_icc->device_profile[k]->num_comps !=
+                            pdev->color_info.num_components)
+                            return gs_rethrow(-1, "Mismatch of object dependent ICC profiles and device color model");
+                    }
+            }
             return 0;
         }
     } else {
         /* The input of the device link must match the output of the device
            profile and the device link output must match the device color
            model */
-        if (!is_sep && dev_icc->link_profile->num_comps_out !=
+        if (check_components && dev_icc->link_profile->num_comps_out !=
             pdev->color_info.num_components) {
             return gs_rethrow(-1, "Mismatch of device link profile and device color model");
         }
-        for (k = 0; k < NUM_DEVICE_PROFILES; k++) {
-            if (!is_sep && dev_icc->device_profile[k] != NULL) {
-                if (dev_icc->device_profile[k]->num_comps !=
-                    dev_icc->link_profile->num_comps) {
-                    return gs_rethrow(-1, "Mismatch of device link profile and device ICC profile");
+        if (check_components) {
+            for (k = 0; k < NUM_DEVICE_PROFILES; k++) {
+                if (dev_icc->device_profile[k] != NULL) {
+                    if (dev_icc->device_profile[k]->num_comps !=
+                        dev_icc->link_profile->num_comps) {
+                        return gs_rethrow(-1, "Mismatch of device link profile and device ICC profile");
+                    }
                 }
             }
         }
@@ -2165,7 +2169,7 @@ gsicc_profile_new(stream *s, gs_memory_t *memory, const char* pname,
         return NULL;
     }
     if_debug1m(gs_debug_flag_icc, mem_nongc,
-               "[icc] allocating ICC profile = 0x%p\n", result);
+               "[icc] allocating ICC profile = "PRI_INTPTR"\n", (intptr_t)result);
     return result;
 }
 
@@ -2176,8 +2180,8 @@ rc_free_icc_profile(gs_memory_t * mem, void *ptr_in, client_name_t cname)
     gs_memory_t *mem_nongc =  profile->memory;
 
     if_debug2m(gs_debug_flag_icc, mem,
-               "[icc] rc decrement profile = 0x%p rc = %ld\n",
-               ptr_in, profile->rc.ref_count);
+               "[icc] rc decrement profile = "PRI_INTPTR" rc = %ld\n",
+               (intptr_t)ptr_in, profile->rc.ref_count);
     if (profile->rc.ref_count <= 1 ) {
         /* Clear out the buffer if it is full */
         if (profile->buffer != NULL) {
@@ -2787,31 +2791,31 @@ gsicc_extract_profile(gs_graphics_type_tag_t graphics_type_tag,
         case GS_UNKNOWN_TAG:
         case GS_UNTOUCHED_TAG:
         default:
-            (*profile) = profile_struct->device_profile[0];
-            *render_cond = profile_struct->rendercond[0];
+            (*profile) = profile_struct->device_profile[GS_DEFAULT_DEVICE_PROFILE];
+            *render_cond = profile_struct->rendercond[GS_DEFAULT_DEVICE_PROFILE];
             break;
         case GS_PATH_TAG:
-            *render_cond = profile_struct->rendercond[1];
-            if (profile_struct->device_profile[1] != NULL) {
-                (*profile) = profile_struct->device_profile[1];
+            *render_cond = profile_struct->rendercond[GS_GRAPHIC_DEVICE_PROFILE];
+            if (profile_struct->device_profile[GS_GRAPHIC_DEVICE_PROFILE] != NULL) {
+                (*profile) = profile_struct->device_profile[GS_GRAPHIC_DEVICE_PROFILE];
             } else {
-                (*profile) = profile_struct->device_profile[0];
+                (*profile) = profile_struct->device_profile[GS_DEFAULT_DEVICE_PROFILE];
             }
             break;
         case GS_IMAGE_TAG:
-            *render_cond = profile_struct->rendercond[2];
-            if (profile_struct->device_profile[2] != NULL) {
-                (*profile) = profile_struct->device_profile[2];
+            *render_cond = profile_struct->rendercond[GS_IMAGE_DEVICE_PROFILE];
+            if (profile_struct->device_profile[GS_IMAGE_DEVICE_PROFILE] != NULL) {
+                (*profile) = profile_struct->device_profile[GS_IMAGE_DEVICE_PROFILE];
             } else {
-                (*profile) = profile_struct->device_profile[0];
+                (*profile) = profile_struct->device_profile[GS_DEFAULT_DEVICE_PROFILE];
             }
             break;
         case GS_TEXT_TAG:
-            *render_cond = profile_struct->rendercond[3];
-            if (profile_struct->device_profile[3] != NULL) {
-                (*profile) = profile_struct->device_profile[3];
+            *render_cond = profile_struct->rendercond[GS_TEXT_DEVICE_PROFILE];
+            if (profile_struct->device_profile[GS_TEXT_DEVICE_PROFILE] != NULL) {
+                (*profile) = profile_struct->device_profile[GS_TEXT_DEVICE_PROFILE];
             } else {
-                (*profile) = profile_struct->device_profile[0];
+                (*profile) = profile_struct->device_profile[GS_DEFAULT_DEVICE_PROFILE];
             }
             break;
         }
@@ -3010,7 +3014,7 @@ gs_seticcdirectory(const gs_gstate * pgs, gs_param_string * pval)
         pname = (char *)gs_alloc_bytes(mem, namelen,
                                        "gs_seticcdirectory");
         if (pname == NULL)
-            return gs_rethrow(-1, "cannot allocate directory name");
+            return gs_rethrow(gs_error_VMerror, "cannot allocate directory name");
         memcpy(pname,pval->data,namelen-1);
         pname[namelen-1] = 0;
         if (gs_lib_ctx_set_icc_directory(mem, (const char*) pname, namelen) < 0) {

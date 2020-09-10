@@ -1,4 +1,4 @@
-/* Copyright (C) 2001-2019 Artifex Software, Inc.
+/* Copyright (C) 2001-2020 Artifex Software, Inc.
    All Rights Reserved.
 
    This software is provided AS-IS with no warranty, either express or
@@ -1215,7 +1215,7 @@ image_init_color_cache(gx_image_enum * penum, int bps, int spp)
            to decode first.  Then we can apply CM. Create a temp buffer in
            the source space and then transform it with one call */
         temp_buffer = (byte*) gs_alloc_bytes(penum->memory,
-                                             num_entries * num_src_comp,
+                                             (size_t)num_entries * num_src_comp,
                                              "image_init_color_cache");
         if (need_decode) {
             if (is_indexed) {

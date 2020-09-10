@@ -1,4 +1,4 @@
-/* Copyright (C) 2001-2019 Artifex Software, Inc.
+/* Copyright (C) 2001-2020 Artifex Software, Inc.
    All Rights Reserved.
 
    This software is provided AS-IS with no warranty, either express or
@@ -698,7 +698,7 @@ image_render_color_thresh(gx_image_enum *penum_orig, const byte *buffer, int dat
                                       penum->ht_offset_bits)) & 15;
             for (k = 0; k < spp_out; k ++) {
                 offset_contone[k]   = (- (((long)(penum->line)) +
-                                          contone_stride * k +
+                                          (long)contone_stride * k +
                                           penum->ht_offset_bits)) & 15;
             }
             data_length = dest_width;
@@ -724,7 +724,7 @@ image_render_color_thresh(gx_image_enum *penum_orig, const byte *buffer, int dat
             offset_threshold = (-(long)(penum->thresh_buffer)) & 15;
             for (k = 0; k < spp_out; k ++) {
                 offset_contone[k]   = (- ((long)(penum->line) +
-                                          contone_stride * k)) & 15;
+                                          (long)contone_stride * k)) & 15;
             }
             /* In the landscaped case, we want to accumulate multiple columns
                of data before sending to the device.  We want to have a full
@@ -1222,14 +1222,14 @@ mapped:	if (mcode < 0)
             goto fill;
         if (sizeof(pdevc_next->colors.binary.color[0]) <= sizeof(ulong))
             if_debug7m('B', penum->memory,
-                       "[B]0x%x,0x%x,0x%x,0x%x -> 0x%lx,0x%lx,0x%lx\n",
+                       "[B]0x%x,0x%x,0x%x,0x%x -> 0x%lx,0x%lx," PRI_INTPTR "\n",
                        next.v[0], next.v[1], next.v[2], next.v[3],
                        (ulong)pdevc_next->colors.binary.color[0],
                        (ulong)pdevc_next->colors.binary.color[1],
-                       (ulong) pdevc_next->type);
+                       (intptr_t)pdevc_next->type);
         else
             if_debug9m('B', penum->memory,
-                       "[B]0x%x,0x%x,0x%x,0x%x -> 0x%08lx%08lx,0x%08lx%08lx,0x%lx\n",
+                       "[B]0x%x,0x%x,0x%x,0x%x -> 0x%08lx%08lx,0x%08lx%08lx," PRI_INTPTR "\n",
                        next.v[0], next.v[1], next.v[2], next.v[3],
                        (ulong)(pdevc_next->colors.binary.color[0] >>
                                8 * (sizeof(pdevc_next->colors.binary.color[0]) - sizeof(ulong))),
@@ -1237,7 +1237,7 @@ mapped:	if (mcode < 0)
                        (ulong)(pdevc_next->colors.binary.color[1] >>
                                8 * (sizeof(pdevc_next->colors.binary.color[1]) - sizeof(ulong))),
                        (ulong)pdevc_next->colors.binary.color[1],
-                       (ulong) pdevc_next->type);
+                       (intptr_t)pdevc_next->type);
         /* NB: printf above fails to account for sizeof gx_color_index 4 or 8 bytes */
         if (posture != image_skewed && dev_color_eq(*pdevc, *pdevc_next))
             goto set;

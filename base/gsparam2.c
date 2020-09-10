@@ -1,4 +1,4 @@
-/* Copyright (C) 2001-2019 Artifex Software, Inc.
+/* Copyright (C) 2001-2020 Artifex Software, Inc.
    All Rights Reserved.
 
    This software is provided AS-IS with no warranty, either express or
@@ -43,7 +43,7 @@ gs_param_list_puts(stream *dest, gs_param_list *list)
     gs_param_enumerator_t key_enum;
     gs_param_key_t key;
     char *string_key = gs_alloc_bytes(dest->memory, MAX_PARAM_KEY + 1, "gs_param_list_puts(string_key)");
-    
+
     if (!string_key) {
         return_error(gs_error_VMerror);
     }
@@ -100,6 +100,8 @@ gs_param_list_puts(stream *dest, gs_param_list *list)
             case gs_param_type_bool:
             case gs_param_type_int:
             case gs_param_type_long:
+            case gs_param_type_size_t:
+            case gs_param_type_i64:
             case gs_param_type_float:
                 sput_bytes(dest, (byte *)&value.value, value_top_sizeof);
             case gs_param_type_null:
@@ -207,7 +209,7 @@ gs_param_list_gets(stream *src, gs_param_list *list, gs_memory_t *mem)
 {
     int code = 0;
     char *string_key = gs_alloc_bytes(dest->memory, MAX_PARAM_KEY + 1, "gs_param_list_gets(string_key)");
-    
+
     if (!string_key) {
         return_error(gs_error_VMerror);
     }
@@ -247,6 +249,8 @@ gs_param_list_gets(stream *src, gs_param_list *list, gs_memory_t *mem)
             case gs_param_type_bool:
             case gs_param_type_int:
             case gs_param_type_long:
+            case gs_param_type_size_t:
+            case gs_param_type_i64:
             case gs_param_type_float:
                 code = sget_bytes(src, (byte *)&typed.value, value_top_sizeof);
             case gs_param_type_null:

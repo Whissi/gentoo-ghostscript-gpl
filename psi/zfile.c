@@ -1,4 +1,4 @@
-/* Copyright (C) 2001-2019 Artifex Software, Inc.
+/* Copyright (C) 2001-2020 Artifex Software, Inc.
    All Rights Reserved.
 
    This software is provided AS-IS with no warranty, either express or
@@ -357,6 +357,7 @@ zdeletefile(i_ctx_t *i_ctx_p)
             return code;
         }
     }
+
     code = (*pname.iodev->procs.delete_file)(pname.iodev, pname.fname);
 
     if (code >= 0 && is_temp)

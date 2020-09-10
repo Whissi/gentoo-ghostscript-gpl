@@ -1,4 +1,4 @@
-/* Copyright (C) 2001-2019 Artifex Software, Inc.
+/* Copyright (C) 2001-2020 Artifex Software, Inc.
    All Rights Reserved.
 
    This software is provided AS-IS with no warranty, either express or
@@ -479,7 +479,9 @@ pdf_end_char_proc(gx_device_pdf * pdev, pdf_stream_position_t * ppos)
     stream *s;
     gs_offset_t start_pos, end_pos, length;
 
-    pdf_end_encrypt(pdev);
+    if (pdf_end_encrypt(pdev))
+        s_close_filters(&pdev->strm, pdev->strm->strm);
+
     s = pdev->strm;
     start_pos = ppos->start_pos;
     end_pos = stell(s);

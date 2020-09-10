@@ -1,4 +1,4 @@
-/* Copyright (C) 2001-2019 Artifex Software, Inc.
+/* Copyright (C) 2001-2020 Artifex Software, Inc.
    All Rights Reserved.
 
    This software is provided AS-IS with no warranty, either express or
@@ -819,7 +819,6 @@ op_show_continue_dispatch(i_ctx_t *i_ctx_p, int npop, int code)
                 ref cnref;
                 op_proc_t cont = op_show_continue, exec_cont = 0;
                 gs_glyph glyph = penum->returned.current_glyph;
-                int code;
 
                 pop(npop);
                 op = osp;

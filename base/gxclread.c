@@ -1,4 +1,4 @@
-/* Copyright (C) 2001-2019 Artifex Software, Inc.
+/* Copyright (C) 2001-2020 Artifex Software, Inc.
    All Rights Reserved.
 
    This software is provided AS-IS with no warranty, either express or
@@ -197,9 +197,9 @@ rb:
             }
 #	    endif
             if_debug5m('l', ss->local_memory,
-                      "[l]reading for bands (%d,%d) at bfile %ld, cfile %ld, length %u\n",
+                      "[l]reading for bands (%d,%d) at bfile %"PRId64", cfile %"PRId64", length %u\n",
                       bmin, bmax,
-                      (long)(io_procs->ftell(bfile) - sizeof(ss->b_this)), (long)pos, left);
+                      (io_procs->ftell(bfile) - sizeof(ss->b_this)), (int64_t)pos, left);
         }
     }
     pw->ptr = q;
@@ -808,7 +808,7 @@ clist_render_rectangle(gx_device_clist *cldev, const gs_int_rect *prect,
                  * a gx_saved_page with non-zero cfile or bfile.
                  */
                 bdev->band_offset_x = 0;
-                bdev->band_offset_y = band_first * band_height;
+                bdev->band_offset_y = band_first * (long)band_height;
                 pinfo = &(crdev->page_info);
         } else {
             const gx_placed_page *ppage = &ppages[i];

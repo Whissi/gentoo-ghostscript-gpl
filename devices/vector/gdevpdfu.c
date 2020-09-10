@@ -1,4 +1,4 @@
-/* Copyright (C) 2001-2019 Artifex Software, Inc.
+/* Copyright (C) 2001-2020 Artifex Software, Inc.
    All Rights Reserved.
 
    This software is provided AS-IS with no warranty, either express or
@@ -568,6 +568,7 @@ int ps2write_dsc_header(gx_device_pdf * pdev, int pages)
             if (code < 0)
                 return code;
         }
+        stream_puts(s, "10 dict dup begin\n");
         stream_puts(s, "/DSC_OPDFREAD true def\n");
         if (pdev->Eps2Write) {
             stream_puts(s, "/SetPageSize false def\n");
@@ -577,6 +578,7 @@ int ps2write_dsc_header(gx_device_pdf * pdev, int pages)
                 stream_puts(s, "/SetPageSize true def\n");
             stream_puts(s, "/EPS2Write false def\n");
         }
+        stream_puts(s, "end\n");
 
         code = copy_procsets(s, pdev->HaveTrueTypes, false);
         if (code < 0)
@@ -626,6 +628,7 @@ pdfwrite_pdf_open_document(gx_device_pdf * pdev)
                     if (code < 0)
                         return code;
                 }
+                stream_puts(s, "10 dict dup begin\n");
                 stream_puts(s, "/DSC_OPDFREAD false def\n");
                 code = copy_procsets(s, pdev->HaveTrueTypes, true);
                 if (code < 0)
@@ -646,6 +649,7 @@ pdfwrite_pdf_open_document(gx_device_pdf * pdev)
                     stream_puts(s, "/FitPages true def\n");
                 if(pdev->CenterPages)
                     stream_puts(s, "/CenterPages true def\n");
+                stream_puts(s, "end\n");
                 pdev->OPDFRead_procset_length = stell(s);
             }
         }
@@ -1000,21 +1004,6 @@ pdf_begin_encrypt(gx_device_pdf * pdev, stream **s, gs_id object_id)
      */
 }
 
-/* Remove the encryption filter. */
-void
-pdf_end_encrypt(gx_device_pdf * pdev)
-{
-    if (pdev->KeyLength) {
-        stream *s = pdev->strm;
-        stream *fs = s->strm;
-
-        sclose(s);
-        gs_free_object(pdev->pdf_memory, s->cbuf, "encrypt buffer");
-        gs_free_object(pdev->pdf_memory, s, "encrypt stream");
-        pdev->strm = fs;
-    }
-}
-
 /* Enter stream context. */
 static int
 none_to_stream(gx_device_pdf * pdev)
@@ -1168,6 +1157,7 @@ stream_to_none(gx_device_pdf * pdev)
     stream *s = pdev->strm;
     gs_offset_t length;
     int code;
+    stream *target;
 
     if (pdev->ResourcesBeforeUsage) {
         int code = pdf_exit_substream(pdev);
@@ -1180,22 +1170,16 @@ stream_to_none(gx_device_pdf * pdev)
             if (code < 0)
                 return code;
         }
-        if (pdev->compression_at_page_start == pdf_compress_Flate) {	/* Terminate the filters. */
-            stream *fs = s->strm;
+        target = pdev->strm;
 
-            if (!pdev->binary_ok) {
-                sclose(s);	/* Terminate the ASCII85 filter. */
-                gs_free_object(pdev->pdf_memory, s->cbuf, "A85E contents buffer");
-                gs_free_object(pdev->pdf_memory, s, "A85E contents stream");
-                pdev->strm = s = fs;
-                fs = s->strm;
-            }
-            sclose(s);		/* Next terminate the compression filter */
-            gs_free_object(pdev->pdf_memory, s->cbuf, "zlib buffer");
-            gs_free_object(pdev->pdf_memory, s, "zlib stream");
-            pdev->strm = fs;
-        }
-        pdf_end_encrypt(pdev);
+        if (pdev->compression_at_page_start == pdf_compress_Flate)
+            target = target->strm;
+        if (!pdev->binary_ok)
+            target = target->strm;
+        if (pdf_end_encrypt(pdev))
+            target = target->strm;
+        s_close_filters(&pdev->strm, target);
+
         s = pdev->strm;
         length = pdf_stell(pdev) - pdev->contents_pos;
         if (pdev->PDFA != 0)
@@ -2014,13 +1998,18 @@ pdf_unclip(gx_device_pdf * pdev)
 /* ------ Miscellaneous output ------ */
 
 /* Generate the default Producer string. */
+/* This calculation is also performed for Ghostscript generally
+ * The code is in ghostpdl/base/gsmisc.c printf_program_ident().
+ * Should we change this calculation both sets of code need to be updated.
+ */
 void
 pdf_store_default_Producer(char buf[PDF_MAX_PRODUCER])
 {
-    if ((gs_revision % 100) == 0)
-        gs_sprintf(buf, "(%s %1.1f)", gs_product, gs_revision / 100.0);
-    else
-        gs_sprintf(buf, "(%s %1.2f)", gs_product, gs_revision / 100.0);
+    int major = (int)(gs_revision / 1000);
+    int minor = (int)(gs_revision - (major * 1000)) / 10;
+    int patch = gs_revision % 10;
+
+    gs_sprintf(buf, "(%s %d.%02d.%d)", gs_product, major, minor, patch);
 }
 
 /* Write matrix values. */
@@ -2133,6 +2122,10 @@ pdf_encrypt_encoded_string(const gx_device_pdf *pdev, const byte *str, uint size
             break;
         }
     }
+    /* Another case where we use sclose() and not sclose_filters(), because the
+     * buffer we supplied to s_init_filter is a heap based C object, so we
+     * must not free it.
+     */
     sclose(&sout); /* Writes ')'. */
     return (int)stell(&sinp) + 1;
 }
@@ -2697,7 +2690,7 @@ pdf_function_aux(gx_device_pdf *pdev, const gs_function_t *pfn,
                 stream_write(writer.strm, ptr, count);
             }
             code = psdf_end_binary(&writer);
-            sclose(s);
+            s_close_filters(&s, s->strm);
         }
         pdev->strm = save;
         if (code < 0)

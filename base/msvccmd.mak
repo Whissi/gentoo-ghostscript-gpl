@@ -1,4 +1,4 @@
-# Copyright (C) 2001-2019 Artifex Software, Inc.
+# Copyright (C) 2001-2020 Artifex Software, Inc.
 # All Rights Reserved.
 #
 # This software is provided AS-IS with no warranty, either express or
@@ -234,6 +234,7 @@ GENOPT=$(CP) $(CD) $(CT) $(CS) $(WARNOPT) $(VC8WARN) /nologo $(CMT)
 
 CCFLAGS=$(PLATOPT) $(FPFLAGS) $(CPFLAGS) $(CFLAGS) $(XCFLAGS) $(MSINCFLAGS) $(SBRFLAGS)
 CC=$(COMP) /c $(CCFLAGS) $(COMPILE_FULL_OPTIMIZED) @$(GLGENDIR)\ccf32.tr
+CXX=$(CXX) /c $(CCFLAGS) $(COMPILE_FULL_OPTIMIZED) @$(GLGENDIR)\ccf32.tr
 CPP=$(COMPCPP) /c $(CCFLAGS) @$(GLGENDIR)\ccf32.tr
 !if $(MAKEDLL)
 WX=$(COMPILE_FOR_DLL)

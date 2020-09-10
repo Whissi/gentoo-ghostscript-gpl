@@ -1,4 +1,4 @@
-/* Copyright (C) 2001-2019 Artifex Software, Inc.
+/* Copyright (C) 2001-2020 Artifex Software, Inc.
    All Rights Reserved.
 
    This software is provided AS-IS with no warranty, either express or
@@ -718,10 +718,14 @@ gs_pattern1_set_color(const gs_client_color * pcc, gs_gstate * pgs)
         pcs = pcs->base_space;
         return pcs->type->set_overprint(pcs, pgs);
     } else {
-        gs_overprint_params_t   params;
+        gs_overprint_params_t   params = {0};
 
         params.retain_any_comps = false;
         params.effective_opm = pgs->color[0].effective_opm = 0;
+        params.op_state = OP_STATE_NONE;
+        params.is_fill_color = false;
+        params.idle = false;
+
         return gs_gstate_update_overprint(pgs, &params);
     }
 }
@@ -766,6 +770,15 @@ typedef struct pixmap_info_s {
     void (*free_proc)(gs_memory_t *, void *, client_name_t);
 } pixmap_info;
 
+void *
+gs_get_pattern_client_data(const gs_client_color * pcc)
+{
+    const gs_pattern_instance_t *pinst = pcc->pattern;
+
+    return (pinst == 0 || pinst->type != &gs_pattern1_type ? 0 :
+            (void *)pinst->client_data);
+}
+
 gs_private_st_suffix_add1(st_pixmap_info,
                           pixmap_info,
                           "pixmap info. struct",
@@ -778,26 +791,16 @@ gs_private_st_suffix_add1(st_pixmap_info,
 #define st_pixmap_info_max_ptrs (1 + st_tile_bitmap_max_ptrs)
 
 /*
- *  Free routine for pattern instances created from pixmaps. This overwrites
- *  the free procedure originally stored in the pattern instance, and stores
- *  the pointer to that procedure in the pixmap_info structure. This procedure
- *  will call the original procedure, then free the pixmap_info structure.
+ *  Free routine for pattern instances created from pixmaps.
  *
  *  Note that this routine does NOT release the data in the original pixmap;
  *  that remains the responsibility of the client.
  */
-static void
-free_pixmap_pattern(
-    gs_memory_t *           pmem,
-    void *                  pvpinst,
-    client_name_t           cname
-)
+static void pixmap_free_notify (gs_memory_t * mem, void *vpinst)
 {
-    gs_pattern1_instance_t *pinst = (gs_pattern1_instance_t *)pvpinst;
-    pixmap_info *ppmap = pinst->templat.client_data;
+    gs_pattern1_instance_t *pinst = (gs_pattern1_instance_t *)vpinst;
 
-    ppmap->free_proc(pmem, pvpinst, cname);
-    gs_free_object(pmem, ppmap, cname);
+    gs_free_object(mem, pinst->client_data, "pixmap_free_notify");
 }
 
 /*
@@ -808,10 +811,10 @@ static int bitmap_paint(gs_image_enum * pen, gs_data_image_t * pim,
 static int
 mask_PaintProc(const gs_client_color * pcolor, gs_gstate * pgs)
 {
-    const pixmap_info *ppmap = gs_getpattern(pcolor)->client_data;
+    int code;
+    const pixmap_info *ppmap = (pixmap_info *)gs_get_pattern_client_data(pcolor);
     const gs_depth_bitmap *pbitmap = &(ppmap->bitmap);
-    gs_image_enum *pen =
-    gs_image_enum_alloc(gs_gstate_memory(pgs), "mask_PaintProc");
+    gs_image_enum *pen = gs_image_enum_alloc(gs_gstate_memory(pgs), "mask_PaintProc");
     gs_image1_t mask;
 
     if (pen == 0)
@@ -820,12 +823,14 @@ mask_PaintProc(const gs_client_color * pcolor, gs_gstate * pgs)
     mask.Width = pbitmap->size.x;
     mask.Height = pbitmap->size.y;
     gs_image_init(pen, &mask, false, false, pgs);
-    return bitmap_paint(pen, (gs_data_image_t *) & mask, pbitmap, pgs);
+    code = bitmap_paint(pen, (gs_data_image_t *) & mask, pbitmap, pgs);
+    gs_free_object(gs_gstate_memory(pgs), pen, "mask_PaintProc");
+    return code;
 }
 static int
 image_PaintProc(const gs_client_color * pcolor, gs_gstate * pgs)
 {
-    const pixmap_info *ppmap = gs_getpattern(pcolor)->client_data;
+    const pixmap_info *ppmap = gs_get_pattern_client_data(pcolor);
     const gs_depth_bitmap *pbitmap = &(ppmap->bitmap);
     gs_image_enum *pen =
         gs_image_enum_alloc(gs_gstate_memory(pgs), "image_PaintProc");
@@ -896,6 +901,7 @@ image_PaintProc(const gs_client_color * pcolor, gs_gstate * pgs)
                                      (gs_data_image_t *)&image,
                                      pgs )) >= 0 &&
         (code = bitmap_paint(pen, (gs_data_image_t *) & image, pbitmap, pgs)) >= 0) {
+        gs_free_object(gs_gstate_memory(pgs), pen, "image_PaintProc");
         return gs_grestore(pgs);
     }
     /* Failed above, need to undo the gsave */
@@ -922,7 +928,7 @@ bitmap_paint(gs_image_enum * pen, gs_data_image_t * pim,
     else
         for (n = pim->Height; n > 0 && code >= 0; dp += raster, --n)
             code = gs_image_next(pen, dp, nbytes, &used);
-    code1 = gs_image_cleanup_and_free_enum(pen, pgs);
+    code1 = gs_image_cleanup(pen, pgs);
     if (code >= 0 && code1 < 0)
         code = code1;
     return code;
@@ -939,7 +945,7 @@ int pixmap_high_level_pattern(gs_gstate * pgs)
     gs_color_space *pcs;
     gs_pattern1_instance_t *pinst =
         (gs_pattern1_instance_t *)gs_currentcolor(pgs)->pattern;
-    const pixmap_info *ppmap = ppat->client_data;
+    const pixmap_info *ppmap = (const pixmap_info *)gs_get_pattern_client_data((const gs_client_color *)&pdc->ccolor);
 
     code = gx_pattern_cache_add_dummy_entry(pgs, pinst, pgs->device->color_info.depth);
     if (code < 0)
@@ -1132,7 +1138,6 @@ gs_makepixmappattern(
     pat.XStep = (float)pbitmap->size.x;
     pat.YStep = (float)pbitmap->size.y;
     pat.PaintProc = (mask ? pixmap_remap_mask_pattern : pixmap_remap_image_pattern);
-    pat.client_data = ppmap;
 
     /* set the ctm to be the identity */
     gs_currentmatrix(pgs, &smat);
@@ -1158,9 +1163,8 @@ gs_makepixmappattern(
         if (!mask && (white_index >= (1 << pbitmap->pix_depth)))
             pinst->uses_mask = false;
 
-        /* overwrite the free procedure for the pattern instance */
-        ppmap->free_proc = pinst->rc.free;
-        pinst->rc.free = free_pixmap_pattern;
+        pinst->client_data = ppmap;
+        pinst->notify_free = pixmap_free_notify;
 
         /*
          * Since the PaintProcs don't reference the saved color space or
@@ -1645,7 +1649,7 @@ typedef struct gx_dc_serialized_tile_s {
 } gx_dc_serialized_tile_t;
 
 enum {
-    TILE_IS_LOCKED   = 0x80000000,
+    TILE_IS_LOCKED   = (int)0x80000000,
     TILE_HAS_OVERLAP = 0x40000000,
     TILE_IS_SIMPLE   = 0x20000000,
     TILE_USES_TRANSP = 0x10000000,
@@ -1664,9 +1668,9 @@ gx_dc_pattern_write_raster(gx_color_tile *ptile, int64_t offset, byte *data,
     int left = *psize;
     int64_t offset1 = offset;
 
-    size_b = sizeof(gx_strip_bitmap) +
+    size_b = (int)sizeof(gx_strip_bitmap) +
          ptile->tbits.size.y * ptile->tbits.raster * ptile->tbits.num_planes;
-    size_c = ptile->tmask.data ? sizeof(gx_strip_bitmap) + ptile->tmask.size.y * ptile->tmask.raster : 0;
+    size_c = ptile->tmask.data ? (int)sizeof(gx_strip_bitmap) + ptile->tmask.size.y * ptile->tmask.raster : 0;
     if (data == NULL) {
         *psize = sizeof(gx_dc_serialized_tile_t) + size_b + size_c;
         return 0;
@@ -2117,8 +2121,22 @@ gx_dc_pattern_read(
             /* the following works for raster or clist patterns */
             cache_space_needed = buf.size_b + buf.size_c;
         }
+
+        /* Free up any unlocked patterns if needed */
         gx_pattern_cache_ensure_space((gs_gstate *)pgs, cache_space_needed);
 
+        /* If the pattern tile is already in the cache, make sure it isn't locked */
+        /* The lock will be reset below, but the read logic needs to finish loading the pattern. */
+        ptile = &(pgs->pattern_cache->tiles[buf.id % pgs->pattern_cache->num_tiles]);
+        if (ptile->id != gs_no_id && ptile->is_locked) {
+            /* we shouldn't have miltiple tiles locked, but check if OK before unlocking */
+            if (ptile->id != buf.id)
+                return_error(gs_error_unregistered);	/* can't unlock some other tile in this slot */
+            code = gx_pattern_cache_entry_set_lock((gs_gstate *)pgs, buf.id, false);        /* make sure not locked */
+            if (code < 0)
+                return code;	/* can't happen since we call ensure_space above, but Coverity doesn't know that */
+        }
+        /* get_entry will free the tile in the cache slot if it isn't empty */
         code = gx_pattern_cache_get_entry((gs_gstate *)pgs, /* Break 'const'. */
                         buf.id, &ptile);
         if (code < 0)

@@ -1,4 +1,4 @@
-# Copyright (C) 2001-2019 Artifex Software, Inc.
+# Copyright (C) 2001-2020 Artifex Software, Inc.
 # All Rights Reserved.
 #
 # This software is provided AS-IS with no warranty, either express or
@@ -581,6 +581,35 @@ MSVC_VERSION=14
 MSVC_VERSION=15
 !endif
 !if "$(_NMAKE_VER)" == "14.24.28314.0"
+# VS2019 (Toolset v142)
+MSVC_VERSION=16
+!endif
+!if "$(_NMAKE_VER)" == "14.24.28315.0"
+# VS2019 (Toolset v142 - update)
+MSVC_VERSION=16
+MS_TOOLSET_VERSION=14.24.28315
+!endif
+!if "$(_NMAKE_VER)" == "14.24.28316.0"
+# VS2019 (Toolset v142 - update)
+MSVC_VERSION=16
+MS_TOOLSET_VERSION=14.24.28316
+!endif
+!if "$(_NMAKE_VER)" == "14.25.28614.0"
+# VS2019 (Toolset v142 - update)
+MSVC_VERSION=16
+MS_TOOLSET_VERSION=14.25.28614
+!endif
+!if "$(_NMAKE_VER)" == "14.26.28805.0"
+# VS2019 (Toolset v142 - update)
+MSVC_VERSION=16
+MS_TOOLSET_VERSION=14.26.28805
+!endif
+!if "$(_NMAKE_VER)" == "14.26.28806.0"
+# VS2019 (Toolset v142 - update)
+MSVC_VERSION=16
+MS_TOOLSET_VERSION=14.26.28806
+!endif
+!if "$(_NMAKE_VER)" == "14.27.29111.0"
 # VS2019 (Toolset v142)
 MSVC_VERSION=16
 !endif

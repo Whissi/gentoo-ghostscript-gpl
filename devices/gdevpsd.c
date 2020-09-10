@@ -1,4 +1,4 @@
-/* Copyright (C) 2001-2019 Artifex Software, Inc.
+/* Copyright (C) 2001-2020 Artifex Software, Inc.
    All Rights Reserved.
 
    This software is provided AS-IS with no warranty, either express or
@@ -129,7 +129,7 @@ RELOC_PTRS_END
 static int
 psd_spec_op(gx_device *dev_, int op, void *data, int datasize)
 {
-    if (op == gxdso_supports_devn) {
+    if (op == gxdso_supports_devn || op == gxdso_skip_icc_component_validation) {
         return true;
     }
     return gdev_prn_dev_spec_op(dev_, op, data, datasize);
@@ -1262,11 +1262,10 @@ psd_write_image_data(psd_write_ctx *xc, gx_device_printer *pdev)
     if (sep_line == NULL)
         return_error(gs_error_VMerror);
 
-    code = gx_downscaler_init_planar_trapped(&ds, (gx_device *)pdev, &params, num_comp,
-                                             psd_dev->downscale.downscale_factor, 0, bpc, bpc,
-                                             psd_dev->downscale.trap_w,
-                                             psd_dev->downscale.trap_h,
-                                             psd_dev->downscale.trap_order);
+    code = gx_downscaler_init_planar(&ds, (gx_device *)pdev,
+                                     bpc, bpc, num_comp,
+                                     &psd_dev->downscale,
+                                     &params);
     if (code < 0)
         goto cleanup;
 

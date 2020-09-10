@@ -1,4 +1,4 @@
-/* Copyright (C) 2001-2019 Artifex Software, Inc.
+/* Copyright (C) 2001-2020 Artifex Software, Inc.
    All Rights Reserved.
 
    This software is provided AS-IS with no warranty, either express or
@@ -1096,8 +1096,8 @@ clist_image_plane_data(gx_image_enum_common_t * info,
             pie->color_map_is_known = true;
             if (code >= 0) {
                 uint want_known = ctm_known | clip_path_known |
-                            op_bm_tk_known | opacity_alpha_known |
-                            shape_alpha_known | alpha_known |
+                            op_bm_tk_known | ais_known |
+                            fill_alpha_known | stroke_alpha_known | fill_adjust_known |
                             (pie->color_space.id == gs_no_id ? 0 :
                                                      color_space_known);
 
@@ -1110,6 +1110,8 @@ clist_image_plane_data(gx_image_enum_common_t * info,
             if (code < 0)
                 return code;
             if (pie->uses_color) {
+                gs_int_point color_phase;
+
                 /* We want to write the color taking into account the entire image so */
                 /* we set re.rect_nbands from pie->ymin and pie->ymax so that we will */
                 /* make the decision to write 'all_bands' the same for the whole image */
@@ -1120,6 +1122,14 @@ clist_image_plane_data(gx_image_enum_common_t * info,
                 code = cmd_put_drawing_color(cdev, re.pcls, &pie->dcolor,
                                              &re, devn_not_tile_fill);
                 if (code < 0)
+                    return code;
+                /* see if phase informaiton must be inserted in the command list */
+                /* if so, go ahead and do it for all_bands */
+                if ( pie->dcolor.type->get_phase(&pie->dcolor, &color_phase) &&
+                     (color_phase.x != re.pcls->tile_phase.x ||
+                      color_phase.y != re.pcls->tile_phase.y ) &&
+                     (code = cmd_set_tile_phase_generic(cdev, re.pcls,
+                                                        color_phase.x, color_phase.y, true)) < 0  )
                     return code;
             }
             if (entire_box.p.x != 0 || entire_box.p.y != 0 ||
@@ -1828,10 +1838,10 @@ clist_image_unknowns(gx_device *dev, const clist_image_enum *pie)
     uint unknown = 0;
 
     /*
-     * Determine if the CTM, color space, and clipping region (and, for
-     * masked images or images with CombineWithColor, the current color)
-     * are unknown. Set the device state in anticipation of the values
-     * becoming known.
+     * Determine if the CTM, color space, fill_adjust and clipping region,
+     * (and, for masked images or images with CombineWithColor, the current
+     * color) are unknown. Set the device state in anticipation of the
+     * values becoming known.
      */
     if (cdev->gs_gstate.ctm.xx != pgs->ctm.xx ||
         cdev->gs_gstate.ctm.xy != pgs->ctm.xy ||
@@ -1846,13 +1856,17 @@ clist_image_unknowns(gx_device *dev, const clist_image_enum *pie)
     if (pie->color_space.id == gs_no_id) { /* masked image */
         cdev->color_space.space = 0; /* for GC */
     } else {                    /* not masked */
-        if (cdev->color_space.id == pie->color_space.id) {
-            /* The color space pointer might not be valid: update it. */
-            cdev->color_space.space = pie->color_space.space;
-        } else {
+        if (cdev->color_space.id != pie->color_space.id ||
+            cdev->color_space.space != pie->color_space.space) {
             unknown |= color_space_known;
+            cdev->color_space.space = pie->color_space.space;
             cdev->color_space = pie->color_space;
         }
+    }
+    if (cdev->gs_gstate.fill_adjust.x != pgs->fill_adjust.x ||
+        cdev->gs_gstate.fill_adjust.y != pgs->fill_adjust.y) {
+        unknown |= fill_adjust_known;
+        cdev->gs_gstate.fill_adjust = pgs->fill_adjust;
     }
     if (cmd_check_clip_path(cdev, pie->pcpath))
         unknown |= clip_path_known;
@@ -1874,17 +1888,17 @@ clist_image_unknowns(gx_device *dev, const clist_image_enum *pie)
         cdev->gs_gstate.text_knockout = pgs->text_knockout;
         cdev->gs_gstate.renderingintent = pgs->renderingintent;
     }
-    if (cdev->gs_gstate.opacity.alpha != pgs->opacity.alpha) {
-        unknown |= opacity_alpha_known;
-        cdev->gs_gstate.opacity.alpha = pgs->opacity.alpha;
+    if (cdev->gs_gstate.alphaisshape != pgs->alphaisshape) {
+        unknown |= ais_known;
+        cdev->gs_gstate.alphaisshape = pgs->alphaisshape;
     }
-    if (cdev->gs_gstate.shape.alpha != pgs->shape.alpha) {
-        unknown |= shape_alpha_known;
-        cdev->gs_gstate.shape.alpha = pgs->shape.alpha;
+    if (cdev->gs_gstate.strokeconstantalpha != pgs->strokeconstantalpha) {
+        unknown |= stroke_alpha_known;
+        cdev->gs_gstate.strokeconstantalpha = pgs->strokeconstantalpha;
     }
-    if (cdev->gs_gstate.alpha != pgs->alpha) {
-        unknown |= alpha_known;
-        cdev->gs_gstate.alpha = pgs->alpha;
+    if (cdev->gs_gstate.fillconstantalpha != pgs->fillconstantalpha) {
+        unknown |= fill_alpha_known;
+        cdev->gs_gstate.fillconstantalpha = pgs->fillconstantalpha;
     }
     return unknown;
 }

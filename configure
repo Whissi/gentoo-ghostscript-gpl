@@ -620,6 +620,7 @@ ac_includes_default="\
 #endif"
 
 ac_subst_vars='LTLIBOBJS
+CFLAGS_VISIBILITY
 ARCH_AUTOCONF_HEADER
 AUXEXTRALIBS
 LDFLAGSAUX
@@ -628,6 +629,7 @@ CFLAGSAUX_DEBUG
 CFLAGSAUX_STANDARD
 CAPOPTAUX
 GCFLAGSAUX
+CFLAGSAUX
 CCAUX
 JPX_SSE_CFLAGS
 CFLAGS_SANITIZE
@@ -820,6 +822,22 @@ FONTCONFIG_CFLAGS
 HAVE_FONTCONFIG
 UTF8DEVS
 HAVE_LIBIDN
+TESS_CXXFLAGS
+TESS_NEON
+TESS_SSE4_1
+TESS_FMA
+TESS_AVX2
+TESS_AVX
+OCR_VERSION
+OCR_DEVS
+TESSERACTDIR
+LEPTONICADIR
+TESSERACTINCLUDE
+LEPTONICAINCLUDE
+TESSERACT_LIBS
+ac_ct_CXX
+CXXFLAGS
+CXX
 RECURSIVE_MUTEXATTR
 PTHREAD_LIBS
 SYNC
@@ -910,6 +928,7 @@ enable_sse2
 enable_threadsafe
 with_large_color_index
 enable_threading
+with_tesseract
 with_libiconv
 with_libidn
 with_libpaper
@@ -941,6 +960,7 @@ with_gpdl
 enable_compile_inits
 with_drivers
 with_driversfile
+with_openprinting
 enable_hidden_visibility
 enable_dynamic
 with_fontpath
@@ -963,6 +983,9 @@ LDFLAGS
 LIBS
 CPPFLAGS
 CPP
+CXX
+CXXFLAGS
+CCC
 XMKMF'
 
 
@@ -1618,6 +1641,7 @@ Optional Packages:
   --with-arch_h=<arch.h to use>
                           Use a custom arch.h (must be an absolute path)
 
+  --without-tesseract     do not try to use the Tesseract library for OCR
   --with-libiconv=[no/gnu/native]
                           use the libiconv library
   --without-libidn        Do not use libidn to support Unicode passwords
@@ -1704,6 +1728,8 @@ Some influential environment variables:
   CPPFLAGS    (Objective) C/C++ preprocessor flags, e.g. -I<include dir> if
               you have headers in a nonstandard directory <include dir>
   CPP         C preprocessor
+  CXX         C++ compiler command
+  CXXFLAGS    C++ compiler flags
   XMKMF       Path to xmkmf, Makefile generator for X Window System
 
 Use these variables to override the choices made by `configure' or to help
@@ -2473,6 +2499,90 @@ $as_echo "$ac_res" >&6; }
   eval $as_lineno_stack; ${as_lineno_stack:+:} unset as_lineno
 
 } # ac_fn_c_check_decl
+
+# ac_fn_cxx_try_compile LINENO
+# ----------------------------
+# Try to compile conftest.$ac_ext, and return whether this succeeded.
+ac_fn_cxx_try_compile ()
+{
+  as_lineno=${as_lineno-"$1"} as_lineno_stack=as_lineno_stack=$as_lineno_stack
+  rm -f conftest.$ac_objext
+  if { { ac_try="$ac_compile"
+case "(($ac_try" in
+  *\"* | *\`* | *\\*) ac_try_echo=\$ac_try;;
+  *) ac_try_echo=$ac_try;;
+esac
+eval ac_try_echo="\"\$as_me:${as_lineno-$LINENO}: $ac_try_echo\""
+$as_echo "$ac_try_echo"; } >&5
+  (eval "$ac_compile") 2>conftest.err
+  ac_status=$?
+  if test -s conftest.err; then
+    grep -v '^ *+' conftest.err >conftest.er1
+    cat conftest.er1 >&5
+    mv -f conftest.er1 conftest.err
+  fi
+  $as_echo "$as_me:${as_lineno-$LINENO}: \$? = $ac_status" >&5
+  test $ac_status = 0; } && {
+	 test -z "$ac_cxx_werror_flag" ||
+	 test ! -s conftest.err
+       } && test -s conftest.$ac_objext; then :
+  ac_retval=0
+else
+  $as_echo "$as_me: failed program was:" >&5
+sed 's/^/| /' conftest.$ac_ext >&5
+
+	ac_retval=1
+fi
+  eval $as_lineno_stack; ${as_lineno_stack:+:} unset as_lineno
+  as_fn_set_status $ac_retval
+
+} # ac_fn_cxx_try_compile
+
+# ac_fn_cxx_try_link LINENO
+# -------------------------
+# Try to link conftest.$ac_ext, and return whether this succeeded.
+ac_fn_cxx_try_link ()
+{
+  as_lineno=${as_lineno-"$1"} as_lineno_stack=as_lineno_stack=$as_lineno_stack
+  rm -f conftest.$ac_objext conftest$ac_exeext
+  if { { ac_try="$ac_link"
+case "(($ac_try" in
+  *\"* | *\`* | *\\*) ac_try_echo=\$ac_try;;
+  *) ac_try_echo=$ac_try;;
+esac
+eval ac_try_echo="\"\$as_me:${as_lineno-$LINENO}: $ac_try_echo\""
+$as_echo "$ac_try_echo"; } >&5
+  (eval "$ac_link") 2>conftest.err
+  ac_status=$?
+  if test -s conftest.err; then
+    grep -v '^ *+' conftest.err >conftest.er1
+    cat conftest.er1 >&5
+    mv -f conftest.er1 conftest.err
+  fi
+  $as_echo "$as_me:${as_lineno-$LINENO}: \$? = $ac_status" >&5
+  test $ac_status = 0; } && {
+	 test -z "$ac_cxx_werror_flag" ||
+	 test ! -s conftest.err
+       } && test -s conftest$ac_exeext && {
+	 test "$cross_compiling" = yes ||
+	 test -x conftest$ac_exeext
+       }; then :
+  ac_retval=0
+else
+  $as_echo "$as_me: failed program was:" >&5
+sed 's/^/| /' conftest.$ac_ext >&5
+
+	ac_retval=1
+fi
+  # Delete the IPA/IPO (Inter Procedural Analysis/Optimization) information
+  # created by the PGI compiler (conftest_ipa8_conftest.oo), as it would
+  # interfere with the next link command; also delete a directory that is
+  # left behind by Apple's compiler.  We do this before executing the actions.
+  rm -rf conftest.dSYM conftest_ipa8_conftest.oo
+  eval $as_lineno_stack; ${as_lineno_stack:+:} unset as_lineno
+  as_fn_set_status $ac_retval
+
+} # ac_fn_cxx_try_link
 cat >config.log <<_ACEOF
 This file contains any messages produced by compilers while
 running configure, to aid debugging if configure makes a mistake.
@@ -4481,7 +4591,7 @@ INSTALL_CONTRIB="install-contrib-extras"
 
 if test x"$enable_contrib" = x; then
     case $host in
-      *-mingw*|*-msys*|*-cygwin*)
+      *-mingw*|*-msys*)
         { $as_echo "$as_me:${as_lineno-$LINENO}: WARNING: disabling contrib devices" >&5
 $as_echo "$as_me: WARNING: disabling contrib devices" >&2;}
         enable_contrib=no
@@ -4510,33 +4620,38 @@ fi
 
 
 CC_OPT_FLAGS_TO_TRY="-O -DNDEBUG"
+CC_VISIBILITY_FLAGS_TO_TRY=""
 SET_DT_SONAME="-soname="
 CFLAGS_LARGEFILE=""
 
 case $host in
         *-linux*|*-gnu)
-        if test $ac_cv_c_compiler_gnu = yes; then
+        if test $GCC = yes; then
             CC_OPT_FLAGS_TO_TRY="-O2 -DNDEBUG"
             CC_DBG_FLAGS_TO_TRY="-gdwarf-2 -g3 -O0"
+            CC_VISIBILITY_FLAGS_TO_TRY="-fvisibility=hidden"
         fi
         ;;
         *bsd*)
-        if test $ac_cv_c_compiler_gnu = yes; then
+        if test $GCC = yes; then
             CC_OPT_FLAGS_TO_TRY="-O2 -DNDEBUG"
             CC_DBG_FLAGS_TO_TRY="-gdwarf-2 -g3 -O0"
+            CC_VISIBILITY_FLAGS_TO_TRY="-fvisibility=hidden"
         fi
         ;;
         *-darwin*)
-        if test $ac_cv_c_compiler_gnu = yes; then
+        if test $GCC = yes; then
             CC_OPT_FLAGS_TO_TRY="-O2 -DNDEBUG"
             CC_DBG_FLAGS_TO_TRY="-gdwarf-2 -g3 -O0"
+            CC_VISIBILITY_FLAGS_TO_TRY="-fvisibility=hidden"
         fi
         SET_DT_SONAME=""
         ;;
-        *-mingw*|*-msys*|*-cygwin*)
-        if test $ac_cv_c_compiler_gnu = yes; then
+        *-mingw*|*-msys*)
+        if test $GCC = yes; then
             CC_OPT_FLAGS_TO_TRY="-O2 -DNDEBUG"
             CC_DBG_FLAGS_TO_TRY="-gdwarf-2 -g3 -O0"
+            CC_VISIBILITY_FLAGS_TO_TRY="-fvisibility=hidden"
         fi
         SET_DT_SONAME=""
         ;;
@@ -4544,21 +4659,23 @@ case $host in
         CC_OPT_FLAGS_TO_TRY="-O2 -DNDEBUG"
         CFLAGS_LARGEFILE="-D_LARGEFILE_SOURCE -D_LARGEFILE64_SOURCE -D_FILE_OFFSET_BITS=64"
         # the trailing space is required!
-        if test $ac_cv_c_compiler_gnu = no; then
+        if test $GCC = no; then
             SET_DT_SONAME="-h "
         fi
-        if test $ac_cv_c_compiler_gnu = yes; then
+        if test $GCC = yes; then
             CC_OPT_FLAGS_TO_TRY="-O2 -DNDEBUG"
             CC_DBG_FLAGS_TO_TRY="-gdwarf-2 -g3 -O0"
+            CC_VISIBILITY_FLAGS_TO_TRY="-fvisibility=hidden"
         else
             CC_DBG_FLAGS_TO_TRY="-g -O0"
         fi
         ;;
         *-aix*)
-        if test $ac_cv_c_compiler_gnu = yes; then
+        if test $GCC = yes; then
             CC_OPT_FLAGS_TO_TRY="-O2 -DNDEBUG"
             CC_DBG_FLAGS_TO_TRY="-gdwarf-2 -g3 -O0"
             SET_DT_SONAME="so"
+            CC_VISIBILITY_FLAGS_TO_TRY="-fvisibility=hidden"
         fi
         ;;
 esac
@@ -4566,7 +4683,7 @@ esac
 
 
 
-if test $ac_cv_c_compiler_gnu = yes; then
+if test $GCC = yes; then
     cflags_to_try="-Wall -Wstrict-prototypes -Wundef \
 -Wmissing-declarations -Wmissing-prototypes -Wwrite-strings \
 -fno-strict-aliasing -Werror=declaration-after-statement \
@@ -4610,11 +4727,17 @@ _ACEOF
 if ac_fn_c_try_compile "$LINENO"; then :
 
                CFLAGS="$CFLAGS -DHAVE_RESTRICT=1"
+               if test x"$host" = x"$build" ; then
+                   CFLAGSAUX="$CFLAGSAUX -DHAVE_RESTRICT=1"
+               fi
                { $as_echo "$as_me:${as_lineno-$LINENO}: result: yes" >&5
 $as_echo "yes" >&6; }
 else
 
                CFLAGS="$CFLAGS -DHAVE_RESTRICT=0"
+               if test x"$host" = x"$build" ; then
+                   CFLAGSAUX="$CFLAGSAUX -DHAVE_RESTRICT=0"
+               fi
                { $as_echo "$as_me:${as_lineno-$LINENO}: result: no" >&5
 $as_echo "no" >&6; }
 fi
@@ -4635,10 +4758,10 @@ ARCH_CONF_HEADER=
 
 if test x"$with_arch_h" = x""; then
     case $host in
-          x86_64*-mingw*|x86_64*-msys*|x86_64*-cygwin*)
+          x86_64*-mingw*|x86_64*-msys*)
             ARCH_CONF_HEADER="\$(GLSRCDIR)/../arch/windows-x64-msvc.h"
           ;;
-          *-mingw*|*-msys*|*-cygwin*)
+          *-mingw*|*-msys*)
             ARCH_CONF_HEADER="\$(GLSRCDIR)/../arch/windows-x86-msvc.h"
           ;;
           *-darwin*)
@@ -4742,6 +4865,31 @@ rm -f core conftest.err conftest.$ac_objext conftest.$ac_ext
     CFLAGS=$old_cflags
 done
 
+CFLAGS_VISIBILITY=""
+
+for flag in $CC_VISIBILITY_FLAGS_TO_TRY; do
+    CFLAGS="$CFLAGS $flag"
+    cat confdefs.h - <<_ACEOF >conftest.$ac_ext
+/* end confdefs.h.  */
+
+int
+main ()
+{
+return 0;
+  ;
+  return 0;
+}
+_ACEOF
+if ac_fn_c_try_compile "$LINENO"; then :
+
+        echo "   $flag"
+        CFLAGS_VISIBILITY="$CFLAGS_VISIBILITY $flag"
+
+fi
+rm -f core conftest.err conftest.$ac_objext conftest.$ac_ext
+    CFLAGS=$old_cflags
+done
+
 { $as_echo "$as_me:${as_lineno-$LINENO}: result:  ...done." >&5
 $as_echo " ...done." >&6; }
 
@@ -4770,7 +4918,7 @@ _ACEOF
 if ac_fn_c_try_link "$LINENO"; then :
   CFLAGS_SANITIZE="$CFLAGS"
 else
-  CFLAGS_SANITIZE="****************ADDRESS_SANITIZER_NOT_SUPPORTED*********************"
+  CFLAGS_SANITIZE="'****************ADDRESS_SANITIZER_NOT_SUPPORTED*********************'"
 fi
 rm -f core conftest.err conftest.$ac_objext \
     conftest$ac_exeext conftest.$ac_ext
@@ -6647,6 +6795,528 @@ fi
 
 
 
+TESSERACTDIR=tesseract
+LEPTONICADIR=leptonica
+OCR_VERSION=0
+LEPTONICAINCLUDE=
+TESSERACTINCLUDE=
+TESSERACT_LIBS=
+OCR_DEVS=
+
+
+# Check whether --with-tesseract was given.
+if test "${with_tesseract+set}" = set; then :
+  withval=$with_tesseract;
+fi
+
+
+if test x$with_tesseract != xno; then
+  { $as_echo "$as_me:${as_lineno-$LINENO}: checking for local Tesseract library source" >&5
+$as_echo_n "checking for local Tesseract library source... " >&6; }
+  if test -d $srcdir/tesseract && test -d $srcdir/leptonica; then
+    { $as_echo "$as_me:${as_lineno-$LINENO}: result: yes" >&5
+$as_echo "yes" >&6; }
+    ac_ext=cpp
+ac_cpp='$CXXCPP $CPPFLAGS'
+ac_compile='$CXX -c $CXXFLAGS $CPPFLAGS conftest.$ac_ext >&5'
+ac_link='$CXX -o conftest$ac_exeext $CXXFLAGS $CPPFLAGS $LDFLAGS conftest.$ac_ext $LIBS >&5'
+ac_compiler_gnu=$ac_cv_cxx_compiler_gnu
+
+    ac_ext=cpp
+ac_cpp='$CXXCPP $CPPFLAGS'
+ac_compile='$CXX -c $CXXFLAGS $CPPFLAGS conftest.$ac_ext >&5'
+ac_link='$CXX -o conftest$ac_exeext $CXXFLAGS $CPPFLAGS $LDFLAGS conftest.$ac_ext $LIBS >&5'
+ac_compiler_gnu=$ac_cv_cxx_compiler_gnu
+if test -z "$CXX"; then
+  if test -n "$CCC"; then
+    CXX=$CCC
+  else
+    if test -n "$ac_tool_prefix"; then
+  for ac_prog in g++ c++ gpp aCC CC cxx cc++ cl.exe FCC KCC RCC xlC_r xlC
+  do
+    # Extract the first word of "$ac_tool_prefix$ac_prog", so it can be a program name with args.
+set dummy $ac_tool_prefix$ac_prog; ac_word=$2
+{ $as_echo "$as_me:${as_lineno-$LINENO}: checking for $ac_word" >&5
+$as_echo_n "checking for $ac_word... " >&6; }
+if ${ac_cv_prog_CXX+:} false; then :
+  $as_echo_n "(cached) " >&6
+else
+  if test -n "$CXX"; then
+  ac_cv_prog_CXX="$CXX" # Let the user override the test.
+else
+as_save_IFS=$IFS; IFS=$PATH_SEPARATOR
+for as_dir in $PATH
+do
+  IFS=$as_save_IFS
+  test -z "$as_dir" && as_dir=.
+    for ac_exec_ext in '' $ac_executable_extensions; do
+  if as_fn_executable_p "$as_dir/$ac_word$ac_exec_ext"; then
+    ac_cv_prog_CXX="$ac_tool_prefix$ac_prog"
+    $as_echo "$as_me:${as_lineno-$LINENO}: found $as_dir/$ac_word$ac_exec_ext" >&5
+    break 2
+  fi
+done
+  done
+IFS=$as_save_IFS
+
+fi
+fi
+CXX=$ac_cv_prog_CXX
+if test -n "$CXX"; then
+  { $as_echo "$as_me:${as_lineno-$LINENO}: result: $CXX" >&5
+$as_echo "$CXX" >&6; }
+else
+  { $as_echo "$as_me:${as_lineno-$LINENO}: result: no" >&5
+$as_echo "no" >&6; }
+fi
+
+
+    test -n "$CXX" && break
+  done
+fi
+if test -z "$CXX"; then
+  ac_ct_CXX=$CXX
+  for ac_prog in g++ c++ gpp aCC CC cxx cc++ cl.exe FCC KCC RCC xlC_r xlC
+do
+  # Extract the first word of "$ac_prog", so it can be a program name with args.
+set dummy $ac_prog; ac_word=$2
+{ $as_echo "$as_me:${as_lineno-$LINENO}: checking for $ac_word" >&5
+$as_echo_n "checking for $ac_word... " >&6; }
+if ${ac_cv_prog_ac_ct_CXX+:} false; then :
+  $as_echo_n "(cached) " >&6
+else
+  if test -n "$ac_ct_CXX"; then
+  ac_cv_prog_ac_ct_CXX="$ac_ct_CXX" # Let the user override the test.
+else
+as_save_IFS=$IFS; IFS=$PATH_SEPARATOR
+for as_dir in $PATH
+do
+  IFS=$as_save_IFS
+  test -z "$as_dir" && as_dir=.
+    for ac_exec_ext in '' $ac_executable_extensions; do
+  if as_fn_executable_p "$as_dir/$ac_word$ac_exec_ext"; then
+    ac_cv_prog_ac_ct_CXX="$ac_prog"
+    $as_echo "$as_me:${as_lineno-$LINENO}: found $as_dir/$ac_word$ac_exec_ext" >&5
+    break 2
+  fi
+done
+  done
+IFS=$as_save_IFS
+
+fi
+fi
+ac_ct_CXX=$ac_cv_prog_ac_ct_CXX
+if test -n "$ac_ct_CXX"; then
+  { $as_echo "$as_me:${as_lineno-$LINENO}: result: $ac_ct_CXX" >&5
+$as_echo "$ac_ct_CXX" >&6; }
+else
+  { $as_echo "$as_me:${as_lineno-$LINENO}: result: no" >&5
+$as_echo "no" >&6; }
+fi
+
+
+  test -n "$ac_ct_CXX" && break
+done
+
+  if test "x$ac_ct_CXX" = x; then
+    CXX="g++"
+  else
+    case $cross_compiling:$ac_tool_warned in
+yes:)
+{ $as_echo "$as_me:${as_lineno-$LINENO}: WARNING: using cross tools not prefixed with host triplet" >&5
+$as_echo "$as_me: WARNING: using cross tools not prefixed with host triplet" >&2;}
+ac_tool_warned=yes ;;
+esac
+    CXX=$ac_ct_CXX
+  fi
+fi
+
+  fi
+fi
+# Provide some information about the compiler.
+$as_echo "$as_me:${as_lineno-$LINENO}: checking for C++ compiler version" >&5
+set X $ac_compile
+ac_compiler=$2
+for ac_option in --version -v -V -qversion; do
+  { { ac_try="$ac_compiler $ac_option >&5"
+case "(($ac_try" in
+  *\"* | *\`* | *\\*) ac_try_echo=\$ac_try;;
+  *) ac_try_echo=$ac_try;;
+esac
+eval ac_try_echo="\"\$as_me:${as_lineno-$LINENO}: $ac_try_echo\""
+$as_echo "$ac_try_echo"; } >&5
+  (eval "$ac_compiler $ac_option >&5") 2>conftest.err
+  ac_status=$?
+  if test -s conftest.err; then
+    sed '10a\
+... rest of stderr output deleted ...
+         10q' conftest.err >conftest.er1
+    cat conftest.er1 >&5
+  fi
+  rm -f conftest.er1 conftest.err
+  $as_echo "$as_me:${as_lineno-$LINENO}: \$? = $ac_status" >&5
+  test $ac_status = 0; }
+done
+
+{ $as_echo "$as_me:${as_lineno-$LINENO}: checking whether we are using the GNU C++ compiler" >&5
+$as_echo_n "checking whether we are using the GNU C++ compiler... " >&6; }
+if ${ac_cv_cxx_compiler_gnu+:} false; then :
+  $as_echo_n "(cached) " >&6
+else
+  cat confdefs.h - <<_ACEOF >conftest.$ac_ext
+/* end confdefs.h.  */
+
+int
+main ()
+{
+#ifndef __GNUC__
+       choke me
+#endif
+
+  ;
+  return 0;
+}
+_ACEOF
+if ac_fn_cxx_try_compile "$LINENO"; then :
+  ac_compiler_gnu=yes
+else
+  ac_compiler_gnu=no
+fi
+rm -f core conftest.err conftest.$ac_objext conftest.$ac_ext
+ac_cv_cxx_compiler_gnu=$ac_compiler_gnu
+
+fi
+{ $as_echo "$as_me:${as_lineno-$LINENO}: result: $ac_cv_cxx_compiler_gnu" >&5
+$as_echo "$ac_cv_cxx_compiler_gnu" >&6; }
+if test $ac_compiler_gnu = yes; then
+  GXX=yes
+else
+  GXX=
+fi
+ac_test_CXXFLAGS=${CXXFLAGS+set}
+ac_save_CXXFLAGS=$CXXFLAGS
+{ $as_echo "$as_me:${as_lineno-$LINENO}: checking whether $CXX accepts -g" >&5
+$as_echo_n "checking whether $CXX accepts -g... " >&6; }
+if ${ac_cv_prog_cxx_g+:} false; then :
+  $as_echo_n "(cached) " >&6
+else
+  ac_save_cxx_werror_flag=$ac_cxx_werror_flag
+   ac_cxx_werror_flag=yes
+   ac_cv_prog_cxx_g=no
+   CXXFLAGS="-g"
+   cat confdefs.h - <<_ACEOF >conftest.$ac_ext
+/* end confdefs.h.  */
+
+int
+main ()
+{
+
+  ;
+  return 0;
+}
+_ACEOF
+if ac_fn_cxx_try_compile "$LINENO"; then :
+  ac_cv_prog_cxx_g=yes
+else
+  CXXFLAGS=""
+      cat confdefs.h - <<_ACEOF >conftest.$ac_ext
+/* end confdefs.h.  */
+
+int
+main ()
+{
+
+  ;
+  return 0;
+}
+_ACEOF
+if ac_fn_cxx_try_compile "$LINENO"; then :
+
+else
+  ac_cxx_werror_flag=$ac_save_cxx_werror_flag
+	 CXXFLAGS="-g"
+	 cat confdefs.h - <<_ACEOF >conftest.$ac_ext
+/* end confdefs.h.  */
+
+int
+main ()
+{
+
+  ;
+  return 0;
+}
+_ACEOF
+if ac_fn_cxx_try_compile "$LINENO"; then :
+  ac_cv_prog_cxx_g=yes
+fi
+rm -f core conftest.err conftest.$ac_objext conftest.$ac_ext
+fi
+rm -f core conftest.err conftest.$ac_objext conftest.$ac_ext
+fi
+rm -f core conftest.err conftest.$ac_objext conftest.$ac_ext
+   ac_cxx_werror_flag=$ac_save_cxx_werror_flag
+fi
+{ $as_echo "$as_me:${as_lineno-$LINENO}: result: $ac_cv_prog_cxx_g" >&5
+$as_echo "$ac_cv_prog_cxx_g" >&6; }
+if test "$ac_test_CXXFLAGS" = set; then
+  CXXFLAGS=$ac_save_CXXFLAGS
+elif test $ac_cv_prog_cxx_g = yes; then
+  if test "$GXX" = yes; then
+    CXXFLAGS="-g -O2"
+  else
+    CXXFLAGS="-g"
+  fi
+else
+  if test "$GXX" = yes; then
+    CXXFLAGS="-O2"
+  else
+    CXXFLAGS=
+  fi
+fi
+ac_ext=cpp
+ac_cpp='$CXXCPP $CPPFLAGS'
+ac_compile='$CXX -c $CXXFLAGS $CPPFLAGS conftest.$ac_ext >&5'
+ac_link='$CXX -o conftest$ac_exeext $CXXFLAGS $CPPFLAGS $LDFLAGS conftest.$ac_ext $LIBS >&5'
+ac_compiler_gnu=$ac_cv_cxx_compiler_gnu
+
+
+cat confdefs.h - <<_ACEOF >conftest.$ac_ext
+/* end confdefs.h.  */
+
+int
+main ()
+{
+return 0;
+  ;
+  return 0;
+}
+_ACEOF
+if ac_fn_cxx_try_compile "$LINENO"; then :
+  HAVE_CXX_COMPILER=yes
+else
+  HAVE_CXX_COMPILER=no
+fi
+rm -f core conftest.err conftest.$ac_objext conftest.$ac_ext
+    if test x$HAVE_CXX_COMPILER != xyes; then
+      { $as_echo "$as_me:${as_lineno-$LINENO}: WARNING: Disabling tesseract as no working C++ compiler" >&5
+$as_echo "$as_me: WARNING: Disabling tesseract as no working C++ compiler" >&2;}
+    else
+                        { $as_echo "$as_me:${as_lineno-$LINENO}: checking sse4.1 support" >&5
+$as_echo_n "checking sse4.1 support... " >&6; }
+      save_cxxflags=$CXXFLAGS
+      TESS_CXXFLAGS=""
+      CXXFLAGS="$CXXFLAGS -msse4.1"
+
+      TESS_SSE4_1=""
+      cat confdefs.h - <<_ACEOF >conftest.$ac_ext
+/* end confdefs.h.  */
+#include <emmintrin.h>
+                          #include <smmintrin.h>
+int
+main ()
+{
+__m128i input1;
+                          unsigned char buf1[128];
+                          input1 = _mm_loadu_si128((const __m128i *)buf1);
+                          input1 = _mm_hadd_epi32(input1, input1);
+                          return(0);
+
+  ;
+  return 0;
+}
+_ACEOF
+if ac_fn_cxx_try_link "$LINENO"; then :
+  TESS_SSE4_1="-msse4.1"
+else
+  TESS_SSE4_1=""
+fi
+rm -f core conftest.err conftest.$ac_objext \
+    conftest$ac_exeext conftest.$ac_ext
+
+      if test "x$TESS_SSE4_1" != x; then
+        { $as_echo "$as_me:${as_lineno-$LINENO}: result: yes" >&5
+$as_echo "yes" >&6; }
+        TESS_CXXFLAGS="$TESS_CXXFLAGS -DHAVE_SSE4_1"
+      else
+        { $as_echo "$as_me:${as_lineno-$LINENO}: result: no" >&5
+$as_echo "no" >&6; }
+      fi
+
+      { $as_echo "$as_me:${as_lineno-$LINENO}: checking avx support" >&5
+$as_echo_n "checking avx support... " >&6; }
+      CXXFLAGS="$save_cxxflags -mavx"
+
+      TESS_AVX=""
+      cat confdefs.h - <<_ACEOF >conftest.$ac_ext
+/* end confdefs.h.  */
+#include <immintrin.h>
+int
+main ()
+{
+__m256d input1 = _mm256_setzero_pd();
+                          input1 = _mm256_hadd_pd(input1, input1);
+                          return(0);
+  ;
+  return 0;
+}
+_ACEOF
+if ac_fn_cxx_try_link "$LINENO"; then :
+  TESS_AVX="-mavx"
+else
+  TESS_AVX=""
+fi
+rm -f core conftest.err conftest.$ac_objext \
+    conftest$ac_exeext conftest.$ac_ext
+
+      if test "x$TESS_AVX" != x; then
+        { $as_echo "$as_me:${as_lineno-$LINENO}: result: yes" >&5
+$as_echo "yes" >&6; }
+        TESS_CXXFLAGS="$TESS_CXXFLAGS -DHAVE_AVX"
+      else
+        { $as_echo "$as_me:${as_lineno-$LINENO}: result: no" >&5
+$as_echo "no" >&6; }
+      fi
+
+      { $as_echo "$as_me:${as_lineno-$LINENO}: checking avx2 support" >&5
+$as_echo_n "checking avx2 support... " >&6; }
+      CXXFLAGS="$save_cxxflags -mavx2"
+
+      TESS_AVX2=""
+      cat confdefs.h - <<_ACEOF >conftest.$ac_ext
+/* end confdefs.h.  */
+#include <immintrin.h>
+int
+main ()
+{
+__m256i input1;
+                          unsigned char buf1[256];
+                          input1 = _mm256_loadu_si256((const __m256i *)buf1);
+                          input1 = _mm256_adds_epu8(input1, input1);
+                          return(0);
+  ;
+  return 0;
+}
+_ACEOF
+if ac_fn_cxx_try_link "$LINENO"; then :
+  TESS_AVX2="-mavx2"
+else
+  TESS_AVX2=""
+fi
+rm -f core conftest.err conftest.$ac_objext \
+    conftest$ac_exeext conftest.$ac_ext
+
+      if test "x$TESS_AVX2" != x; then
+        { $as_echo "$as_me:${as_lineno-$LINENO}: result: yes" >&5
+$as_echo "yes" >&6; }
+        TESS_CXXFLAGS="$TESS_CXXFLAGS -DHAVE_AVX2"
+      else
+        { $as_echo "$as_me:${as_lineno-$LINENO}: result: no" >&5
+$as_echo "no" >&6; }
+      fi
+
+      { $as_echo "$as_me:${as_lineno-$LINENO}: checking fma support" >&5
+$as_echo_n "checking fma support... " >&6; }
+      CXXFLAGS="$save_cxxflags -mfma"
+
+      TESS_FMA=""
+      cat confdefs.h - <<_ACEOF >conftest.$ac_ext
+/* end confdefs.h.  */
+#include <immintrin.h>
+int
+main ()
+{
+__m256d input1 = _mm256_setzero_pd();
+                          input1 = _mm256_fmadd_pd(input1, input1, input1);
+                          return(0);
+  ;
+  return 0;
+}
+_ACEOF
+if ac_fn_cxx_try_link "$LINENO"; then :
+  TESS_FMA="-mfma"
+else
+  TESS_FMA=""
+fi
+rm -f core conftest.err conftest.$ac_objext \
+    conftest$ac_exeext conftest.$ac_ext
+
+      if test "x$TESS_FMA" != x; then
+        { $as_echo "$as_me:${as_lineno-$LINENO}: result: yes" >&5
+$as_echo "yes" >&6; }
+        TESS_CXXFLAGS="$TESS_CXXFLAGS -DHAVE_FMA"
+      else
+        { $as_echo "$as_me:${as_lineno-$LINENO}: result: no" >&5
+$as_echo "no" >&6; }
+      fi
+
+      { $as_echo "$as_me:${as_lineno-$LINENO}: checking neon support" >&5
+$as_echo_n "checking neon support... " >&6; }
+      CXXFLAGS="$save_cxxflags -mfpu=neon -mcpu=cortex-a53"
+
+      TESS_NEON=""
+      cat confdefs.h - <<_ACEOF >conftest.$ac_ext
+/* end confdefs.h.  */
+#include "arm_neon.h"
+int
+main ()
+{
+int32x4_t round = vdupq_n_s32(10);
+                         return(0);
+  ;
+  return 0;
+}
+_ACEOF
+if ac_fn_cxx_try_link "$LINENO"; then :
+  TESS_NEON="-mfpu=neon -mcpu=cortex-a53 -D__ARM_NEON__"
+else
+  TESS_NEON=""
+fi
+rm -f core conftest.err conftest.$ac_objext \
+    conftest$ac_exeext conftest.$ac_ext
+
+      if test "x$TESS_NEON" != x; then
+        { $as_echo "$as_me:${as_lineno-$LINENO}: result: yes" >&5
+$as_echo "yes" >&6; }
+        TESS_CXXFLAGS="$TESS_CXXFLAGS -DHAVE_NEON"
+      else
+        { $as_echo "$as_me:${as_lineno-$LINENO}: result: no" >&5
+$as_echo "no" >&6; }
+      fi
+
+      CXXFLAGS="$save_cxxflags"
+
+      OCR_VERSION=1
+      OCR_DEVS="\$(DD)ocr.dev \$(DD)hocr.dev \$(DD)pdfocr8.dev \$(DD)pdfocr24.dev \$(DD)pdfocr32.dev"
+      LEPTONICAINCLUDE="include base/leptonica.mak"
+      TESSERACTINCLUDE="include base/tesseract.mak"
+      TESSERACT_LIBS="-lstdc++"
+    fi
+    ac_ext=c
+ac_cpp='$CPP $CPPFLAGS'
+ac_compile='$CC -c $CFLAGS $CPPFLAGS conftest.$ac_ext >&5'
+ac_link='$CC -o conftest$ac_exeext $CFLAGS $CPPFLAGS $LDFLAGS conftest.$ac_ext $LIBS >&5'
+ac_compiler_gnu=$ac_cv_c_compiler_gnu
+
+  else
+    { $as_echo "$as_me:${as_lineno-$LINENO}: result: no" >&5
+$as_echo "no" >&6; }
+  fi
+fi
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
 
 # Check whether --with-libiconv was given.
 if test "${with_libiconv+set}" = set; then :
@@ -7635,7 +8305,7 @@ $as_echo "yes" >&6; }
         SHARE_ZLIB=0
         ZLIBDIR=$srcdir/zlib
 
-        if test x"$ac_cv_c_compiler_gnu" = x"yes"; then
+        if test x"$GCC" = x"yes"; then
           ZLIBCFLAGS="-Wno-write-strings"
         fi
   else
@@ -7734,7 +8404,24 @@ $as_echo "yes" >&6; }
           SHARE_LIBPNG=0
           LIBPNGDIR=$srcdir/libpng
           PNGDEVS="$PNGDEVS_ALL"
-  else
+          case $host in
+            *powerpc*)
+                # Building on PPC with gcc, disable libpng's PPC specific
+                # optimizations: we don't include the source file for it
+                # and it only applies to reading, which we don't use.
+                if test $GCC = yes; then
+                  CFLAGS="$CFLAGS -DPNG_POWERPC_VSX_OPT=0"
+                fi
+            ;;
+            *arm64*|*aarch64*)
+                # Building on arm64 with gcc, disable libpng's neon
+                # optimizations.
+                if test $GCC = yes; then
+                  CFLAGS="$CFLAGS -DPNG_ARM_NEON_OPT=0"
+                fi
+            ;;
+          esac
+ else
           { $as_echo "$as_me:${as_lineno-$LINENO}: result: no" >&5
 $as_echo "no" >&6; }
           { $as_echo "$as_me:${as_lineno-$LINENO}: checking for png_create_write_struct in -lpng" >&5
@@ -8133,6 +8820,11 @@ $as_echo "$as_me: Could not find local copy of libtiff. Disabling tiff and xps o
         ;;
 esac
 
+
+if test x"$SHARE_LIBTIFF" != x"$SHARE_LIBJPEG" ; then
+    as_fn_error $? "Mixing local libtiff with shared libjpeg not supported" "$LINENO" 5
+fi
+
 CGLAGS_STORE=$CFLAGS
 CFLAGS=-Wno-misleading-indentation
 cat confdefs.h - <<_ACEOF >conftest.$ac_ext
@@ -8187,7 +8879,7 @@ if test x"$SHARE_LIBTIFF" = x"0" ; then
       fi
       cd "$olddir"
 
-      if test x"$ac_cv_c_compiler_gnu" = x"yes"; then
+      if test x"$GCC" = x"yes"; then
         TIFFCFLAGS="-Wno-write-strings $CFLAGS_NMI $CFLAGS_NUD -DJPEG_LIB_MK1_OR_12BIT=0"
       fi
       # if we're building with our own libjpeg, or we have another libjpeg available, allow jpeg compression in TIFF
@@ -8659,7 +9351,7 @@ fi
 
 
 case $host in
-    *-mingw*|*-msys*|*-cygwin*)
+    *-mingw*|*-msys*)
         { $as_echo "$as_me:${as_lineno-$LINENO}: WARNING: disabling the ijs device" >&5
 $as_echo "$as_me: WARNING: disabling the ijs device" >&2;}
         with_ijs=no
@@ -8783,7 +9475,7 @@ $as_echo "yes" >&6; }
           JBIG2_AUTOCONF_CFLAGS="-DUSE_LDF_JB2 -DMAC -DMAC_OS_X_BUILD -fsigned-char"
         ;;
         *-aix*)
-          if test $ac_cv_c_compiler_gnu = yes; then
+          if test $GCC = yes; then
             JBIG2_AUTOCONF_CFLAGS="-DUSE_LDF_JB2 -fsigned-char -DLINUX=1 -DFORTE"
           else
             JBIG2_AUTOCONF_CFLAGS="-DUSE_LDF_JB2 -qchars=signed -DLINUX=1 -DFORTE"
@@ -8804,7 +9496,7 @@ $as_echo "no" >&6; }
 fi
 
 JB2_STDINT_TYPES_IN=
-JBIG2DEC_REQ=0.16
+JBIG2DEC_REQ=0.19
 
 if test "x$JBIG2_DECODER" = x; then
 
@@ -8996,7 +9688,7 @@ $as_echo "yes" >&6; }
           JPX_AUTOCONF_CFLAGS="-DUSE_LWF_JP2 -DMAC -DMAC_OS_X_BUILD"
         ;;
         *-aix*)
-          if test $ac_cv_c_compiler_gnu = yes; then
+          if test $GCC = yes; then
             JPX_AUTOCONF_CFLAGS="-DUSE_LWF_JP2 -fsigned-char -DLINUX=1 -DFORTE"
           else
             JPX_AUTOCONF_CFLAGS="-DUSE_LWF_JP2 -qchars=signed -DLINUX=1 -DFORTE"
@@ -9050,7 +9742,7 @@ done
 JPX_SSE_CFLAGS=""
 
 if test "x$HAVE_SSE2" = "x" ; then
-  if test $ac_cv_c_compiler_gnu = yes; then
+  if test $GCC = yes; then
     JPX_SSE_CFLAGS="-U__SSE__"
   fi
 fi
@@ -9220,10 +9912,10 @@ $as_echo_n "checking for URF support... " >&6; }
 $as_echo "yes" >&6; }
     ENABLEURF="\$(D_)URF_INCLUDED\$(_D)"
     URF_DEVS='urfgray urfrgb urfcmyk'
-    GPDL_URF_TOP_OBJ=$(GPDLOBJ)/$(GPDL_URF_TOP_OBJ_FILE)
-    URF_INCLUDE=$(I_)$(URFSRCDIR)$(_I)
-    URF_DEV=$(GLD)urfd.dev
-    SURFX_H=SURFX_H=$(URFSRCDIR)$(D)surfx.h
+    GPDL_URF_TOP_OBJ="\$(GPDLOBJ)/\$(GPDL_URF_TOP_OBJ_FILE)"
+    URF_INCLUDE="\$(I_)\$(URFSRCDIR)\$(_I)"
+    URF_DEV="\$(GLD)urfd.dev"
+    SURFX_H="\$(URFSRCDIR)\$(D)surfx.h"
 fi
 fi
 
@@ -10514,7 +11206,15 @@ IBM_DEVS='ibmpro jetp3852'
 OKI_DEVS='oki182 okiibm oki4w'
 JAPAN_DEVS='lips4 lips4v ljet4pjl lj4dithp dj505j picty180 lips2p bjc880j pr201 pr150 pr1000 pr1000_4 jj100 bj10v bj10vh mj700v2c mj500c mj6000c mj8000c fmpr fmlbp ml600 lbp310 lbp320 md50Mono md50Eco md1xMono escpage lp2000 npdl rpdl'
 MISC_PDEVS='uniprint ap3250 atx23 atx24 atx38 itk24i itk38 coslw2p coslwxl declj250 fs600 imagen lj250 m8510 necp6 oce9050 r4081 sj48 tek4696 t4693d2 t4693d4 t4693d8 dl2100 la50 la70 la75 la75plus ln03 xes md2k md5k gdi samsunggdi'
-OPVP_DEVS='opvp oprp'
+
+
+# Check whether --with-openprinting was given.
+if test "${with_openprinting+set}" = set; then :
+  withval=$with_openprinting; OPVP_DEVS='opvp oprp'
+else
+  OPVP_DEVS=''
+fi
+
 
 ETS_HALFTONING_DEVS='rinkj'
 
@@ -10553,11 +11253,12 @@ while test -n "$drivers"; do
         PRINTERS)
                 P_DEVS0="$P_DEVS0 $CANON_DEVS $EPSON_DEVS $HP_DEVS $LEXMARK_DEVS $BROTHER_DEVS $APPLE_DEVS $IBM_DEVS $OKI_DEVS $JAPAN_DEVS $MISC_PDEVS $ETS_HALFTONING_DEVS $URF_DEVS"
                 IJS_DEVS0="$IJSDEVS"
-                if test x$ac_cv_lib_dl_dlopen != xno -a x$found_iconv != xno; then
-                        P_DEVS0="$P_DEVS0 $OPVP_DEVS"
-                else
-                        { $as_echo "$as_me:${as_lineno-$LINENO}: WARNING: Unable to include opvp/oprp driver due to missing or disabled prerequisites..." >&5
-$as_echo "$as_me: WARNING: Unable to include opvp/oprp driver due to missing or disabled prerequisites..." >&2;}
+                if test x"$OPVP_DEVS" != x"" ; then
+                  if test x$ac_cv_lib_dl_dlopen != xno -a x$found_iconv != xno; then
+                    P_DEVS0="$P_DEVS0 $OPVP_DEVS"
+                  else
+                    as_fn_error $? "Unable to include opvp/oprp driver due to missing or disabled prerequisites..." "$LINENO" 5
+                  fi
                 fi
                 ;;
         FILES)
@@ -10822,7 +11523,7 @@ if test "${enable_hidden_visibility+set}" = set; then :
 fi
 
 
-if test x$hide_symbols = xyes -a $ac_cv_c_compiler_gnu = yes; then
+if test x$hide_symbols = xyes -a $GCC = yes; then
     attr_default="__attribute__((visibility(\\\"default\\\")))"
     attr_hidden="__attribute__((visibility(\\\"hidden\\\")))"
 fi
@@ -10834,7 +11535,7 @@ case $host in
       PCL_DYNAMIC_LDFLAGS="-shared -Wl,\$(LD_SET_DT_SONAME)\$(LDFLAGS_SO_PREFIX)\$(PCL_SONAME_MAJOR)"
       XPS_DYNAMIC_LDFLAGS="-shared -Wl,\$(LD_SET_DT_SONAME)\$(LDFLAGS_SO_PREFIX)\$(XPS_SONAME_MAJOR)"
       PDL_DYNAMIC_LDFLAGS="-shared -Wl,\$(LD_SET_DT_SONAME)\$(LDFLAGS_SO_PREFIX)\$(GPDL_SONAME_MAJOR)"
-      if test $ac_cv_c_compiler_gnu = yes; then
+      if test $GCC = yes; then
         # GCC high level flag
         DYNAMIC_LIBS="-rdynamic"
       else
@@ -10842,7 +11543,7 @@ case $host in
       fi
       SO_LIB_EXT=".so"
     ;;
-    *-mingw*|*-msys*|*-cygwin*)
+    *-mingw*|*-msys*)
       if test x$hide_symbols = xyes; then
         attr_default="__declspec(dllexport)"
         attr_hidden=""
@@ -10871,6 +11572,32 @@ case $host in
       GPDL_SONAME_MAJOR="lib\$(GPDL${libname3}"
       GPDL_SONAME_MAJOR_MINOR="lib\$(GPDL${libname2}"
     ;;
+    *-cygwin*)
+      if test x$hide_symbols = xyes; then
+        attr_default="__declspec(dllexport)"
+        attr_hidden=""
+      fi
+      GS_DYNAMIC_LDFLAGS="-shared -Wl,--out-implib=\$(BINDIR)/lib\$(GS_SO_BASE).dll.a $_ldflags"
+      PCL_DYNAMIC_LDFLAGS="-shared -Wl,--out-implib=\$(BINDIR)/lib\$(PCL_SO_BASE).dll.a $_ldflags"
+      XPS_DYNAMIC_LDFLAGS="-shared -Wl,--out-implib=\$(BINDIR)/lib\$(XPS_SO_BASE).dll.a $_ldflags"
+      PDL_DYNAMIC_LDFLAGS="-shared -Wl,--out-implib=\$(BINDIR)/lib\$(PDL_SO_BASE).dll.a $_ldflags"
+      SO_LIB_EXT=""
+      DLL_EXT=".dll"
+      SO_LIB_VERSION_SEPARATOR="-"
+      # make sure the import library doesn't link a program against the DLL with the minor version in it
+      GS_SONAME="lib\$(GS${libname1}"
+      GS_SONAME_MAJOR="lib\$(GS${libname3}"
+      GS_SONAME_MAJOR_MINOR="cyg\$(GS${libname2}"
+      PCL_SONAME="lib\$(PCL${libname1}"
+      PCL_SONAME_MAJOR="lib\$(PCL${libname3}"
+      PCL_SONAME_MAJOR_MINOR="cyg\$(PCL${libname2}"
+      XPS_SONAME="lib\$(XPS${libname1}"
+      XPS_SONAME_MAJOR="lib\$(XPS${libname3}"
+      XPS_SONAME_MAJOR_MINOR="cyg\$(XPS${libname2}"
+      GPDL_SONAME="lib\$(GPDL${libname1}"
+      GPDL_SONAME_MAJOR="lib\$(GPDL${libname3}"
+      GPDL_SONAME_MAJOR_MINOR="cyg\$(GPDL${libname2}"
+    ;;
     *bsd*)
       DYNAMIC_CFLAGS="-fPIC $DYNAMIC_CFLAGS"
       GS_DYNAMIC_LDFLAGS="-shared -Wl,\$(LD_SET_DT_SONAME)\$(LDFLAGS_SO_PREFIX)\$(GS_SONAME_MAJOR)"
@@ -10881,15 +11608,15 @@ case $host in
     ;;
     *-darwin*)
       DYNAMIC_CFLAGS="-fPIC $DYNAMIC_CFLAGS"
-      GS_DYNAMIC_LDFLAGS="-dynamiclib -install_name \$(GS_SONAME_MAJOR_MINOR)"
-      PCL_DYNAMIC_LDFLAGS="-dynamiclib -install_name \$(PCL_SONAME_MAJOR_MINOR)"
-      XPS_DYNAMIC_LDFLAGS="-dynamiclib -install_name \$(XPS_SONAME_MAJOR_MINOR)"
-      PDL_DYNAMIC_LDFLAGS="-dynamiclib -install_name \$(GPDL_SONAME_MAJOR_MINOR)"
+      GS_DYNAMIC_LDFLAGS="-dynamiclib -install_name $DARWIN_LDFLAGS_SO_PREFIX\$(GS_SONAME_MAJOR_MINOR)"
+      PCL_DYNAMIC_LDFLAGS="-dynamiclib -install_name $DARWIN_LDFLAGS_SO_PREFIX\$(PCL_SONAME_MAJOR_MINOR)"
+      XPS_DYNAMIC_LDFLAGS="-dynamiclib -install_name $DARWIN_LDFLAGS_SO_PREFIX\$(XPS_SONAME_MAJOR_MINOR)"
+      PDL_DYNAMIC_LDFLAGS="-dynamiclib -install_name $DARWIN_LDFLAGS_SO_PREFIX\$(GPDL_SONAME_MAJOR_MINOR)"
       DYNAMIC_LIBS=""
       SO_LIB_EXT=".dylib"
     ;;
     *-sun*|*-solaris*)
-      if test $ac_cv_c_compiler_gnu = yes; then
+      if test $GCC = yes; then
         DYNAMIC_CFLAGS="-fPIC $DYNAMIC_CFLAGS"
       else
         DYNAMIC_CFLAGS="-KPIC $DYNAMIC_CFLAGS"
@@ -10908,7 +11635,7 @@ case $host in
       SO_LIB_EXT=".so"
     ;;
     *-aix*)
-      if test $ac_cv_c_compiler_gnu = yes; then
+      if test $GCC = yes; then
         DYNAMIC_CFLAGS="-fPIC $DYNAMIC_CFLAGS"
         GCFLAGS="-Wl,-brtl -D_LARGE_FILES $GCFLAGS"
         GS_DYNAMIC_LDFLAGS="-shared -Wl,-brtl,-G -fPIC"
@@ -10927,7 +11654,7 @@ case $host in
 esac
 
 if test x$hide_symbols = xyes ; then
-  if test $ac_cv_c_compiler_gnu = yes; then
+  if test $GCC = yes; then
     DYNAMIC_CFLAGS="$DYNAMIC_CFLAGS -fvisibility=hidden"
   fi
   DYNAMIC_CFLAGS="$DYNAMIC_CFLAGS -DGSDLLEXPORT=\"$attr_default\""
@@ -12030,7 +12757,7 @@ esac
 EXEEXT=""
 
 case $host in
-    *-mingw*|*-msys*|*-cygwin*)
+    *-mingw*|*-msys*)
       EXEEXT=".exe"
     ;;
     *)
@@ -12053,7 +12780,7 @@ fi
 AUXEXEEXT=""
 
 case $build in
-    *-mingw*|*-msys*|*-cygwin*)
+    *-mingw*|*-msys*)
       AUXEXEEXT=".exe"
     ;;
     *)
@@ -12096,10 +12823,11 @@ fi
 # NOTE: Strict aliasing can cause some parts
 #       of Ghostscript to malfunction.
 # --------------------------------------------------
-if test $ac_cv_c_compiler_gnu = yes; then
+if test $GCC = yes; then
   { $as_echo "$as_me:${as_lineno-$LINENO}: checking whether to explicitly disable strict aliasing" >&5
 $as_echo_n "checking whether to explicitly disable strict aliasing... " >&6; }
   CFLAGS_backup="$CFLAGS"
+  CFLAGSAUX_backup="$CFLAGSAUX"
   CFLAGS="$CFLAGS -fno-strict-aliasing"
   cat confdefs.h - <<_ACEOF >conftest.$ac_ext
 /* end confdefs.h.  */
@@ -12117,10 +12845,14 @@ if ac_fn_c_try_compile "$LINENO"; then :
     { $as_echo "$as_me:${as_lineno-$LINENO}: result: yes" >&5
 $as_echo "yes" >&6; }
     CFLAGS_backup="$CFLAGS"
+    if test x"$host" = x"$build" ; then
+      CFLAGSAUX_backup="$CFLAGSAUX -fno-strict-aliasing"
+    fi
 
 fi
 rm -f core conftest.err conftest.$ac_objext conftest.$ac_ext
   CFLAGS="$CFLAGS_backup"
+  CFLAGSAUX="$CFLAGSAUX_backup"
 fi
 
 # --------------------------------------------------
@@ -12881,7 +13613,16 @@ fi
 
 
 
+
+if test x"$GCFLAGSAUX" = x"\$(GCFLAGS)" ; then
+    GCFLAGSAUX="$GCFLAGS"
+fi
+
+CFLAGSAUX=$(echo $CFLAGSAUX | sed -e 's/-DGS_NO_FILESYSTEM//g')
+
 SRCDIR="$srcdir"
+
+
 
 
 

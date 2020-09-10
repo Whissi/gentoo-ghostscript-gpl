@@ -1,4 +1,4 @@
-/* Copyright (C) 2001-2019 Artifex Software, Inc.
+/* Copyright (C) 2001-2020 Artifex Software, Inc.
    All Rights Reserved.
 
    This software is provided AS-IS with no warranty, either express or
@@ -493,7 +493,7 @@ gs_build_function_4(i_ctx_t *i_ctx_p, const ref *op, const gs_function_params_t 
     /* free_params will free the ops string */
 fail:
     gs_function_PtCr_free_params(&params, mem);
-    return (code < 0 ? code : gs_note_error(gs_error_rangecheck));
+    return code;
 }
 
 int make_type4_function(i_ctx_t * i_ctx_p, ref *arr, ref *pproc, gs_function_t **func)

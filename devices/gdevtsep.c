@@ -1,4 +1,4 @@
-/* Copyright (C) 2001-2019 Artifex Software, Inc.
+/* Copyright (C) 2001-2020 Artifex Software, Inc.
    All Rights Reserved.
 
    This software is provided AS-IS with no warranty, either express or
@@ -329,12 +329,9 @@ tiffscaled_print_page(gx_device_printer * pdev, gp_file * file)
 
 
     return tiff_downscale_and_print_page(pdev, tfdev->tif,
-                                         tfdev->downscale.downscale_factor,
-                                         tfdev->downscale.min_feature_size,
+                                         &tfdev->downscale,
                                          tfdev->AdjustWidth,
-                                         1, 1,
-                                         0, 0, NULL,
-                                         tfdev->downscale.ets);
+                                         1, 1);
 }
 
 static int
@@ -357,12 +354,9 @@ tiffscaled8_print_page(gx_device_printer * pdev, gp_file * file)
             tfdev->MaxStripSize);
     }
     return tiff_downscale_and_print_page(pdev, tfdev->tif,
-                                         tfdev->downscale.downscale_factor,
-                                         tfdev->downscale.min_feature_size,
+                                         &tfdev->downscale,
                                          tfdev->AdjustWidth,
-                                         8, 1,
-                                         0, 0, NULL,
-                                         0);
+                                         8, 1);
 }
 
 static void
@@ -375,7 +369,7 @@ tiff_set_rgb_fields(gx_device_tiff *tfdev)
     else if (tfdev->icc_struct->oi_profile != NULL)
         icc_profile = tfdev->icc_struct->oi_profile;
     else
-        icc_profile = tfdev->icc_struct->device_profile[0];
+        icc_profile = tfdev->icc_struct->device_profile[GS_DEFAULT_DEVICE_PROFILE];
 
     switch (icc_profile->data_cs) {
         case gsRGB:
@@ -416,12 +410,9 @@ tiffscaled24_print_page(gx_device_printer * pdev, gp_file * file)
     }
 
     return tiff_downscale_and_print_page(pdev, tfdev->tif,
-                                         tfdev->downscale.downscale_factor,
-                                         tfdev->downscale.min_feature_size,
+                                         &tfdev->downscale,
                                          tfdev->AdjustWidth,
-                                         8, 3,
-                                         0, 0, NULL,
-                                         0);
+                                         8, 3);
 }
 
 static void
@@ -459,13 +450,9 @@ tiffscaled32_print_page(gx_device_printer * pdev, gp_file * file)
     }
 
     return tiff_downscale_and_print_page(pdev, tfdev->tif,
-                                         tfdev->downscale.downscale_factor,
-                                         tfdev->downscale.min_feature_size,
+                                         &tfdev->downscale,
                                          tfdev->AdjustWidth,
-                                         8, 4,
-                                         tfdev->downscale.trap_w, tfdev->downscale.trap_h,
-                                         tfdev->downscale.trap_order,
-                                         0);
+                                         8, 4);
 }
 
 static int
@@ -485,13 +472,9 @@ tiffscaled4_print_page(gx_device_printer * pdev, gp_file * file)
                          tfdev->MaxStripSize);
 
     return tiff_downscale_and_print_page(pdev, tfdev->tif,
-                                         tfdev->downscale.downscale_factor,
-                                         tfdev->downscale.min_feature_size,
+                                         &tfdev->downscale,
                                          tfdev->AdjustWidth,
-                                         1, 4,
-                                         tfdev->downscale.trap_w, tfdev->downscale.trap_h,
-                                         tfdev->downscale.trap_order,
-                                         tfdev->downscale.ets);
+                                         1, 4);
 }
 
 /* Called when the post render ICC profile is in a different color space
@@ -525,7 +508,8 @@ tiff_set_icc_color_fields(gx_device_printer *pdev)
 static int
 tiffsep_spec_op(gx_device *dev_, int op, void *data, int datasize)
 {
-    if (op == gxdso_supports_iccpostrender || op == gxdso_supports_devn) {
+    if (op == gxdso_supports_iccpostrender || op == gxdso_supports_devn
+     || op == gxdso_skip_icc_component_validation) {
         return true;
     }
     return gdev_prn_dev_spec_op(dev_, op, data, datasize);
@@ -1791,8 +1775,8 @@ tiffsep_prn_open(gx_device * pdev)
                 &rendering_params);
         } else {
             pdev_sep->icclink = gsicc_alloc_link_dev(pdev->memory,
-                profile_struct->device_profile[0], profile_struct->postren_profile,
-                &rendering_params);
+                profile_struct->device_profile[GS_DEFAULT_DEVICE_PROFILE],
+                profile_struct->postren_profile, &rendering_params);
         }
         if (pdev_sep->icclink == NULL) {
             return_error(gs_error_VMerror);
@@ -1813,7 +1797,7 @@ tiffsep_close_sep_file(tiffsep_device *tfdev, const char *fn, int comp_num)
     int code;
 
     if (tfdev->tiff[comp_num]) {
-        TIFFCleanup(tfdev->tiff[comp_num]);
+        TIFFClose(tfdev->tiff[comp_num]);
         tfdev->tiff[comp_num] = NULL;
     }
 
@@ -1832,7 +1816,7 @@ tiffsep_close_comp_file(tiffsep_device *tfdev, const char *fn)
     int code;
 
     if (tfdev->tiff_comp) {
-        TIFFCleanup(tfdev->tiff_comp);
+        TIFFClose(tfdev->tiff_comp);
         tfdev->tiff_comp = NULL;
     }
 
@@ -2242,7 +2226,6 @@ tiffsep_print_page(gx_device_printer * pdev, gp_file * file)
     gs_parsed_file_name_t parsed;
     int plane_count = 0;  /* quiet compiler */
     int factor = tfdev->downscale.downscale_factor;
-    int mfs = tfdev->downscale.min_feature_size;
     int dst_bpc = tfdev->BitsPerComponent;
     gx_downscaler_t ds;
     int width = gx_downscaler_scale(tfdev->width, factor);
@@ -2481,10 +2464,10 @@ tiffsep_print_page(gx_device_printer * pdev, gp_file * file)
                     }
                 }
             }
-            code = gx_downscaler_init_planar_trapped(&ds, (gx_device *)pdev, &params,
-                                                     num_comp, factor, mfs, 8, dst_bpc,
-                                                     tfdev->downscale.trap_w, tfdev->downscale.trap_h,
-                                                     tfdev->downscale.trap_order);
+            code = gx_downscaler_init_planar(&ds, (gx_device *)pdev,
+                                             8, dst_bpc, num_comp,
+                                             &tfdev->downscale,
+                                             &params);
             if (code < 0)
                 goto cleanup;
             byte_width = (width * dst_bpc + 7)>>3;
@@ -2577,9 +2560,7 @@ cleanup:
             }
         }
         TIFFWriteDirectory(tfdev->tiff_comp);
-        if (fmt) {
-            code = tiffsep_close_comp_file(tfdev, pdev->fname);
-        }
+        code = tiffsep_close_comp_file(tfdev, pdev->fname);
         if (code1 < 0) {
             code = code1;
         }
@@ -2970,17 +2951,17 @@ tiff_open_s(gx_device *pdev)
 
     /* Take care of any color model changes now */
     if (pdev->icc_struct->postren_profile != NULL &&
-        pdev->icc_struct->device_profile[0]->num_comps != pdev->color_info.num_components &&
+        pdev->icc_struct->device_profile[GS_DEFAULT_DEVICE_PROFILE]->num_comps != pdev->color_info.num_components &&
         pdev->color_info.depth == 8 * pdev->color_info.num_components) {
 
         code = gx_change_color_model((gx_device*)pdev,
-            pdev->icc_struct->device_profile[0]->num_comps, 8);
+            pdev->icc_struct->device_profile[GS_DEFAULT_DEVICE_PROFILE]->num_comps, 8);
         if (code < 0)
             return code;
 
         /* Reset the device procs */
         memset(&(pdev->procs), 0, sizeof(pdev->procs));
-        switch (pdev->icc_struct->device_profile[0]->num_comps) {
+        switch (pdev->icc_struct->device_profile[GS_DEFAULT_DEVICE_PROFILE]->num_comps) {
         case 1:
             pdev->procs = tiffscaled8_procs;
             pdev->color_info.dither_colors = 0;

@@ -1,4 +1,4 @@
-/* Copyright (C) 2001-2019 Artifex Software, Inc.
+/* Copyright (C) 2001-2020 Artifex Software, Inc.
    All Rights Reserved.
 
    This software is provided AS-IS with no warranty, either express or
@@ -55,6 +55,7 @@
 #include "gdevpccm.h"
 #include "gscdefs.h"
 #include "gxdownscale.h"
+#include "gxdevsop.h"
 
 /* ------ The device descriptors ------ */
 
@@ -79,6 +80,7 @@ static dev_proc_get_params(png_get_params_downscale);
 static dev_proc_put_params(png_put_params_downscale);
 static dev_proc_get_params(png_get_params_downscale_mfs);
 static dev_proc_put_params(png_put_params_downscale_mfs);
+static dev_proc_dev_spec_op(pngalpha_spec_op);
 
 typedef struct gx_device_png_s gx_device_png;
 struct gx_device_png_s {
@@ -280,7 +282,8 @@ static const gx_device_procs pngalpha_procs =
         pngalpha_fillpage,
         NULL,	/* push_transparency_state */
         NULL,	/* pop_transparency_state */
-        pngalpha_put_image
+        pngalpha_put_image,
+        pngalpha_spec_op               /* dev_spec_op */\
 };
 
 const gx_device_pngalpha gs_pngalpha_device = {
@@ -451,8 +454,6 @@ do_png_print_page(gx_device_png * pdev, gp_file * file, bool monod)
     png_text text_png;
     int dst_bpc, src_bpc;
     bool errdiff = 0;
-    int factor = pdev->downscale.downscale_factor;
-    int mfs = pdev->downscale.min_feature_size;
 
     bool invert = false, endian_swap = false, bg_needed = false;
     png_byte bit_depth = 0;
@@ -468,14 +469,15 @@ do_png_print_page(gx_device_png * pdev, gp_file * file, bool monod)
     png_color *palettep;
     png_uint_16 num_palette;
     png_uint_32 valid = 0;
+    int upfactor, downfactor;
 
     /* Sanity check params */
-    if (factor < 1)
-        factor = 1;
-    if (mfs < 1)
-        mfs = 1;
-    else if (mfs > 2)
-        mfs = 2;
+    if (pdev->downscale.downscale_factor < 1)
+        pdev->downscale.downscale_factor = 1;
+    if (pdev->downscale.min_feature_size < 1)
+        pdev->downscale.min_feature_size = 1;
+    else if (pdev->downscale.min_feature_size > 2)
+        pdev->downscale.min_feature_size = 2;
 
     /* Slightly nasty, but it saves us duplicating this entire routine. */
     if (monod) {
@@ -503,11 +505,13 @@ do_png_print_page(gx_device_png * pdev, gp_file * file, bool monod)
     png_set_write_fn(png_ptr, file, my_png_write, my_png_flush);
 
     /* set the file information here */
+    gx_downscaler_decode_factor(pdev->downscale.downscale_factor,
+                                &upfactor, &downfactor);
     /* resolution is in pixels per meter vs. dpi */
     x_pixels_per_unit =
-        (png_uint_32) (pdev->HWResolution[0] * (100.0 / 2.54) / factor + 0.5);
+        (png_uint_32) (pdev->HWResolution[0] * upfactor * (100.0 / 2.54) / downfactor + 0.5);
     y_pixels_per_unit =
-        (png_uint_32) (pdev->HWResolution[1] * (100.0 / 2.54) / factor + 0.5);
+        (png_uint_32) (pdev->HWResolution[1] * upfactor * (100.0 / 2.54) / downfactor + 0.5);
 
     phys_unit_type = PNG_RESOLUTION_METER;
     valid |= PNG_INFO_pHYs;
@@ -597,8 +601,13 @@ do_png_print_page(gx_device_png * pdev, gp_file * file, bool monod)
     }
     /* add comment */
     strncpy(software_key, "Software", sizeof(software_key));
-    gs_sprintf(software_text, "%s %d.%02d", gs_product,
-            (int)(gs_revision / 100), (int)(gs_revision % 100));
+    {
+        int major = (int)(gs_revision / 1000);
+        int minor = (int)(gs_revision - (major * 1000)) / 10;
+        int patch = gs_revision % 10;
+
+        gs_sprintf(software_text, "%s %d.%02d.%d", gs_product, major, minor, patch);
+    }
     text_png.compression = -1;	/* uncompressed */
     text_png.key = software_key;
     text_png.text = software_text;
@@ -609,9 +618,9 @@ do_png_print_page(gx_device_png * pdev, gp_file * file, bool monod)
     if (errdiff)
         src_bpc = 8;
     else
-        factor = 1;
-    width = pdev->width/factor;
-    height = pdev->height/factor;
+        pdev->downscale.downscale_factor = upfactor = downfactor = 1;
+    width = pdev->width * upfactor / downfactor;
+    height = pdev->height * upfactor / downfactor;
 
 #if PNG_LIBPNG_VER_MINOR >= 5
     png_set_pHYs(png_ptr, info_ptr,
@@ -627,8 +636,8 @@ do_png_print_page(gx_device_png * pdev, gp_file * file, bool monod)
 
     png_set_text(png_ptr, info_ptr, &text_png, 1);
 
-    if (pdev->icc_struct != NULL && pdev->icc_struct->device_profile[0] != NULL) {
-        cmm_profile_t *icc_profile = pdev->icc_struct->device_profile[0];
+    if (pdev->icc_struct != NULL && pdev->icc_struct->device_profile[GS_DEFAULT_DEVICE_PROFILE] != NULL) {
+        cmm_profile_t *icc_profile = pdev->icc_struct->device_profile[GS_DEFAULT_DEVICE_PROFILE];
         /* PNG can only be RGB or gray.  No CIELAB :(  */
         if (icc_profile->data_cs == gsRGB || icc_profile->data_cs == gsGRAY) {
             if (icc_profile->num_comps == pdev->color_info.num_components &&
@@ -653,8 +662,8 @@ do_png_print_page(gx_device_png * pdev, gp_file * file, bool monod)
     info_ptr->text = &text_png;
     info_ptr->num_text = 1;
     /* Set up the ICC information */
-    if (pdev->icc_struct != NULL && pdev->icc_struct->device_profile[0] != NULL) {
-        cmm_profile_t *icc_profile = pdev->icc_struct->device_profile[0];
+    if (pdev->icc_struct != NULL && pdev->icc_struct->device_profile[GS_DEFAULT_DEVICE_PROFILE] != NULL) {
+        cmm_profile_t *icc_profile = pdev->icc_struct->device_profile[GS_DEFAULT_DEVICE_PROFILE];
         /* PNG can only be RGB or gray.  No CIELAB :(  */
         if (icc_profile->data_cs == gsRGB || icc_profile->data_cs == gsGRAY) {
             if (icc_profile->num_comps == pdev->color_info.num_components &&
@@ -697,7 +706,7 @@ do_png_print_page(gx_device_png * pdev, gp_file * file, bool monod)
      * hit. So ensure that we only trigger downscales when we need them.
      */
     code = gx_downscaler_init(&ds, (gx_device *)pdev, src_bpc, dst_bpc,
-                              depth/dst_bpc, factor, mfs, NULL, 0);
+                              depth/dst_bpc, &pdev->downscale, NULL, 0);
     if (code >= 0)
     {
 #ifdef CLUSTER
@@ -1071,4 +1080,16 @@ pngalpha_copy_alpha(gx_device * dev, const byte * data, int data_x,
         gs_free_object(mem, lin, "copy_alpha(lin)");
         return code;
     }
+}
+
+static int
+pngalpha_spec_op(gx_device* pdev, int dso, void* ptr, int size)
+{
+    switch (dso)
+    {
+    case gxdso_supports_alpha:
+        return 1;
+    }
+
+    return gdev_prn_dev_spec_op(pdev, dso, ptr, size);
 }

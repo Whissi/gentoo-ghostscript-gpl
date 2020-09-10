@@ -1,4 +1,4 @@
-/* Copyright (C) 2001-2019 Artifex Software, Inc.
+/* Copyright (C) 2001-2020 Artifex Software, Inc.
    All Rights Reserved.
 
    This software is provided AS-IS with no warranty, either express or
@@ -617,7 +617,7 @@ gs_color_select_t select)
     int i = pcs->type->num_components(pcs);
     cmm_dev_profile_t *dev_profile = NULL;
     gs_color_space_index type = gs_color_space_get_index(pcs);
-    int num_src_comps = 1;
+    uchar num_src_comps = 1;
 
     /* Define the rendering intents. */
     rendering_params.black_point_comp = pgs->blackptcomp;
@@ -683,13 +683,14 @@ gs_color_select_t select)
                 return false;
 
             /* Check if the profile is DeviceN (NCLR) */
-            if (dev_profile->device_profile[0]->data_cs == gsNCHANNEL) {
+            if (dev_profile->device_profile[GS_DEFAULT_DEVICE_PROFILE]->data_cs == gsNCHANNEL) {
                 if (dev_profile->spotnames == NULL)
                     return false;
                 if (!dev_profile->spotnames->equiv_cmyk_set) {
                     /* Note that if the improper NCLR profile is used, then the
                        composite preview will be wrong. */
-                    code = gsicc_set_devicen_equiv_colors(dev, pgs, dev_profile->device_profile[0]);
+                    code = gsicc_set_devicen_equiv_colors(dev, pgs,
+                                      dev_profile->device_profile[GS_DEFAULT_DEVICE_PROFILE]);
                     if (code < 0)
                         return false;
                     dev_profile->spotnames->equiv_cmyk_set = true;
@@ -769,13 +770,7 @@ gx_remap_concrete_DGray(const gs_color_space * pcs, const frac * pconc,
                         gx_device * dev, gs_color_select_t select,
                         const cmm_dev_profile_t *dev_profile)
 {
-    if (pgs->alpha == gx_max_color_value)
-        (*pgs->cmap_procs->map_gray)
-            (pconc[0], pdc, pgs, dev, select);
-    else
-        (*pgs->cmap_procs->map_rgb_alpha)
-            (pconc[0], pconc[0], pconc[0], cv2frac(pgs->alpha),
-             pdc, pgs, dev, select);
+    (*pgs->cmap_procs->map_gray)(pconc[0], pdc, pgs, dev, select);
     return 0;
 }
 int
@@ -808,12 +803,8 @@ gx_remap_DeviceGray(const gs_client_color * pc, const gs_color_space * pcs,
     /* Save original color space and color info into dev color */
     pdc->ccolor.paint.values[0] = pc->paint.values[0];
     pdc->ccolor_valid = true;
-    if (pgs->alpha == gx_max_color_value)
-        (*pgs->cmap_procs->map_gray)
-            (fgray, pdc, pgs, dev, select);
-    else
-        (*pgs->cmap_procs->map_rgb_alpha)
-            (fgray, fgray, fgray, cv2frac(pgs->alpha), pdc, pgs, dev, select);
+
+    (*pgs->cmap_procs->map_gray)(fgray, pdc, pgs, dev, select);
     return 0;
 }
 
@@ -833,13 +824,8 @@ gx_remap_concrete_DRGB(const gs_color_space * pcs, const frac * pconc,
                        gx_device * dev, gs_color_select_t select,
                        const cmm_dev_profile_t *dev_profile)
 {
-    if (pgs->alpha == gx_max_color_value)
-        gx_remap_concrete_rgb(pconc[0], pconc[1], pconc[2],
-                              pdc, pgs, dev, select);
-    else
-        gx_remap_concrete_rgb_alpha(pconc[0], pconc[1], pconc[2],
-                                    cv2frac(pgs->alpha),
-                                    pdc, pgs, dev, select);
+
+    gx_remap_concrete_rgb(pconc[0], pconc[1], pconc[2], pdc, pgs, dev, select);
     return 0;
 }
 int
@@ -855,12 +841,8 @@ gx_remap_DeviceRGB(const gs_client_color * pc, const gs_color_space * pcs,
     pdc->ccolor.paint.values[1] = pc->paint.values[1];
     pdc->ccolor.paint.values[2] = pc->paint.values[2];
     pdc->ccolor_valid = true;
-    if (pgs->alpha == gx_max_color_value)
-        gx_remap_concrete_rgb(fred, fgreen, fblue,
-                              pdc, pgs, dev, select);
-    else
-        gx_remap_concrete_rgb_alpha(fred, fgreen, fblue, cv2frac(pgs->alpha),
-                                    pdc, pgs, dev, select);
+
+    gx_remap_concrete_rgb(fred, fgreen, fblue, pdc, pgs, dev, select);
     return 0;
 }
 
@@ -1419,7 +1401,7 @@ cmap_separation_halftoned(frac all, gx_device_color * pdc,
      const gs_gstate * pgs, gx_device * dev, gs_color_select_t select,
      const gs_color_space *pcs)
 {
-    uchar i, ncomps = dev->color_info.num_components;
+    uint i, ncomps = dev->color_info.num_components;
     bool additive = dev->color_info.polarity == GX_CINFO_POLARITY_ADDITIVE;
     frac comp_value = all;
     frac cm_comps[GX_DEVICE_COLOR_MAX_COMPONENTS];
@@ -1474,7 +1456,7 @@ static void
 cmap_separation_direct(frac all, gx_device_color * pdc, const gs_gstate * pgs,
                  gx_device * dev, gs_color_select_t select, const gs_color_space *pcs)
 {
-    uchar i, ncomps = dev->color_info.num_components;
+    uint i, ncomps = dev->color_info.num_components;
     bool additive = dev->color_info.polarity == GX_CINFO_POLARITY_ADDITIVE;
     frac comp_value = all;
     frac cm_comps[GX_DEVICE_COLOR_MAX_COMPONENTS];
@@ -1887,7 +1869,7 @@ gx_default_8bit_map_gray_color(gx_device * dev, const gx_color_value cv[])
 {
     gx_color_index color = gx_color_value_to_byte(cv[0]);
 
-    return (color == gx_no_color_index ? color ^ 1 : color);
+    return color;
 }
 
 int
@@ -2002,7 +1984,11 @@ cmyk_8bit_map_cmyk_color(gx_device * dev, const gx_color_value cv[])
         ((uint)gx_color_value_to_byte(cv[1]) << 16) +
         ((uint)gx_color_value_to_byte(cv[0]) << 24);
 
+#if ARCH_SIZEOF_GX_COLOR_INDEX > 4
+    return color;
+#else
     return (color == gx_no_color_index ? color ^ 1 : color);
+#endif
 }
 
 gx_color_index

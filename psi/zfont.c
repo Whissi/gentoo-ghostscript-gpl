@@ -1,4 +1,4 @@
-/* Copyright (C) 2001-2019 Artifex Software, Inc.
+/* Copyright (C) 2001-2020 Artifex Software, Inc.
    All Rights Reserved.
 
    This software is provided AS-IS with no warranty, either express or
@@ -41,8 +41,11 @@ static int setup_unicode_decoder(i_ctx_t *i_ctx_p, ref *Decoding);
 bool
 zfont_mark_glyph_name(const gs_memory_t *mem, gs_glyph glyph, void *ignore_data)
 {
-    return (glyph >= gs_c_min_std_encoding_glyph || glyph == GS_NO_GLYPH ? false :
-            name_mark_index(mem, (uint) glyph));
+    if (glyph == GS_NO_GLYPH)
+        return false;
+    if (glyph >= gs_c_min_std_encoding_glyph)
+        return false;
+    return name_mark_index(mem, (uint) glyph);
 }
 
 /* Get a global glyph code.  */
