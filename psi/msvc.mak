@@ -1,4 +1,4 @@
-# Copyright (C) 2001-2020 Artifex Software, Inc.
+# Copyright (C) 2001-2021 Artifex Software, Inc.
 # All Rights Reserved.
 #
 # This software is provided AS-IS with no warranty, either express or
@@ -87,7 +87,11 @@ DEFAULT_OBJ_DIR=.\$(PRODUCT_PREFIX)profobj
 !if "$(DEBUG)"=="1"
 DEFAULT_OBJ_DIR=.\$(PRODUCT_PREFIX)debugobj
 !else
+!if "$(SANITIZE)"=="1"
+DEFAULT_OBJ_DIR=.\$(PRODUCT_PREFIX)sanobj
+!else
 DEFAULT_OBJ_DIR=.\$(PRODUCT_PREFIX)obj
+!endif
 !endif
 !endif
 !endif
@@ -114,10 +118,14 @@ BINDIR=.\membin
 !if "$(DEBUG)"=="1"
 BINDIR=.\debugbin
 !else
+!if "$(SANITIZE)"=="1"
+BINDIR=.\sanbin
+!else
 !if "$(DEBUGSYM)"=="1"
 BINDIR=.\profbin
 !else
 BINDIR=.\bin
+!endif
 !endif
 !endif
 !endif
@@ -308,6 +316,12 @@ AROOTDIR=c:/gs
 GSROOTDIR=$(AROOTDIR)/gs$(GS_DOT_VERSION)
 !endif
 
+# Define the directory to look in for tesseract data.
+
+!ifndef TESSDATA
+TESSDATA=$(GSROOTDIR)/tessdata
+!endif
+
 # Define the directory that will hold documentation at runtime.
 
 !ifndef GS_DOCDIR
@@ -380,6 +394,10 @@ DEBUGSYM=0
 # WIN32 and WIN64 are mutually exclusive.  WIN32 is the default.
 !if !defined(WIN32) && (!defined(Win64) || !defined(WIN64))
 WIN32=0
+!endif
+
+!if "$(SANITIZE)"=="1" && defined(WIN64)
+!error 64bit Sanitize builds not supported by MSVC yet!
 !endif
 
 # We can build either 32-bit or 64-bit target on a 64-bit platform
@@ -672,19 +690,12 @@ ENABLE_TIFF=$(D_)TIFF_INCLUDED$(_D)
 ZSRCDIR=.\zlib
 !endif
 
-# Define which jbig2 library to use
-!if !defined(JBIG2_LIB) && (!defined(NO_LURATECH) || "$(NO_LURATECH)" != "1")
-!if exist("luratech\ldf_jb2")
-JBIG2_LIB=luratech
-!endif
-!endif
-
 !if exist("leptonica")
 LEPTONICADIR=leptonica
 !endif
 !if exist("tesseract")
 TESSERACTDIR=tesseract
-TESSCXXFLAGS=-DHAVE_AVX -DHAVE_AVX2 -DHAVE_SSE4_1 -DHAVE_FMA -D__AVX__ -D__AVX2__ -D__FMA__ -D__SSE4_1__ /EHsc /std:c++17
+TESSCXXFLAGS=-DHAVE_AVX -DHAVE_AVX2 -DHAVE_SSE4_1 -DHAVE_FMA -D__AVX__ -D__AVX2__ -D__FMA__ -D__SSE4_1__ /EHsc /std:c++17 /utf-8
 !endif
 !if defined(TESSERACTDIR) && defined(LEPTONICADIR)
 OCR_VERSION=1
@@ -696,40 +707,34 @@ OCR_VERSION=0
 JBIG2_LIB=jbig2dec
 !endif
 
-!if "$(JBIG2_LIB)" == "luratech" || "$(JBIG2_LIB)" == "ldf_jb2"
-# Set defaults for using the Luratech JB2 implementation
-!ifndef JBIG2SRCDIR
-# CSDK source code location
-JBIG2SRCDIR=luratech\ldf_jb2
-!endif
-!ifndef JBIG2_CFLAGS
-# required compiler flags
-!ifdef WIN64
-JBIG2_CFLAGS=-DUSE_LDF_JB2 -DWIN64
-!else
-JBIG2_CFLAGS=-DUSE_LDF_JB2 -DWIN32
-!endif
-!endif
-!else
 # Use jbig2dec by default. See jbig2.mak for more information.
 !ifndef JBIG2SRCDIR
 # location of included jbig2dec library source
 JBIG2SRCDIR=jbig2dec
 !endif
-!endif
 
 # Alternatively, you can build a separate DLL
 # and define SHARE_JBIG2=1 in src/winlib.mak
 
-# Define which jpeg2k library to use
-!if !defined(JPX_LIB) && (!defined(NO_LURATECH) || "$(NO_LURATECH)" != "1")
-!if exist("luratech\lwf_jp2")
-JPX_LIB=luratech
-!endif
-!endif
-
 !ifndef JPX_LIB
 JPX_LIB=openjpeg
+!endif
+
+# If $EXTRACT_DIR is unset, and the 'extract' directory exists,
+# default it to that.
+!if "$(EXTRACT_DIR)" == ""
+!   if exist("extract")
+EXTRACT_DIR=extract
+!   endif
+!endif
+
+# If $EXTRACT_DIR is set, build with Extract library.
+#
+!if "$(EXTRACT_DIR)" != ""
+!   if !exist($(EXTRACT_DIR))
+!       error Cannot find extract directory: $(EXTRACT_DIR)
+!   endif
+EXTRACT_DEVS=$(DD)docxwrite.dev
 !endif
 
 # Alternatively, you can build a separate DLL
@@ -1000,6 +1005,37 @@ MS_TOOLSET_VERSION=14.26.28806
 !if "$(_NMAKE_VER)" == "14.27.29111.0"
 # VS2019 (Toolset v142)
 MSVC_VERSION=16
+MS_TOOLSET_VERSION=14.27.29111
+!endif
+!if "$(_NMAKE_VER)" == "14.27.29112.0"
+# VS2019 (Toolset v142)
+MSVC_VERSION=16
+MS_TOOLSET_VERSION=14.27.29112
+!endif
+!if "$(_NMAKE_VER)" == "14.28.29333.0"
+# VS2019 (Toolset v142)
+MSVC_VERSION=16
+MS_TOOLSET_VERSION=14.28.29333
+!endif
+!if "$(_NMAKE_VER)" == "14.28.29334.0"
+# VS2019 (Toolset v142)
+MSVC_VERSION=16
+MS_TOOLSET_VERSION=14.28.29333
+!endif
+!if "$(_NMAKE_VER)" == "14.28.29335.0"
+# VS2019 (Toolset v142)
+MSVC_VERSION=16
+MS_TOOLSET_VERSION=14.28.29333
+!endif
+!if "$(_NMAKE_VER)" == "14.28.29336.0"
+# VS2019 (Toolset v142)
+MSVC_VERSION=16
+MS_TOOLSET_VERSION=14.28.29333
+!endif
+!if "$(_NMAKE_VER)" == "14.28.29910.0"
+# VS2019 (Toolset v142)
+MSVC_VERSION=16
+MS_TOOLSET_VERSION=14.28.29333
 !endif
 !endif
 
@@ -1320,9 +1356,9 @@ LINKLIBPATH=/LIBPATH:"$(DEVSTUDIO)\lib\$(DEVSTUDIO_TARGET)"
 !if $(MSVC_VERSION) == 16
 ! ifndef DEVSTUDIO
 !  if exist("C:\Program Files (x86)\Microsoft Visual Studio\2019\Professional")
-DEVSTUDIO_VARIANT="Professional"
+DEVSTUDIO_VARIANT=Professional
 !  else
-DEVSTUDIO_VARIANT="Community"
+DEVSTUDIO_VARIANT=Community
 !  endif
 DEVSTUDIO=C:\Program Files (x86)\Microsoft Visual Studio\2019\$(DEVSTUDIO_VARIANT)\VC\Tools\MSVC\$(MS_TOOLSET_VERSION)
 ! endif
@@ -1538,24 +1574,6 @@ JPX_SSE_CFLAGS=
 SYNC=winsync
 !endif
 
-# Luratech jp2 flags depend on the compiler version
-#
-!if "$(JPX_LIB)" == "luratech" || "$(JPX_LIB)" == "lwf_jp2"
-# Set defaults for using the Luratech JP2 implementation
-!ifndef JPXSRCDIR
-# CSDK source code location
-JPXSRCDIR=luratech\lwf_jp2
-!endif
-!ifndef JPX_CFLAGS
-# required compiler flags
-!ifdef WIN64
-JPX_CFLAGS=-DUSE_LWF_JP2 -DWIN64 -DNO_ASSEMBLY
-!else
-JPX_CFLAGS=-DUSE_LWF_JP2 -DWIN32 -DNO_ASSEMBLY
-!endif
-!endif
-!endif
-
 # OpenJPEG compiler flags
 #
 !if "$(JPX_LIB)" == "openjpeg"
@@ -1654,7 +1672,7 @@ DEVICE_DEVS11=$(DD)bmpmono.dev $(DD)bmpgray.dev $(DD)bmp16.dev $(DD)bmp256.dev $
 DEVICE_DEVS12=$(DD)bit.dev $(DD)bitrgb.dev $(DD)bitcmyk.dev $(DD)bitrgbtags.dev $(DD)chameleon.dev
 DEVICE_DEVS13=$(DD)pngmono.dev $(DD)pngmonod.dev $(DD)pnggray.dev $(DD)png16.dev $(DD)png256.dev $(DD)png16m.dev $(DD)pngalpha.dev $(DD)fpng.dev $(DD)psdcmykog.dev
 DEVICE_DEVS14=$(DD)jpeg.dev $(DD)jpeggray.dev $(DD)jpegcmyk.dev $(DD)pdfimage8.dev $(DD)pdfimage24.dev $(DD)pdfimage32.dev $(DD)PCLm.dev
-DEVICE_DEVS15=$(DD)pdfwrite.dev $(DD)ps2write.dev $(DD)eps2write.dev $(DD)txtwrite.dev $(DD)pxlmono.dev $(DD)pxlcolor.dev $(DD)xpswrite.dev $(DD)inkcov.dev $(DD)ink_cov.dev
+DEVICE_DEVS15=$(DD)pdfwrite.dev $(DD)ps2write.dev $(DD)eps2write.dev $(DD)txtwrite.dev $(DD)pxlmono.dev $(DD)pxlcolor.dev $(DD)xpswrite.dev $(DD)inkcov.dev $(DD)ink_cov.dev $(EXTRACT_DEVS)
 DEVICE_DEVS16=$(DD)bbox.dev $(DD)plib.dev $(DD)plibg.dev $(DD)plibm.dev $(DD)plibc.dev $(DD)plibk.dev $(DD)plan.dev $(DD)plang.dev $(DD)planm.dev $(DD)planc.dev $(DD)plank.dev $(DD)planr.dev
 !if "$(WITH_CUPS)" == "1"
 DEVICE_DEVS16=$(DEVICE_DEVS16) $(DD)cups.dev
@@ -1845,6 +1863,10 @@ $(GS_XE): $(GSDLL_DLL)  $(DWOBJ) $(GSCONSOLE_XE) $(GLOBJ)gp_wutf8.$(OBJ) $(TOP_M
 !if "$(PROFILE)"=="1"
 	echo /Profile >> $(PSGEN)gswin.rsp
 !endif
+!if "$(SANITIZE)"=="1"
+	echo /wholearchive:clang_rt.asan-i386.lib >> $(PSGEN)gswin.rsp
+	echo /wholearchive:clang_rt.asan_cxx-i386.lib >> $(PSGEN)gswin.rsp
+!endif
 !ifdef WIN64
 	echo /DEF:$(PSSRCDIR)\dwmain64.def /OUT:$(GS_XE) >> $(PSGEN)gswin.rsp
 !else
@@ -1859,6 +1881,10 @@ $(GSCONSOLE_XE): $(OBJC) $(GS_OBJ).res $(PSSRCDIR)\dw64c.def $(PSSRCDIR)\dw32c.d
 	echo /SUBSYSTEM:CONSOLE$(SUBSUBSYS) > $(PSGEN)gswin.rsp
 !if "$(PROFILE)"=="1"
 	echo /Profile >> $(PSGEN)gswin.rsp
+!endif
+!if "$(SANITIZE)"=="1"
+	echo /wholearchive:clang_rt.asan-i386.lib >> $(PSGEN)gswin.rsp
+	echo /wholearchive:clang_rt.asan_cxx-i386.lib >> $(PSGEN)gswin.rsp
 !endif
 !ifdef WIN64
 	echo  /DEF:$(PSSRCDIR)\dw64c.def /OUT:$(GSCONSOLE_XE) >> $(PSGEN)gswin.rsp
@@ -1875,6 +1901,9 @@ $(GSDLL_DLL): $(ECHOGS_XE) $(gs_tr) $(GS_ALL) $(DEVS_ALL) $(GSDLL_OBJS) $(GSDLL_
 !if "$(PROFILE)"=="1"
 	echo /Profile >> $(PSGEN)gswin.rsp
 !endif
+!if "$(SANITIZE)"=="1"
+	echo /wholearchive:clang_rt.asan_dll_thunk-i386.lib >> $(PSGEN)gswin.rsp
+!endif
 	$(LINK) $(LCT) @$(PSGEN)gswin.rsp $(GSDLL_OBJS) @$(gsld_tr) $(PSOBJ)gsromfs$(COMPILE_INITS).$(OBJ) @$(PSGEN)lib.rsp $(LINKLIBPATH) @$(LIBCTR) $(GSDLL_OBJ).res
 	del $(PSGEN)gswin.rsp
 
@@ -1889,6 +1918,9 @@ $(GPCL6DLL_DLL): $(ECHOGS_XE) $(GSDLL_OBJ).res $(LIBCTR) $(LIB_ALL) $(PCL_DEVS_A
 !if "$(PROFILE)"=="1"
 	echo /Profile >> $(PSGEN)gpclwin.rsp
 !endif
+!if "$(SANITIZE)"=="1"
+	echo /wholearchive:clang_rt.asan_dll_thunk-i386.lib >> $(PSGEN)gpclwin.rsp
+!endif
 	$(LINK) $(LCT) @$(PCLGEN)gpclwin.rsp $(GPCL6DLL_OBJS) @$(PCLGEN)gpclwin.tr @$(PSGEN)pcllib.rsp $(LINKLIBPATH) @$(LIBCTR) $(GSDLL_OBJ).res
 	del $(PCLGEN)gpclwin.rsp
 
@@ -1896,6 +1928,10 @@ $(GPCL_XE): $(GPCL6DLL_DLL) $(DWMAINOBJS) $(GS_OBJ).res $(TOP_MAKEFILES)
 	echo /SUBSYSTEM:CONSOLE$(SUBSUBSYS) > $(PCLGEN)gpclwin.rsp
 !if "$(PROFILE)"=="1"
 	echo /Profile >> $(PCLGEN)gpclwin.rsp
+!endif
+!if "$(SANITIZE)"=="1"
+	echo /wholearchive:clang_rt.asan-i386.lib >> $(PCLGEN)gpclwin.rsp
+	echo /wholearchive:clang_rt.asan_cxx-i386.lib >> $(PCLGEN)gpclwin.rsp
 !endif
 !ifdef WIN64
 	echo  /OUT:$(GPCL_XE) >> $(PCLGEN)gpclwin.rsp
@@ -1917,6 +1953,9 @@ $(GXPSDLL_DLL): $(ECHOGS_XE) $(GSDLL_OBJ).res $(LIBCTR) $(LIB_ALL) $(XPS_DEVS_AL
 !if "$(PROFILE)"=="1"
 	echo /Profile >> $(XPSGEN)gxpswin.rsp
 !endif
+!if "$(SANITIZE)"=="1"
+	echo /wholearchive:clang_rt.asan_dll_thunk-i386.lib >> $(PSGEN)gxpswin.rsp
+!endif
 	$(LINK) $(LCT) @$(XPSGEN)gxpswin.rsp $(GXPSDLL_OBJS) @$(XPSGEN)gxpswin.tr @$(XPSGEN)xpslib.rsp $(LINKLIBPATH) @$(LIBCTR) $(GSDLL_OBJ).res
 	del $(PCLGEN)gxpswin.rsp
 
@@ -1924,6 +1963,10 @@ $(GXPS_XE): $(GXPSDLL_DLL) $(DWMAINOBJS) $(GS_OBJ).res $(TOP_MAKEFILES)
 	echo /SUBSYSTEM:CONSOLE$(SUBSUBSYS) > $(XPSGEN)gxpswin.rsp
 !if "$(PROFILE)"=="1"
 	echo /Profile >> $(XPSGEN)gxpswin.rsp
+!endif
+!if "$(SANITIZE)"=="1"
+	echo /wholearchive:clang_rt.asan-i386.lib >> $(XPSGEN)gxpswin.rsp
+	echo /wholearchive:clang_rt.asan_cxx-i386.lib >> $(XPSGEN)gxpswin.rsp
 !endif
 !ifdef WIN64
 	echo  /OUT:$(GXPS_XE) >> $(XPSGEN)gxpswin.rsp
@@ -1957,19 +2000,22 @@ $(GPDLDLL_DLL): $(ECHOGS_XE) $(GSDLL_OBJ).res $(LIBCTR) $(LIB_ALL) $(PCL_DEVS_AL
 !if "$(PROFILE)"=="1"
 	echo /Profile >> $(GPDLGEN)gpdlwin.rsp
 !endif
+!if "$(SANITIZE)"=="1"
+	echo /wholearchive:clang_rt.asan_dll_thunk-i386.lib >> $(PSGEN)gpdlwin.rsp
+!endif
 	$(LINK) $(LCT) @$(GPDLGEN)gpdlwin.rsp $(GPDLDLL_OBJS) @$(GPDLGEN)gpdlwin.tr @$(GPDLGEN)gpdllib.rsp $(LINKLIBPATH) @$(LIBCTR) $(GSDLL_OBJ).res
 	del $(GPDLGEN)gpdlwin.rsp
 
 $(GPDL_XE): $(GPDLDLL_DLL) $(DWMAINOBJS) $(GS_OBJ).res $(TOP_MAKEFILES)
 	echo /SUBSYSTEM:CONSOLE$(SUBSUBSYS) > $(GPDLGEN)gpdlwin.rsp
 !if "$(PROFILE)"=="1"
-	echo /Profile >> $(XPSGEN)gpdlwin.rsp
+	echo /Profile >> $(GPDLGEN)gpdlwin.rsp
 !endif
-!ifdef WIN64
-	echo  /OUT:$(GPDL_XE) >> $(GPDLGEN)gpdlwin.rsp
-!else
-	echo  /OUT:$(GPDL_XE) >> $(GPDLGEN)gpdlwin.rsp
+!if "$(SANITIZE)"=="1"
+	echo /wholearchive:clang_rt.asan-i386.lib >> $(GPDLGEN)gpdlwin.rsp
+	echo /wholearchive:clang_rt.asan_cxx-i386.lib >> $(GPDLGEN)gpdlwin.rsp
 !endif
+	echo  /OUT:$(GPDL_XE) >> $(GPDLGEN)gpdlwin.rsp
 	$(LINK) $(LCT) @$(GPDLGEN)gpdlwin.rsp $(DWMAINOBJS) $(BINDIR)\$(GPDLDLL).lib $(LINKLIBPATH) @$(LIBCTR) $(GS_OBJ).res
 	del $(GPDLGEN)gpdlwin.rsp
 
@@ -1994,6 +2040,10 @@ $(GS_XE): $(GSCONSOLE_XE) $(GS_ALL) $(DEVS_ALL) $(GSDLL_OBJS) $(DWOBJNO) $(GSDLL
 !if "$(PROFILE)"=="1"
 	echo /Profile >> $(PSGEN)gswin.rsp
 !endif
+!if "$(SANITIZE)"=="1"
+	echo /wholearchive:clang_rt.asan-i386.lib >> $(PSGEN)gswin.rsp
+	echo /wholearchive:clang_rt.asan_cxx-i386.lib >> $(PSGEN)gswin.rsp
+!endif
 	$(LINK) $(LCT) @$(PSGEN)gswin.rsp $(GLOBJ)gsdll @$(PSGEN)gswin.tr $(LINKLIBPATH) @$(LIBCTR) @$(PSGEN)lib.rsp $(GSDLL_OBJ).res $(DWTRACE)
 	del $(PSGEN)gswin.tr
 	del $(PSGEN)gswin.rsp
@@ -2012,6 +2062,13 @@ $(GSCONSOLE_XE): $(ECHOGS_XE) $(gs_tr) $(GS_ALL) $(DEVS_ALL) $(GSDLL_OBJS) $(OBJ
 	echo /DEF:$(PSSRCDIR)\dw64c.def /OUT:$(GSCONSOLE_XE) >> $(PSGEN)gswin.rsp
 !else
 	echo /DEF:$(PSSRCDIR)\dw32c.def /OUT:$(GSCONSOLE_XE) >> $(PSGEN)gswin.rsp
+!endif
+!if "$(PROFILE)"=="1"
+	echo /Profile >> $(PSGEN)gswin.rsp
+!endif
+!if "$(SANITIZE)"=="1"
+	echo /wholearchive:clang_rt.asan-i386.lib >> $(PSGEN)gswin.rsp
+	echo /wholearchive:clang_rt.asan_cxx-i386.lib >> $(PSGEN)gswin.rsp
 !endif
 	$(LINK) $(LCT) @$(PSGEN)gswin.rsp $(GLOBJ)gsdll @$(PSGEN)gswin.tr $(LINKLIBPATH) @$(LIBCTR) @$(PSGEN)lib.rsp $(GS_OBJ).res $(DWTRACE)
 	del $(PSGEN)gswin.rsp
@@ -2039,6 +2096,13 @@ $(GXPS_XE): $(ECHOGS_XE) $(LIBCTR) $(LIB_ALL) $(WINMAINOBJS) $(XPS_DEVS_ALL) $(X
 	echo $(WINMAINOBJS) $(MAIN_OBJ) $(XPS_TOP_OBJS) $(INT_ARCHIVE_SOME) $(XOBJS) >> $(XPSGEN)gxpswin.tr
 	echo $(PCLOBJ)xpsromfs$(COMPILE_INITS).$(OBJ) >> $(XPSGEN)gxpswin.tr
 	echo /SUBSYSTEM:CONSOLE$(SUBSUBSYS) > $(XPSGEN)xpswin.rsp
+!if "$(PROFILE)"=="1"
+	echo /Profile >> $(PSGEN)xpswin.rsp
+!endif
+!if "$(SANITIZE)"=="1"
+	echo /wholearchive:clang_rt.asan-i386.lib >> $(XPSGEN)xpswin.rsp
+	echo /wholearchive:clang_rt.asan_cxx-i386.lib >> $(XPSGEN)xpswin.rsp
+!endif
         echo /OUT:$(GXPS_XE) >> $(XPSGEN)xpswin.rsp
 	$(LINK) $(LCT) @$(XPSGEN)xpswin.rsp @$(XPSGEN)gxpswin.tr $(LINKLIBPATH) @$(LIBCTR) @$(XPSGEN)xpslib.rsp
         del $(XPSGEN)xpswin.rsp
@@ -2053,6 +2117,13 @@ $(GPDL_XE): $(ECHOGS_XE) $(ld_tr) $(gpdl_tr) $(LIBCTR) $(LIB_ALL) $(WINMAINOBJS)
 	echo $(WINMAINOBJS) $(MAIN_OBJ) $(GPDL_PSI_TOP_OBJS) $(PCL_PXL_TOP_OBJS) $(PSI_TOP_OBJ) $(XPS_TOP_OBJ) $(XOBJS) >> $(GPDLGEN)gpdlwin.tr
 	echo $(PCLOBJ)pdlromfs$(COMPILE_INITS).$(OBJ) >> $(GPDLGEN)gpdlwin.tr
 	echo /SUBSYSTEM:CONSOLE$(SUBSUBSYS) > $(GPDLGEN)gpdlwin.rsp
+!if "$(PROFILE)"=="1"
+	echo /Profile >> $(PSGEN)gpdlwin.rsp
+!endif
+!if "$(SANITIZE)"=="1"
+	echo /wholearchive:clang_rt.asan-i386.lib >> $(GPDLGEN)gpdlwin.rsp
+	echo /wholearchive:clang_rt.asan_cxx-i386.lib >> $(GPDLGEN)gpdlwin.rsp
+!endif
         echo /OUT:$(GPDL_XE) >> $(GPDLGEN)gpdlwin.rsp
 	$(LINK) $(LCT) @$(GPDLGEN)gpdlwin.rsp @$(GPDLGEN)gpdlwin.tr $(LINKLIBPATH) @$(LIBCTR) @$(GPDLGEN)gpdllib.rsp
 	del $(GPDLGEN)gpdlwin.rsp
@@ -2154,6 +2225,32 @@ profilebsc:
 
 
 
+# -------------------- Sanitize targets --------------------- #
+# Simply set some definitions and call ourselves back         #
+
+SANITIZEDEFS=SANITIZE=1 $(RECURSIVEDEFS)
+
+sanitize:
+	nmake -f $(MAKEFILE) $(SANITIZEDEFS) FT_BRIDGE=$(FT_BRIDGE)
+
+gssanitize:
+	nmake -f $(MAKEFILE) $(SANITIZEDEFS) FT_BRIDGE=$(FT_BRIDGE) gs
+
+gpcl6sanitze:
+	nmake -f $(MAKEFILE) $(SANITIZEDEFS) FT_BRIDGE=$(FT_BRIDGE) gpcl6
+
+gxpssanitize:
+	nmake -f $(MAKEFILE) $(SANITIZEDEFS) FT_BRIDGE=$(FT_BRIDGE) gxps
+
+gpdlsanitize:
+	nmake -f $(MAKEFILE) $(SANITIZEDEFS) FT_BRIDGE=$(FT_BRIDGE) gpdl
+
+sanitizeclean:
+	nmake -f $(MAKEFILE) $(SANITIZEDEFS) FT_BRIDGE=$(FT_BRIDGE) clean
+
+sanitizebsc:
+	nmake -f $(MAKEFILE) $(SANITIZEDEFS) FT_BRIDGE=$(FT_BRIDGE) bsc
+
 # ---------------------- UFST targets ---------------------- #
 # Simply set some definitions and call ourselves back        #
 
@@ -2189,6 +2286,9 @@ ufst-lib:
 ufst-debug: ufst-lib
 	nmake -f $(MAKEFILE) $(RECURSIVEDEFS) $(UFSTBASEDEFS) $(UFSTDEBUGDEFS) UFST_CFLAGS="$(UFST_CFLAGS)"
 
+gpcl6-ufst-debug: ufst-lib
+	nmake -f $(MAKEFILE) $(RECURSIVEDEFS) $(UFSTBASEDEFS) $(UFSTDEBUGDEFS) UFST_CFLAGS="$(UFST_CFLAGS)" gpcl6
+
 ufst-debugclean: ufst-lib
 	nmake -f $(MAKEFILE) $(RECURSIVEDEFS) $(UFSTBASEDEFS) $(UFSTDEBUGDEFS) UFST_CFLAGS="$(UFST_CFLAGS)" clean
 
@@ -2197,6 +2297,9 @@ ufst-debugbsc: ufst-lib
 
 ufst: ufst-lib
 	nmake -f $(MAKEFILE) $(RECURSIVEDEFS) $(UFSTBASEDEFS) $(UFSTDEFS) UFST_CFLAGS="$(UFST_CFLAGS)"
+
+gpcl6-ufst: ufst-lib
+	nmake -f $(MAKEFILE) $(RECURSIVEDEFS) $(UFSTBASEDEFS) $(UFSTDEFS) UFST_CFLAGS="$(UFST_CFLAGS)" gpcl6
 
 ufst-clean: ufst-lib
 	nmake -f $(MAKEFILE) $(RECURSIVEDEFS) $(UFSTBASEDEFS) $(UFSTDEFS) UFST_CFLAGS="$(UFST_CFLAGS)" clean

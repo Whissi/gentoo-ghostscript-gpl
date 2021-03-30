@@ -1,4 +1,4 @@
-/* Copyright (C) 2001-2020 Artifex Software, Inc.
+/* Copyright (C) 2001-2021 Artifex Software, Inc.
    All Rights Reserved.
 
    This software is provided AS-IS with no warranty, either express or
@@ -120,7 +120,7 @@ void gsicc_adjust_profile_rc(cmm_profile_t *profile_data, int delta, const char 
     const char* dirname, int dir_namelen, stream **stmp);
 
 /* Device related */
-cmm_dev_profile_t* gsicc_new_device_profile_array(gs_memory_t *memory);
+cmm_dev_profile_t* gsicc_new_device_profile_array(gx_device *);
 int gsicc_set_device_profile(gx_device * pdev, gs_memory_t * mem,
     char *file_name, gsicc_profile_types_t defaulttype);
 char* gsicc_get_dev_icccolorants(cmm_dev_profile_t *dev_profile);

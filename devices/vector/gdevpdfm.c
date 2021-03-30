@@ -1,4 +1,4 @@
-/* Copyright (C) 2001-2020 Artifex Software, Inc.
+/* Copyright (C) 2001-2021 Artifex Software, Inc.
    All Rights Reserved.
 
    This software is provided AS-IS with no warranty, either express or
@@ -832,8 +832,10 @@ pdfmark_put_ao_pairs(gx_device_pdf * pdev, cos_dict_t *pcd,
                 cos_dict_put_string(adict, key.data, key.size,
                                     value.data, value.size);
             }
-            if (code <= 0 || !pdf_key_eq(&key, ">>"))
+            if (code <= 0 || !pdf_key_eq(&key, ">>")) {
+                cos_free((cos_object_t *)adict, "action dict");
                 return_error(gs_error_rangecheck);
+            }
             cos_dict_put(pcd, (const byte *)"/A", 2,
                          COS_OBJECT_VALUE(&avalue, adict));
         } else if (pdf_key_eq(Action + 1, "/GoTo"))
@@ -1174,20 +1176,28 @@ pdfmark_annot(gx_device_pdf * pdev, gs_param_string * pairs, uint count,
     if (code < 0)
         return code;
     code = cos_dict_put_c_strings(pcd, "/Type", "/Annot");
-    if (code < 0)
+    if (code < 0) {
+        cos_free((cos_object_t *)pcd, "pdfmark_annot");
         return code;
+    }
     code = pdfmark_put_ao_pairs(pdev, pcd, pairs, count, pctm, &params, false);
-    if (code < 0)
+    if (code < 0) {
+        cos_free((cos_object_t *)pcd, "pdfmark_annot");
         return code;
+    }
     if (params.src_pg >= 0)
         page_index = params.src_pg;
-    if (pdf_page_id(pdev, page_index + 1) <= 0)
+    if (pdf_page_id(pdev, page_index + 1) <= 0) {
+        cos_free((cos_object_t *)pcd, "pdfmark_annot");
         return_error(gs_error_rangecheck);
+    }
     annots = pdev->pages[page_index].Annots;
     if (annots == 0) {
         annots = cos_array_alloc(pdev, "pdfmark_annot");
-        if (annots == 0)
+        if (annots == 0) {
+            cos_free((cos_object_t *)pcd, "pdfmark_annot");
             return_error(gs_error_VMerror);
+        }
         pdev->pages[page_index].Annots = annots;
     }
     if (!objname) {
@@ -1334,8 +1344,10 @@ pdfmark_OUT(gx_device_pdf * pdev, gs_param_string * pairs, uint count,
     ao.src_pg = -1;
     code = pdfmark_put_ao_pairs(pdev, node.action, pairs, count, pctm, &ao,
                                 true);
-    if (code < 0)
+    if (code < 0) {
+        cos_free((cos_object_t *)node.action, "pdfmark_OUT");
         return code;
+    }
     if (pdev->outlines_id == 0)
         pdev->outlines_id = pdf_obj_ref(pdev);
     node.id = pdf_obj_ref(pdev);
@@ -1944,25 +1956,41 @@ pdfmark_DOCINFO(gx_device_pdf * pdev, gs_param_string * pairs, uint count,
 
         if (pdev->PDFA !=0) {
             const gs_param_string *p = pairs + i + 1;
-            if (p->size > 9 && memcmp(p->data, "(\\376\\377", 9) == 0) {
+            bool abort = false;
+
+            if (p->size > 9 && memcmp(p->data, "(\\376\\377", 9) == 0)
+                abort = true;
+            else {
+                int j;
+                for (j = 0;j < p->size;j++)
+                {
+                    if (p->data[j] == '\\' || p->data[j] > 0x7F || p->data[j] < 0x20)
+                    {
+                        abort = true;
+                        break;
+                    }
+                }
+            }
+            if (abort == true)
+            {
                 /* Can't handle UTF16BE in PDF/A1, so abort this pair or abort PDF/A or just abort,
                  * depending on PDFACompatibilityPolicy
                  */
                 switch (pdev->PDFACompatibilityPolicy) {
                     case 0:
                         emprintf(pdev->memory,
-                         "UTF16BE text string detected in DOCINFO cannot be represented in XMP for PDF/A1, reverting to normal PDF output\n");
+                         "Text string detected in DOCINFO cannot be represented in XMP for PDF/A1, reverting to normal PDF output\n");
                         pdev->AbortPDFAX = true;
                         pdev->PDFX = 0;
                         break;
                     case 1:
                         emprintf(pdev->memory,
-                         "UTF16BE text string detected in DOCINFO cannot be represented in XMP for PDF/A1, discarding DOCINFO\n");
+                         "Text string detected in DOCINFO cannot be represented in XMP for PDF/A1, discarding DOCINFO\n");
                         continue;
                         break;
                     case 2:
                         emprintf(pdev->memory,
-                         "UTF16BE text string detected in DOCINFO cannot be represented in XMP for PDF/A1, aborting conversion.\n");
+                         "Text string detected in DOCINFO cannot be represented in XMP for PDF/A1, aborting conversion.\n");
                         /* If we don't return a fatal error then zputdeviceparams simply ignores it (!) */
                         return_error(gs_error_Fatal);
                         break;
@@ -2456,7 +2484,16 @@ pdfmark_BDC(gx_device_pdf *pdev, gs_param_string *pairs, uint count,
         /* strip << and >> */
         if ((pairs[1].data)[0]=='<'&&(pairs[1].data)[1]=='<')
         {
-            pairs[1].data=&(pairs[1].data[2]);
+            int ix = 0;
+            byte *p = (byte *)pairs[1].data;
+
+            /* Fortunately we don't use the 'size' when freeing the memory
+             * so we can quickly copy the string content up two places and reduce
+             * the size by 2 to remove the '<<'. This saves an alloc and free of the
+             * string data.
+             */
+            for (ix = 0; ix < pairs[1].size - 2;ix++)
+                p[ix] = pairs[1].data[ix + 2];
             pairs[1].size-=2;
         }
         else
@@ -2831,7 +2868,7 @@ pdfmark_process(gx_device_pdf * pdev, const gs_param_string_array * pma)
             gs_memory_t *mem = pdev->pdf_memory;
             int odd_ok = (pmn->options & PDFMARK_ODD_OK) != 0;
             gs_param_string *pairs;
-            int j;
+            int j, index;
 
             /*
              * Our coordinate system is scaled so that user space is always
@@ -2866,9 +2903,25 @@ pdfmark_process(gx_device_pdf * pdev, const gs_param_string_array * pma)
                                                 "pdfmark_process(pairs)");
                         if (!pairs)
                             return_error(gs_error_VMerror);
-                        memcpy(pairs, data, j * sizeof(*data));
-                        memcpy(pairs + j, data + j + 2,
-                               (size - j) * sizeof(*data));
+
+                        for (index=0;index < size;index++)
+                            pairs[index].data = NULL;
+                        for (index=0;index < j;index++) {
+                            pairs[index].data = gs_alloc_bytes(mem, data[index].size, "pdfmark_process(pairs)");
+                            if (pairs[index].data == NULL)
+                                goto error;
+                            memcpy((byte *)pairs[index].data, data[index].data, data[index].size);
+                            pairs[index].size = data[index].size;
+                            pairs[index].persistent = 1;
+                        }
+                        for (index=j+2;index < size + 2;index++) {
+                            pairs[index - 2].data = gs_alloc_bytes(mem, data[index].size, "pdfmark_process(pairs)");
+                            if (pairs[index - 2].data == NULL)
+                                goto error;
+                            memcpy((byte *)pairs[index - 2].data, data[index].data, data[index].size);
+                            pairs[index - 2].size = data[index].size;
+                            pairs[index - 2].persistent = 1;
+                        }
                         goto copied;
                     }
                 }
@@ -2879,8 +2932,17 @@ pdfmark_process(gx_device_pdf * pdev, const gs_param_string_array * pma)
                                     "pdfmark_process(pairs)");
             if (!pairs)
                 return_error(gs_error_VMerror);
-            memcpy(pairs, data, size * sizeof(*data));
-        copied:		/* Substitute object references for names. */
+            for (j=0;j < size;j++)
+                pairs[j].data = NULL;
+            for (j=0;j < size;j++) {
+                pairs[j].data = gs_alloc_bytes(mem, data[j].size, "pdfmark_process(pairs)");
+                if (pairs[j].data == NULL)
+                    goto error;
+                memcpy((byte *)pairs[j].data, data[j].data, data[j].size);
+                pairs[j].size = data[j].size;
+                pairs[j].persistent = 1;
+            }
+copied:		/* Substitute object references for names. */
             if (!(pmn->options & PDFMARK_NO_REFS)) {
                 for (j = (pmn->options & PDFMARK_KEEP_NAME ? 1 : 1 - odd_ok);
                      j < size; j += 2 - odd_ok
@@ -2893,6 +2955,9 @@ pdfmark_process(gx_device_pdf * pdev, const gs_param_string_array * pma)
                 }
             }
             code = (*pmn->proc) (pdev, pairs, size, &ctm, objname);
+error:
+            for (j=0;j < size;j++)
+                gs_free_object(mem, (byte *)pairs[j].data, "pdfmark_process(pairs)");
             gs_free_object(mem, pairs, "pdfmark_process(pairs)");
             break;
         }

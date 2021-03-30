@@ -1,4 +1,4 @@
-/* Copyright (C) 2001-2020 Artifex Software, Inc.
+/* Copyright (C) 2001-2021 Artifex Software, Inc.
    All Rights Reserved.
 
    This software is provided AS-IS with no warranty, either express or
@@ -32,6 +32,7 @@
 #include "gxcmap.h"
 #include "gxdevice.h"
 #include "gxdevmem.h"
+#include "gxdevsop.h"
 #include "gxiodev.h"
 #include "gxcspace.h"
 #include "gsicc_manage.h"
@@ -69,6 +70,10 @@ gx_device_finalize(const gs_memory_t *cmem, void *vptr)
     if (dev->PageList) {
         rc_decrement(dev->PageList, "gx_device_finalize(PageList)");
         dev->PageList = 0;
+    }
+    if (dev->NupControl) {
+        rc_decrement(dev->NupControl, "gx_device_finalize(NupControl)");
+        dev->NupControl = 0;
     }
 
     if (dev->finalize)
@@ -201,7 +206,7 @@ gs_output_page(gs_gstate * pgs, int num_copies, int flush)
     ((code = gs_fill(pgs)) < 0))
     {
         gs_grestore(pgs);
-	return code;
+        return code;
     }
     code = gs_grestore(pgs);
     if (code < 0)
@@ -645,6 +650,7 @@ gs_make_null_device(gx_device_null *dev_null, gx_device *dev,
 {
     gx_device_init((gx_device *)dev_null, (const gx_device *)&gs_null_device,
                    mem, true);
+    gx_device_fill_in_procs((gx_device *)dev_null);
     gx_device_set_target((gx_device_forward *)dev_null, dev);
     if (dev) {
         /* The gx_device_copy_color_params() call below should
@@ -786,7 +792,10 @@ gx_device_raster(const gx_device * dev, bool pad)
     int l2align;
 
     if (dev->is_planar)
-        bits /= dev->color_info.num_components;
+    {
+        int has_tags = device_encodes_tags(dev);
+        bits /= (dev->color_info.num_components + has_tags);
+    }
 
     raster = (uint)((bits + 7) >> 3);
     if (!pad)
@@ -869,9 +878,21 @@ gx_device_set_hwsize_from_media(gx_device *dev)
     int rot = (dev->LeadingEdge & 1);
     double rot_media_x = rot ? dev->MediaSize[1] : dev->MediaSize[0];
     double rot_media_y = rot ? dev->MediaSize[0] : dev->MediaSize[1];
+    gx_device *parent = dev;
+    int hwsize[2];
 
-    dev->width = (int)(rot_media_x * dev->HWResolution[0] / 72.0 + 0.5);
-    dev->height = (int)(rot_media_y * dev->HWResolution[1] / 72.0 + 0.5);
+    /* Try the spec_op to give the device to control it */
+    hwsize[0] = (int)(rot_media_x * dev->HWResolution[0] / 72.0 + 0.5);
+    hwsize[1] = (int)(rot_media_y * dev->HWResolution[1] / 72.0 + 0.5);
+
+    while (parent->parent != NULL) {
+        parent = parent->parent;
+    }
+    if (dev_proc(parent, dev_spec_op)(parent, gxdso_set_HWSize, &hwsize, sizeof(hwsize)) <= 0) {
+        /* just do the default setting */
+        dev->width = hwsize[0];
+        dev->height = hwsize[1];
+    }
 }
 
 static void
@@ -1155,7 +1176,7 @@ int gx_device_delete_output_file(const gx_device * dev, const char *fname)
 
     if (pfname == NULL) {
         code = gs_note_error(gs_error_VMerror);
-	goto done;
+        goto done;
     }
 
     code = gx_parse_output_file_name(&parsed, &fmt, fname, strlen(fname),
@@ -1214,7 +1235,7 @@ gx_device_open_output_file(const gx_device * dev, char *fname,
 
     if (pfname == NULL) {
         code = gs_note_error(gs_error_VMerror);
-	goto done;
+        goto done;
     }
 
     if (strlen(fname) == 0) {
@@ -1230,8 +1251,8 @@ gx_device_open_output_file(const gx_device * dev, char *fname,
     if (parsed.iodev && !strcmp(parsed.iodev->dname, "%stdout%")) {
         if (parsed.fname) {
             code = gs_note_error(gs_error_undefinedfilename);
-	    goto done;
-	}
+            goto done;
+        }
         *pfile = gp_file_FILE_alloc(dev->memory);
         if (*pfile == NULL) {
             code = gs_note_error(gs_error_VMerror);
@@ -1240,7 +1261,7 @@ gx_device_open_output_file(const gx_device * dev, char *fname,
         gp_file_FILE_set(*pfile, dev->memory->gs_lib_ctx->core->fstdout, noclose);
         /* Force stdout to binary. */
         code = gp_setmode_binary_impl(dev->memory->gs_lib_ctx->core->fstdout, true);
-	goto done;
+        goto done;
     } else if (parsed.iodev && !strcmp(parsed.iodev->dname, "%pipe%")) {
         positionable = false;
     }
@@ -1267,8 +1288,8 @@ gx_device_open_output_file(const gx_device * dev, char *fname,
 
         if (!parsed.fname) {
             code = gs_note_error(gs_error_undefinedfilename);
-	    goto done;
-	}
+            goto done;
+        }
         strcpy(fmode, gp_fmode_wb);
         if (positionable)
             strcat(fmode, "+");

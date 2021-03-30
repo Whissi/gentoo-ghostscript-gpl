@@ -1,4 +1,4 @@
-/* Copyright (C) 2001-2020 Artifex Software, Inc.
+/* Copyright (C) 2001-2021 Artifex Software, Inc.
    All Rights Reserved.
 
    This software is provided AS-IS with no warranty, either express or
@@ -144,7 +144,7 @@ zcheck_r6_password(i_ctx_t * i_ctx_p)
         return_error(gs_error_typecheck);
     if (!r_has_type(Pref, t_string))
         return_error(gs_error_typecheck);
-    
+
     code = dict_find_string(CryptDict, "O", &Oref);
     if (code < 0)
         return code;

@@ -1,4 +1,4 @@
-/* Copyright (C) 2001-2020 Artifex Software, Inc.
+/* Copyright (C) 2001-2021 Artifex Software, Inc.
    All Rights Reserved.
 
    This software is provided AS-IS with no warranty, either express or
@@ -865,6 +865,11 @@ gx_forward_dev_spec_op(gx_device * dev, int dev_spec_op, void *data, int size)
             d->target = fdev->target;
             return 1;
         }
+    } else if (dev_spec_op == gxdso_device_insert_child) {
+        fdev->target = (gx_device *)data;
+        rc_increment(fdev->target);
+        rc_decrement_only(tdev, "gx_forward_device");
+        return 0;
     }
     return dev_proc(tdev, dev_spec_op)(tdev, dev_spec_op, data, size);
 }
@@ -1009,6 +1014,12 @@ gx_forward_create_compositor(gx_device * dev, gx_device ** pcdev,
     code = dev_proc(tdev, create_compositor)(tdev, pcdev, pcte, pgs, memory, cdev);
     /* the compositor may have changed color_info. Pick up the new value */
     dev->color_info = tdev->color_info;
+    if (code == 1) {
+        /* If a new compositor was made that wrapped tdev, then that
+         * compositor should be our target now. */
+        gx_device_set_target((gx_device_forward *)dev, *pcdev);
+        code = 0; /* We have not made a new compositor that wrapped dev. */
+    }
     return code;
 }
 

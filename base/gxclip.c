@@ -1,4 +1,4 @@
-/* Copyright (C) 2001-2020 Artifex Software, Inc.
+/* Copyright (C) 2001-2021 Artifex Software, Inc.
    All Rights Reserved.
 
    This software is provided AS-IS with no warranty, either express or
@@ -590,7 +590,7 @@ clip_fill_rectangle(gx_device * dev, int x, int y, int w, int h,
 }
 
 int
-clip_call_fill_rectangle_hl_color(clip_callback_data_t * pccd, int xc, int yc, 
+clip_call_fill_rectangle_hl_color(clip_callback_data_t * pccd, int xc, int yc,
                                   int xec, int yec)
 {
     gs_fixed_rect rect;
@@ -1245,7 +1245,7 @@ clip_copy_alpha(gx_device * dev,
 }
 
 int
-clip_call_copy_alpha_hl_color(clip_callback_data_t * pccd, int xc, int yc, 
+clip_call_copy_alpha_hl_color(clip_callback_data_t * pccd, int xc, int yc,
                               int xec, int yec)
 {
     return (*dev_proc(pccd->tdev, copy_alpha_hl_color))
@@ -1308,8 +1308,8 @@ clip_call_strip_tile_rect_devn(clip_callback_data_t * pccd, int xc, int yc, int 
 static int
 clip_strip_tile_rect_devn(gx_device * dev, const gx_strip_bitmap * tiles,
                                 int x, int y, int w, int h,
-                                const gx_drawing_color *pdcolor0, 
-                                const gx_drawing_color *pdcolor1, int phase_x, 
+                                const gx_drawing_color *pdcolor0,
+                                const gx_drawing_color *pdcolor1, int phase_x,
                                 int phase_y)
 {
     gx_device_clip *rdev = (gx_device_clip *) dev;

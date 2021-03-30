@@ -1,4 +1,4 @@
-# Copyright (C) 2001-2020 Artifex Software, Inc.
+# Copyright (C) 2001-2021 Artifex Software, Inc.
 # All Rights Reserved.
 #
 # This software is provided AS-IS with no warranty, either express or
@@ -83,7 +83,7 @@ install-data: install-libdata install-resdata$(COMPILE_INITS) install-iccdata$(C
 # There's no point in providing a complete dependency list: we include
 # one file from each subdirectory just as a sanity check.
 
-install-libdata: 
+install-libdata:
 	-mkdir -p $(DESTDIR)$(datadir)
 	-mkdir -p $(DESTDIR)$(gsdir)
 	-mkdir -p $(DESTDIR)$(gsdatadir)
@@ -117,7 +117,7 @@ pdf2dsc.ps ;\
 
 # install the default resource files
 # copy in every category (directory) but CVS
-RES_CATEGORIES=`ls $(PSRESDIR) | grep -v CVS` 
+RES_CATEGORIES=`ls $(PSRESDIR) | grep -v CVS`
 install-resdata0 : $(PSRESDIR)/Decoding/Unicode
 	-mkdir -p $(DESTDIR)$(datadir)
 	-mkdir -p $(DESTDIR)$(gsdir)

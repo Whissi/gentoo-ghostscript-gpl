@@ -1,4 +1,4 @@
-/* Copyright (C) 2001-2020 Artifex Software, Inc.
+/* Copyright (C) 2001-2021 Artifex Software, Inc.
    All Rights Reserved.
 
    This software is provided AS-IS with no warranty, either express or
@@ -107,14 +107,16 @@ gdev_x_open(gx_device_X * xdev)
     }
 # endif
 #endif
+
     if (!(xdev->dpy = XOpenDisplay((char *)NULL))) {
         char *dispname = getenv("DISPLAY");
 
         emprintf1(xdev->memory,
-                  "Cannot open X display `%s'.\n",
-                 (dispname == NULL ? "(null)" : dispname));
+            "Cannot open X display `%s'.\n",
+            (dispname == NULL ? "(null)" : dispname));
         return_error(gs_error_ioerror);
     }
+
     xdev->dest = 0;
     if ((window_id = getenv("GHOSTVIEW"))) {
         if (!(xdev->ghostview = sscanf(window_id, "%ld %ld",
@@ -892,7 +894,7 @@ gdev_x_put_params(gx_device * dev, gs_param_list * plist)
                                   dev->width, dev->height, dev->dname);
             return_error(gs_error_rangecheck);
         }
-        
+
         /* points */
         dev->MediaSize[0] = (float)dev->width / xdev->x_pixels_per_inch * 72;
         dev->MediaSize[1] = (float)dev->height / xdev->y_pixels_per_inch * 72;
@@ -927,7 +929,7 @@ gdev_x_put_params(gx_device * dev, gs_param_list * plist)
     }
     xdev->MaxTempPixmap = values.MaxTempPixmap;
     xdev->MaxTempImage = values.MaxTempImage;
-    
+
     if (clear_window || xdev->space_params.MaxBitmap != orig_MaxBitmap) {
         if (xdev->is_open)
             gdev_x_clear_window(xdev);
@@ -949,12 +951,24 @@ gdev_x_close(gx_device_X *xdev)
         xdev->vinfo = NULL;
     }
     gdev_x_free_colors(xdev);
-    if (xdev->cmap != DefaultColormapOfScreen(xdev->scr))
+    if (xdev->dpy && xdev->cmap != DefaultColormapOfScreen(xdev->scr)) {
         XFreeColormap(xdev->dpy, xdev->cmap);
-    if (xdev->gc)
+        xdev->cmap = DefaultColormapOfScreen(xdev->scr);
+    }
+    if (xdev->dpy && xdev->gc) {
         XFreeGC(xdev->dpy, xdev->gc);
+        xdev->gc = NULL;
+    }
+    if (xdev->dpy && xdev->bpixmap != (Pixmap)0) {
+        XFreePixmap(xdev->dpy, xdev->bpixmap);
+        xdev->bpixmap = (Pixmap)0;
+        xdev->dest = (Pixmap)0;
+    }
 
-    XCloseDisplay(xdev->dpy);
+    /* Closure of device will not close the window
+       finalize will do that. */
+    xdev->pwin = xdev->win;
+
     /* MaxBitmap == 0 ensures x_set_buffer() configures as non-buffering */
     xdev->space_params.MaxBitmap = 0;
     x_set_buffer(xdev);

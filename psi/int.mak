@@ -1,4 +1,4 @@
-# Copyright (C) 2001-2020 Artifex Software, Inc.
+# Copyright (C) 2001-2021 Artifex Software, Inc.
 # All Rights Reserved.
 #
 # This software is provided AS-IS with no warranty, either express or
@@ -1066,7 +1066,7 @@ $(PSOBJ)zcsindex.$(OBJ) : $(PSSRC)zcsindex.c $(OP) $(memory__h)\
 $(PSOBJ)zht2.$(OBJ) : $(PSSRC)zht2.c $(OP)\
  $(memory__h) $(gsstruct_h) $(gxdevice_h) $(gzht_h) $(gen_ordered_h)\
  $(estack_h) $(ialloc_h) $(icolor_h) $(iddict_h) $(idparam_h) $(igstate_h)\
- $(iht_h) $(store_h) $(iname_h) $(zht2_h) $(gxgstate_h) $(INT_MAK) $(MAKEDIRS)
+ $(iht_h) $(store_h) $(iname_h) $(zht2_h) $(gxgstate_h) $(gp_h) $(INT_MAK) $(MAKEDIRS)
 	$(PSCC) $(PSO_)zht2.$(OBJ) $(II)$(GENORDERED_SRCDIR) $(C_) $(PSSRC)zht2.c
 
 # ---------------- setpagedevice ---------------- #
@@ -1211,12 +1211,6 @@ $(PSD)jbig2_jbig2dec.dev : $(ECHOGS_XE) $(fjbig2_) $(GLD)sjbig2.dev\
 	$(ADDMOD) $(PSD)jbig2_jbig2dec -include $(GLD)sjbig2
 	$(ADDMOD) $(PSD)jbig2_jbig2dec -oper zfjbig2
 
-$(PSD)jbig2_luratech.dev : $(ECHOGS_XE) $(fjbig2_) $(GLD)sjbig2.dev\
- $(INT_MAK) $(MAKEDIRS)
-	$(SETMOD) $(PSD)jbig2_luratech $(fjbig2_)
-	$(ADDMOD) $(PSD)jbig2_luratech -include $(GLD)sjbig2
-	$(ADDMOD) $(PSD)jbig2_luratech -oper zfjbig2
-
 $(PSD)jbig2_.dev : $(ECHOGS_XE) $(INT_MAK) $(MAKEDIRS)
 	$(SETMOD) $(PSD)jbig2_
 
@@ -1229,11 +1223,6 @@ $(PSOBJ)zfjbig2_jbig2dec.$(OBJ) : $(PSSRC)zfjbig2.c $(OP) $(memory__h)\
  $(store_h) $(stream_h) $(strimpl_h) $(sjbig2_h) $(INT_MAK) $(MAKEDIRS)
 	$(PSJBIG2CC) $(PSO_)zfjbig2_jbig2dec.$(OBJ) $(C_) $(PSSRC)zfjbig2.c
 
-$(PSOBJ)zfjbig2_luratech.$(OBJ) : $(PSSRC)zfjbig2.c $(OP) $(memory__h)\
- $(gsstruct_h) $(gstypes_h) $(ialloc_h) $(idict_h) $(ifilter_h)\
- $(store_h) $(stream_h) $(strimpl_h) $(sjbig2_h) $(INT_MAK) $(MAKEDIRS)
-	$(PSLDFJB2CC) $(PSO_)zfjbig2_luratech.$(OBJ) $(C_) $(PSSRC)zfjbig2.c
-
 # JPX (jpeg 2000) compression filter
 # this can be turned on and off with a FEATURE_DEV
 
@@ -1244,27 +1233,11 @@ $(PSD)jpx.dev : $(ECHOGS_XE) $(PSD)jpx_$(JPX_LIB).dev\
 $(PSD)jpx_.dev : $(ECHOGS_XE) $(INT_MAK) $(MAKEDIRS)
 	$(SETMOD) $(PSD)jpx_
 
-fjpx_luratech=$(PSOBJ)zfjpx_luratech.$(OBJ)
-
 $(PSOBJ)zfjpx.$(OBJ) : $(PSSRC)zfjpx.c $(OP) $(memory__h)\
  $(gsstruct_h) $(gstypes_h) $(ialloc_h) $(idict_h) $(ifilter_h)\
  $(store_h) $(stream_h) $(strimpl_h) $(ialloc_h) $(iname_h)\
  $(gdebug_h) $(sjpx_h) $(INT_MAK) $(MAKEDIRS)
 	$(PSJASCC) $(PSO_)zfjpx.$(OBJ) $(C_) $(PSSRC)zfjpx.c
-
-$(PSD)jpx_luratech.dev : $(ECHOGS_XE) $(fjpx_luratech)\
- $(GLD)sjpx.dev $(INT_MAK) $(MAKEDIRS)
-	$(SETMOD) $(PSD)jpx_luratech $(fjpx_luratech)
-	$(ADDMOD) $(PSD)jpx_luratech -include $(GLD)sjpx
-	$(ADDMOD) $(PSD)jpx_luratech -include $(GLD)lwf_jp2
-	$(ADDMOD) $(PSD)jpx_luratech -oper zfjpx
-
-$(PSOBJ)zfjpx_luratech.$(OBJ) : $(PSSRC)zfjpx.c $(OP) $(memory__h)\
- $(gsstruct_h) $(gstypes_h) $(ialloc_h) $(idict_h) $(ifilter_h)\
- $(store_h) $(stream_h) $(strimpl_h) $(sjpx_luratech_h)\
- $(INT_MAK) $(MAKEDIRS)
-	$(PSLWFJPXCC) $(PSO_)zfjpx_luratech.$(OBJ) \
-		$(C_) $(PSSRC)zfjpx.c
 
 fjpx_openjpeg=$(PSOBJ)zfjpx_openjpeg.$(OBJ)
 
@@ -1709,7 +1682,7 @@ $(PSD)transpar.dev : $(ECHOGS_XE)\
 $(PSOBJ)ztrans.$(OBJ) : $(PSSRC)ztrans.c $(OP) $(memory__h) $(string__h)\
  $(ghost_h) $(oper_h) $(gscspace_h) $(gscolor2_h) $(gsipar3x_h) $(gstrans_h)\
  $(gxiparam_h) $(gxcspace_h)\
- $(idict_h) $(idparam_h) $(ifunc_h) $(igstate_h) $(iimage_h) $(iname_h)\
+ $(idict_h) $(idstack_h) $(idparam_h) $(ifunc_h) $(igstate_h) $(iimage_h) $(iname_h)\
  $(store_h) $(gdevdevn_h)  $(gxdevsop_h) $(gxblend_h) $(gdevp14_h)\
  $(gsicc_cms_h) $(INT_MAK) $(MAKEDIRS)
 	$(PSCC) $(PSO_)ztrans.$(OBJ) $(C_) $(PSSRC)ztrans.c

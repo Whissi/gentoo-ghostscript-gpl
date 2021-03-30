@@ -1,4 +1,4 @@
-/* Copyright (C) 2001-2020 Artifex Software, Inc.
+/* Copyright (C) 2001-2021 Artifex Software, Inc.
    All Rights Reserved.
 
    This software is provided AS-IS with no warranty, either express or
@@ -706,6 +706,11 @@ typedef struct gdev_space_params_s {
 int gdev_space_params_cmp(const gdev_space_params sp1,
                           const gdev_space_params sp2);
 
+typedef struct gdev_nupcontrol_s {
+        rc_header rc;
+        char *nupcontrol_str;		/* NUL termintated string */
+} gdev_nupcontrol;
+
 typedef struct gdev_pagelist_s {
         rc_header rc;
         char *Pages;
@@ -759,6 +764,8 @@ typedef struct gdev_pagelist_s {
         bool DisablePageHandler;   /* Can be set by the interpreter if it will process FirstPage and LastPage itself */\
         int ObjectFilter;          /* Bit field for which object filters to apply */\
         bool ObjectHandlerPushed;  /* Handles filtering of objects to devices */\
+        gdev_nupcontrol *NupControl;\
+        bool NupHandlerPushed;     /* Handles Nup operations */\
         long PageCount;			/* number of pages written */\
         long ShowpageCount;		/* number of calls on showpage */\
         int NumCopies;\
@@ -772,6 +779,7 @@ typedef struct gdev_pagelist_s {
         gx_stroked_gradient_recognizer_t sgr;\
         size_t MaxPatternBitmap;	/* Threshold for switching to pattern_clist mode */\
         bool page_uses_transparency;    /* PDF 1.4 transparency is used. */\
+        bool page_uses_overprint;       /* overprint is used. */\
         gdev_space_params space_params;\
         cmm_dev_profile_t *icc_struct;  /* object dependent profiles */\
         gs_graphics_type_tag_t   graphics_type_tag;   /* e.g. vector, image or text */\
@@ -1681,11 +1689,6 @@ typedef struct gx_image_plane_s {
   ((*dev_proc(dev, begin_typed_image))\
    (dev, pgs, pmat, pim, prect, pdcolor, pcpath, memory, pinfo))
 
-/*
- * The driver-like procedures gx_device_{image_data, image_plane_data,
- * end_image} are now DEPRECATED and will eventually be removed.
- * Their replacements no longer take an ignored dev argument.
- */
 int gx_image_data(gx_image_enum_common_t *info, const byte **planes,
                   int data_x, uint raster, int height);
 /*
@@ -1700,13 +1703,6 @@ int gx_image_plane_data_rows(gx_image_enum_common_t *info,
 int gx_image_flush(gx_image_enum_common_t *info);
 bool gx_image_planes_wanted(const gx_image_enum_common_t *info, byte *wanted);
 int gx_image_end(gx_image_enum_common_t *info, bool draw_last);
-
-#define gx_device_image_data(dev, info, planes, data_x, raster, height)\
-  gx_image_data(info, planes, data_x, raster, height)
-#define gx_device_image_plane_data(dev, info, planes, height)\
-  gx_image_plane_data(info, planes, height)
-#define gx_device_end_image(dev, info, draw_last)\
-  gx_image_end(info, draw_last)
 
 /*
  * Get the anti-aliasing parameters for a device.  This replaces the

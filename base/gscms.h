@@ -1,4 +1,4 @@
-/* Copyright (C) 2001-2020 Artifex Software, Inc.
+/* Copyright (C) 2001-2021 Artifex Software, Inc.
    All Rights Reserved.
 
    This software is provided AS-IS with no warranty, either express or
@@ -86,7 +86,7 @@ typedef struct gsicc_bufferdesc_s {
     unsigned char bytes_per_chan;
     bool has_alpha;
     bool alpha_first;
-    bool little_endian;
+    bool endian_swap;
     bool is_planar;
     int plane_stride;
     int row_stride;
@@ -264,6 +264,19 @@ struct gsicc_namelist_s {
                               do our first mapping */
 };
 
+/* Overprint (overprint_control)
+ *    /enable	is the default
+ *    /disable	turns off overprint
+ *    /simulate	performs overprint simulation for all devices
+ */
+typedef enum {
+    gs_overprint_control_enable = 0,	/* Overprint for CMYK devices (default) */
+    gs_overprint_control_disable = 1,	/* No overprint for any devices */
+    gs_overprint_control_simulate = 2	/* Simulate overprint for RGB and Gray devices */
+} gs_overprint_control_t;
+#define gs_overprint_control_names\
+        "enable", "disable", "simulate"
+
 /* Destination profiles for different objects */
 struct cmm_dev_profile_s {
         cmm_profile_t  *device_profile[NUM_DEVICE_PROFILES];
@@ -277,8 +290,9 @@ struct cmm_dev_profile_s {
         bool graydetection;        /* Device param for monitoring for gray only page */
         bool pageneutralcolor;      /* Only valid if graydetection true */
         bool usefastcolor;         /* Used when we want to use no cm */
+        bool blacktext;           /* Force text to be pure black */
         bool supports_devn;        /* If the target handles devn colors */
-        bool sim_overprint;     /* Indicates we want to do overprint blending */
+        gs_overprint_control_t overprint_control;	/* enable is the default */
         gsicc_namelist_t *spotnames;  /* If our device profiles are devn */
         bool prebandthreshold;     /* Used to indicate use of HT pre-clist */
         gs_memory_t *memory;

@@ -1,4 +1,4 @@
-/* Copyright (C) 2001-2020 Artifex Software, Inc.
+/* Copyright (C) 2001-2021 Artifex Software, Inc.
    All Rights Reserved.
 
    This software is provided AS-IS with no warranty, either express or
@@ -408,7 +408,12 @@ gs_image_common_init(gs_image_enum * penum, gx_image_enum_common_t * pie,
     int i;
 
     if (pim->Width == 0 || pim->Height == 0) {
+        gx_device *cdev = pie->dev;
+
         gx_image_end(pie, false);
+        if (dev_proc(cdev, dev_spec_op)(cdev,
+                    gxdso_pattern_is_cpath_accum, NULL, 0))
+            gx_device_retain((gx_device *)cdev, false);
         return 1;
     }
     image_enum_init(penum);
@@ -701,7 +706,11 @@ gs_image_cleanup(gs_image_enum * penum, gs_gstate *pgs)
 int
 gs_image_cleanup_and_free_enum(gs_image_enum * penum, gs_gstate *pgs)
 {
-    int code = gs_image_cleanup(penum, pgs);
+    int code;
+
+    if (penum == NULL)
+            return 0;
+    code = gs_image_cleanup(penum, pgs);
 
     gs_free_object(penum->memory, penum, "gs_image_cleanup_and_free_enum");
     return code;

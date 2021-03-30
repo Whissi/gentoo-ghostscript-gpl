@@ -1,4 +1,4 @@
-# Copyright (C) 2001-2020 Artifex Software, Inc.
+# Copyright (C) 2001-2021 Artifex Software, Inc.
 # All Rights Reserved.
 #
 # This software is provided AS-IS with no warranty, either express or
@@ -107,7 +107,7 @@ jpeg.config-clean :
 
 # JI_ and JF_ are defined in gs.mak.
 # See below for why we need to include GLGENDIR here.
-JCC=$(CC_) $(I_)$(GLGENDIR) $(II)$(JI_)$(_I) $(JF_)
+JCC=$(CC) $(I_)$(GLGENDIR) $(II)$(JI_)$(_I) $(JF_) $(CCFLAGS)
 
 # We need our own version of jconfig.h, and our own "wrapper" for
 # jmorecfg.h.
@@ -125,9 +125,9 @@ jmorecf__h=$(GLGEN)jmorecf_.h
 
 # We use our own jconfig.h and jmorecfg.h iff we aren't sharing the library.
 # The library itself may need copies of them.
-
 jconfig_h=$(GLGEN)jconfig.h
 jmorecfg_h=$(GLGEN)jmorecfg.h
+jmemcust_h=$(GLSRC)jmemcust.h $(jconfig_h)
 
 $(GLGEN)jconfig_.h : $(GLGEN)jconfig$(SHARE_JPEG).h $(JPEG_MAK) $(MAKEDIRS)
 	$(CP_) $(GLGEN)jconfig$(SHARE_JPEG).h $(GLGEN)jconfig_.h

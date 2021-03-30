@@ -1,4 +1,4 @@
-/* Copyright (C) 2001-2020 Artifex Software, Inc.
+/* Copyright (C) 2001-2021 Artifex Software, Inc.
    All Rights Reserved.
 
    This software is provided AS-IS with no warranty, either express or
@@ -221,7 +221,7 @@ gx_device_flp gs_flp_device =
 static int ParsePageList(gx_device *dev, first_last_subclass_data *psubclass_data, char *PageList)
 {
     char *str, *oldstr, *workstr, c, *ArgCopy;
-    int LastPage, Page, byte, bit, i;
+    int LastPage, Page, byte, bit, i, prev_page = -1;
 
     psubclass_data->ProcessedPageList = true;
     if (strcmp(PageList, "even") == 0) {
@@ -309,6 +309,13 @@ static int ParsePageList(gx_device *dev, first_last_subclass_data *psubclass_dat
                     if (LastPage < 0)
                         LastPage = 0;
 
+                    if (LastPage < Page || Page <= prev_page) {
+                        /* Strictly monotonic increasing required */
+                        emprintf(dev->memory, "\n**** Error : rangecheck processing PageList\n");
+                        return_error(gs_error_rangecheck);
+                    }
+                    prev_page = LastPage;
+
                     for (i=Page; i<= LastPage;i++) {
                         if (i > psubclass_data->LastListPage - 1) {
                             emprintf(dev->memory, "\n**** Error : rangecheck processing PageList\n");
@@ -323,10 +330,13 @@ static int ParsePageList(gx_device *dev, first_last_subclass_data *psubclass_dat
                     Page = atoi(oldstr) - 1;
                     if (Page < 0)
                         Page = 0;
-                    if (Page > psubclass_data->LastListPage - 1) {
+                    if (Page <= prev_page || Page > psubclass_data->LastListPage - 1) {
+                        /* Strictly monotonic increasing required */
                         emprintf(dev->memory, "\n**** Error : rangecheck processing PageList\n");
                         return_error(gs_error_rangecheck);
                     }
+                    prev_page = Page;
+
                     byte = (int)(Page / 8);
                     bit = Page % 8;
                     c = 0x01 << bit;
@@ -519,7 +529,7 @@ int
 flp_put_params(gx_device * dev, gs_param_list * plist)
 {
     bool temp_bool = false;
-    int code, ecode;
+    int code, ecode = 0;
     gs_param_string pagelist;
 
     code = param_read_int(plist, "FirstPage", &dev->FirstPage);
@@ -875,6 +885,7 @@ flp_image_plane_data(gx_image_enum_common_t * info,
 static int
 flp_image_end_image(gx_image_enum_common_t * info, bool draw_last)
 {
+    gs_free_object(info->memory, info, "flp_end_image");
     return 0;
 }
 

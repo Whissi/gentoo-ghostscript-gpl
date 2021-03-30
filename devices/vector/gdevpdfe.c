@@ -1,4 +1,4 @@
-/* Copyright (C) 2001-2020 Artifex Software, Inc.
+/* Copyright (C) 2001-2021 Artifex Software, Inc.
    All Rights Reserved.
 
    This software is provided AS-IS with no warranty, either express or
@@ -492,6 +492,7 @@ pdf_xmp_write_translated(gx_device_pdf *pdev, stream *s, const byte *data, int d
         if (code < 0)
             return code;
         write(s, (const byte *)buf1, buf1b - buf1);
+        gs_free_object(pdev->memory, buf1, "pdf_xmp_write_translated");
     }
     gs_free_object(pdev->memory, buf0, "pdf_xmp_write_translated");
     return 0;
@@ -840,8 +841,6 @@ pdf_write_document_metadata(gx_device_pdf *pdev, const byte digest[6])
 int
 pdf_document_metadata(gx_device_pdf *pdev)
 {
-    int j;
-
     if (pdev->CompatibilityLevel < 1.4)
         return 0;
     if (cos_dict_find_c_key(pdev->Catalog, "/Metadata"))
@@ -889,33 +888,6 @@ pdf_document_metadata(gx_device_pdf *pdev)
         if (code < 0)
             return code;
 
-        /* By storing the Metadata in the Catalog dictionary we have referenced it from the
-         * 'global named objects', and the object will be freed when we free those objects.
-         * We *don't* want it referenced by any resource because if it is then we will free
-         * it before we free the global named resources. So remove the Metadata cos_stream
-         * object from the resourceOther resource type chains.
-         */
-        for (j = 0; j < NUM_RESOURCE_CHAINS; ++j) {
-            pdf_resource_t *pres1, *head = pdev->resources[resourceOther].chains[j];
-
-            pres1 = head;
-
-            if (pres1 == pres) {
-                pdev->resources[resourceOther].chains[j] = pres1->next;
-                break;
-            } else {
-                while (pres1->next) {
-                    if (pres1->next == pres) {
-                        pres1->next = pres->next;
-                        break;
-                    }
-                    if (pres1->next == pres->next)
-                        break;
-
-                    pres1 = pres1->next;
-                }
-            }
-        }
     }
     return 0;
 }

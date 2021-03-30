@@ -1,4 +1,4 @@
-/* Copyright (C) 2001-2020 Artifex Software, Inc.
+/* Copyright (C) 2001-2021 Artifex Software, Inc.
    All Rights Reserved.
 
    This software is provided AS-IS with no warranty, either express or
@@ -31,24 +31,7 @@
 #include "sjpeg.h"
 
 #include "gdevpdfimg.h"
-
-#define	    COMPRESSION_NONE	1	/* dump mode */
-#define	    COMPRESSION_LZW		2       /* Lempel-Ziv  & Welch */
-#define	    COMPRESSION_FLATE	3
-#define	    COMPRESSION_JPEG	4
-#define	    COMPRESSION_RLE		5
-
-static struct compression_string {
-    unsigned char id;
-    const char *str;
-} compression_strings [] = {
-    { COMPRESSION_NONE, "None" },
-    { COMPRESSION_LZW, "LZW" },     /* Not supported in PCLm */
-    { COMPRESSION_FLATE, "Flate" },
-    { COMPRESSION_JPEG, "JPEG" },
-    { COMPRESSION_RLE, "RLE" },
-    { 0, NULL }
-};
+#include "tessocr.h"
 
 int pdf_ocr_open(gx_device *pdev);
 int pdf_ocr_close(gx_device *pdev);
@@ -63,6 +46,7 @@ pdfocr_put_some_params(gx_device * dev, gs_param_list * plist)
     gs_param_string langstr;
     const char *param_name;
     size_t len;
+    int engine;
 
     switch (code = param_read_string(plist, (param_name = "OCRLanguage"), &langstr)) {
         case 0:
@@ -71,6 +55,17 @@ pdfocr_put_some_params(gx_device * dev, gs_param_list * plist)
                 len = sizeof(pdf_dev->ocr.language)-1;
             memcpy(pdf_dev->ocr.language, langstr.data, len);
             pdf_dev->ocr.language[len] = 0;
+            break;
+        case 1:
+            break;
+        default:
+            ecode = code;
+            param_signal_error(plist, param_name, ecode);
+    }
+
+    switch (code = param_read_int(plist, (param_name = "OCREngine"), &engine)) {
+        case 0:
+            pdf_dev->ocr.engine = engine;
             break;
         case 1:
             break;
@@ -118,6 +113,9 @@ pdfocr_get_some_params(gx_device * dev, gs_param_list * plist)
         langstr.persistent = false;
     }
     if ((code = param_write_string(plist, "OCRLanguage", &langstr)) < 0)
+        ecode = code;
+
+    if ((code = param_write_int(plist, "OCREngine", &pdf_dev->ocr.engine)) < 0)
         ecode = code;
 
     return ecode;
@@ -228,21 +226,27 @@ const gx_device_pdf_image gs_pdfocr32_device = {
     0    /* JPEGQ */
 };
 
+/* These strings have object numbers built into them which are only
+ * correct for a specific value of PDFIMG_STATIC_OBJS (currently 4)
+ * If we add more static objects (eg Metadata) then we need to update
+ * the values in the strings below.
+ */
+
 /* Funky font */
 static const char funky_font[] =
-"3 0 obj\n<</BaseFont/GlyphLessFont/DescendantFonts[4 0 R]"
-"/Encoding/Identity-H/Subtype/Type0/ToUnicode 6 0 R/Type /Font"
+"4 0 obj\n<</BaseFont/GlyphLessFont/DescendantFonts[5 0 R]"
+"/Encoding/Identity-H/Subtype/Type0/ToUnicode 7 0 R/Type /Font"
 ">>\nendobj\n";
 
 static const char funky_font2[] =
-"4 0 obj\n<</BaseFont/GlyphLessFont"
-"/CIDToGIDMap 5 0 R\n/CIDSystemInfo<<\n"
+"5 0 obj\n<</BaseFont/GlyphLessFont"
+"/CIDToGIDMap 6 0 R\n/CIDSystemInfo<<\n"
 "/Ordering (Identity)/Registry (Adobe)/Supplement 0>>"
-"/FontDescriptor 7 0 R/Subtype /CIDFontType2/Type/Font"
+"/FontDescriptor 8 0 R/Subtype /CIDFontType2/Type/Font"
 "/DW 500>>\nendobj\n";
 
 static const char funky_font3[] =
-"5 0 obj\n<</Length 210/Filter/FlateDecode"
+"6 0 obj\n<</Length 210/Filter/FlateDecode"
 ">>stream\n";
 
 static const char funky_font3a[] = {
@@ -279,7 +283,7 @@ static const char funky_font3b[] =
 "endstream\nendobj\n";
 
 static const char funky_font4[] =
-"6 0 obj\n<</Length 353>>\nstream\n"
+"7 0 obj\n<</Length 353>>\nstream\n"
 "/CIDInit /ProcSet findresource begin\n"
 "12 dict begin\n"
 "begincmap\n"
@@ -305,13 +309,13 @@ static const char funky_font4[] =
 "endobj\n";
 
 static const char funky_font5[] =
-"7 0 obj\n"
+"8 0 obj\n"
 "<</Ascent 1000/CapHeight 1000/Descent -1/Flags 5"
-"/FontBBox[0 0 500 1000]/FontFile2 8 0 R/FontName/GlyphLessFont"
+"/FontBBox[0 0 500 1000]/FontFile2 9 0 R/FontName/GlyphLessFont"
 "/ItalicAngle 0/StemV 80/Type/FontDescriptor>>\nendobj\n";
 
 static const char funky_font6[] =
-"8 0 obj\n<</Length 572/Length1 572>>\nstream\n";
+"9 0 obj\n<</Length 572/Length1 572>>\nstream\n";
 
 static const char funky_font6a[] =
 {
@@ -416,7 +420,7 @@ ocr_file_init(gx_device_pdf_image *dev)
     stream_write(dev->strm, funky_font6a, sizeof(funky_font6a));
     stream_write(dev->strm, funky_font6b, sizeof(funky_font6b)-1);
 
-    return ocr_init_api(dev->memory, language, &dev->ocr.state);
+    return ocr_init_api(dev->memory->non_gc_memory, language, dev->ocr.engine, &dev->ocr.state);
 }
 
 static void

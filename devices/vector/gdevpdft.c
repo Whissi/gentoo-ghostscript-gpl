@@ -1,4 +1,4 @@
-/* Copyright (C) 2001-2020 Artifex Software, Inc.
+/* Copyright (C) 2001-2021 Artifex Software, Inc.
    All Rights Reserved.
 
    This software is provided AS-IS with no warranty, either express or
@@ -334,6 +334,7 @@ pdf_begin_transparency_mask(gs_gstate * pgs, gx_device_pdf * pdev,
     } else {
         int code;
 
+        pdev->smask_construction = true;
         code = pdf_make_soft_mask_dict(pdev, pparams);
         if (code < 0)
             return code;
@@ -348,6 +349,7 @@ static int
 pdf_end_transparency_mask(gs_gstate * pgs, gx_device_pdf * pdev,
                                 const gs_pdf14trans_params_t * pparams)
 {
+    pdev->smask_construction = false;
     if (pdev->image_mask_skip)
         pdev->image_mask_skip = false;
     else {

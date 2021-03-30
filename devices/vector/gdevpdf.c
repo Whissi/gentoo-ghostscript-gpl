@@ -1,4 +1,4 @@
-/* Copyright (C) 2001-2020 Artifex Software, Inc.
+/* Copyright (C) 2001-2021 Artifex Software, Inc.
    All Rights Reserved.
 
    This software is provided AS-IS with no warranty, either express or
@@ -37,6 +37,8 @@
 
 #include "gxfcache.h"
 #include "gdevpdts.h"       /* for sync_text_state */
+
+#include "gdevpdfo.h"
 
 /* Define the default language level and PDF compatibility level. */
 /* Acrobat 8 (PDF 1.7) is the default. (1.7 for ICC V4.2.0 profile support) */
@@ -1090,11 +1092,18 @@ round_box_coord(double xy)
 static int
 pdf_write_page(gx_device_pdf *pdev, int page_num)
 {
-    long page_id = pdf_page_id(pdev, page_num);
-    pdf_page_t *page = &pdev->pages[page_num - 1];
+    long page_id;
+    pdf_page_t *page;
     double mediabox[4] = {0, 0};
     stream *s;
-    const cos_value_t *v_mediabox = cos_dict_find_c_key(page->Page, "/MediaBox");
+    const cos_value_t *v_mediabox;
+
+    if (pdev->pages == NULL)
+        return_error(gs_error_undefined);
+
+    page = &pdev->pages[page_num - 1];
+    v_mediabox = cos_dict_find_c_key(page->Page, "/MediaBox");
+    page_id = pdf_page_id(pdev, page_num);
 
     /* If we have not been given a MediaBox overriding pdfmark, use the current media size. */
     s = pdev->strm;
@@ -1383,8 +1392,29 @@ pdf_write_page(gx_device_pdf *pdev, int page_num)
     /* Write the annotations array if any. */
 
     if (page->Annots) {
+        const cos_value_t *value = NULL;
+        const cos_array_element_t *e = NULL, *next = NULL;
+        long index = 0;
+
         stream_puts(s, "/Annots");
         COS_WRITE(page->Annots, pdev);
+        /* More complications caused by cos objects. Simply calling COS_FREE
+         * will free the array, but it won't free the elements of the array
+         * if they have non-zero IDs (see the comments regarding cleanup of
+         * resources in pdf_close at around line 1090 below). Because we've
+         * already written out the annotations, the dictionary contents have
+         * already been freed, but we need the IDs until this point when we
+         * write out the array in the page dictionary. So after using them,
+         * we must go through the array and set the ids to 0 so that COS_FREE
+         * will free the array elements as well as the array itself.
+         */
+        e = cos_array_element_first(page->Annots);
+        while (e != NULL) {
+            next = cos_array_element_next(e, &index, &value);
+            if (value->contents.object != NULL)
+                value->contents.object->id = 0;
+            e = next;
+        }
         COS_FREE(page->Annots, "pdf_write_page(Annots)");
         page->Annots = 0;
     }
@@ -2554,10 +2584,10 @@ pdf_close(gx_device * dev)
 {
     gx_device_pdf *const pdev = (gx_device_pdf *) dev;
     gs_memory_t *mem = pdev->pdf_memory;
-    stream *s;
+    stream *s = NULL;
     gp_file *tfile = pdev->xref.file;
     gs_offset_t xref = 0;
-    gs_offset_t resource_pos;
+    gs_offset_t resource_pos = 0;
     long Catalog_id = 0, Info_id = 0,
         Pages_id = 0, Encrypt_id = 0;
     long Threads_id = 0;
@@ -2569,12 +2599,15 @@ pdf_close(gx_device * dev)
     bool file_per_page = false;
 
     if (!dev->is_open)
-      return_error(gs_error_undefined);
+        return_error(gs_error_undefined);
     dev->is_open = false;
 
-    Catalog_id = pdev->Catalog->id;
-    Info_id = pdev->Info->id;
-    Pages_id = pdev->Pages->id;
+    if (pdev->Catalog)
+        Catalog_id = pdev->Catalog->id;
+    if (pdev->Info)
+        Info_id = pdev->Info->id;
+    if (pdev->Pages)
+        Pages_id = pdev->Pages->id;
 
     memset(&linear_params, 0x00, sizeof(linear_params));
     linear_params.Info_id = Info_id;
@@ -2681,7 +2714,7 @@ pdf_close(gx_device * dev)
     }
 
     /* Create the Pages tree. */
-    if (!(pdev->ForOPDFRead && pdev->ProduceDSC)) {
+    if (!(pdev->ForOPDFRead && pdev->ProduceDSC) && pdev->strm != NULL) {
         pdf_open_obj(pdev, Pages_id, resourcePagesTree);
         pdf_record_usage(pdev, Pages_id, resource_usage_part9_structure);
 
@@ -2724,7 +2757,7 @@ pdf_close(gx_device * dev)
             if (code >= 0)
                 code = code1;
             pdf_open_obj(pdev, pdev->outlines_id, resourceOutline);
-            pprintd1(s, "<< /Count %d", pdev->outlines_open);
+            pprintd1(s, "<< /Type /Outlines /Count %d", pdev->outlines_open);
             pprintld2(s, " /First %ld 0 R /Last %ld 0 R >>\n",
                   pdev->outline_levels[0].first.id,
                   pdev->outline_levels[0].last.id);
@@ -2844,7 +2877,8 @@ pdf_close(gx_device * dev)
         pdf_record_usage(pdev, pdev->Info->id, resource_usage_part9_structure);
 
     } else {
-        pdev->Info->id = 0;	/* Don't write Info dict for DSC PostScript */
+        if (pdev->Info != NULL)
+            pdev->Info->id = 0;	/* Don't write Info dict for DSC PostScript */
     }
     /*
      * Write the definitions of the named objects.
@@ -2852,10 +2886,13 @@ pdf_close(gx_device * dev)
      * XObjects, and images named by NI.
      */
 
-    do {
-        cos_dict_objects_write(pdev->local_named_objects, pdev);
-    } while (pdf_pop_namespace(pdev) >= 0);
-    cos_dict_objects_write(pdev->global_named_objects, pdev);
+    if(pdev->local_named_objects != NULL) {
+        do {
+            cos_dict_objects_write(pdev->local_named_objects, pdev);
+        } while (pdf_pop_namespace(pdev) >= 0);
+    }
+    if (pdev->global_named_objects != NULL)
+        cos_dict_objects_write(pdev->global_named_objects, pdev);
 
     if (pdev->ForOPDFRead && pdev->ProduceDSC) {
         int pages;
@@ -2870,20 +2907,22 @@ pdf_close(gx_device * dev)
 
     /* Copy the resources into the main file. */
 
-    s = pdev->strm;
-    resource_pos = stell(s);
-    sflush(pdev->asides.strm);
-    {
-        gp_file *rfile = pdev->asides.file;
-        int64_t res_end = gp_ftell(rfile);
+    if (pdev->strm != NULL) {
+        s = pdev->strm;
+        resource_pos = stell(s);
+        sflush(pdev->asides.strm);
+        {
+            gp_file *rfile = pdev->asides.file;
+            int64_t res_end = gp_ftell(rfile);
 
-        gp_fseek(rfile, 0L, SEEK_SET);
-        code1 = pdf_copy_data(s, rfile, res_end, NULL);
-        if (code >= 0)
-            code = code1;
+            gp_fseek(rfile, 0L, SEEK_SET);
+            code1 = pdf_copy_data(s, rfile, res_end, NULL);
+            if (code >= 0)
+                code = code1;
+        }
     }
 
-    if (pdev->ForOPDFRead && pdev->ProduceDSC) {
+    if (pdev->ForOPDFRead && pdev->ProduceDSC && s != NULL) {
         int j;
 
         pagecount = 1;
@@ -2959,7 +2998,7 @@ pdf_close(gx_device * dev)
         memset(linear_params.Offsets, 0x00, linear_params.LastResource * sizeof(gs_offset_t));
     }
 
-    if (!(pdev->ForOPDFRead && pdev->ProduceDSC)) {
+    if (!(pdev->ForOPDFRead && pdev->ProduceDSC) && pdev->strm != NULL) {
         /* Write Encrypt. */
         if (pdev->OwnerPassword.size > 0) {
             Encrypt_id = pdf_obj_ref(pdev);
@@ -3037,7 +3076,7 @@ pdf_close(gx_device * dev)
         }
     }
 
-    if (pdev->Linearise) {
+    if (pdev->Linearise && pdev->strm != NULL) {
         int i;
 
         code = pdf_linearise(pdev, &linear_params);
@@ -3055,13 +3094,13 @@ pdf_close(gx_device * dev)
      */
 
     /* Memory management of resources in pdfwrite is bizarre and complex. Originally there was no means
-     * to free any resorucesw on completionj, pdfwrite simply relied on the garbage collector to clean up
+     * to free any resources on completion, pdfwrite simply relied on the garbage collector to clean up
      * and all the resource objects are GC-visible. However, this doesn't work well when the interpreter
      * does not use GC, ie PCL or XPS, and even when GC is available, the time taken to clean up the
      * (sometimes enormous numbers) of objects can be surprisingly significant. So code was added above
-     * to handle the simple cases useing pdf_free_resource_object(), and below to handle the more complex
+     * to handle the simple cases using pdf_free_resource_object(), and below to handle the more complex
      * situations.
-     * The way this works is that for each resrouce type we free the 'object', if the object is itself
+     * The way this works is that for each resource type we free the 'object', if the object is itself
      * a 'cos' object (array, dictionary) then we free each of its members. However, if any of the objects
      * have an ID which is not zero, then we don't free them (this is true only for contents, all the
      * objects of a given type are freed regardless of whether their ID is 0). These are taken to be
@@ -3069,7 +3108,7 @@ pdf_close(gx_device * dev)
      * that resource type is freed. For the simple resources, which is most of them, this works well.
      *
      * However, there are complications; colour spaces and functions can contain cos objects
-     * whose members pointers to other objects of the same resoruce type (eg a type 3 stitching function
+     * whose members pointers to other objects of the same resource type (eg a type 3 stitching function
      * can point to an array of type 0 functions). We can't afford to have these free the object, because
      * the resource chain is still pointing at it, and will try to free it again. The same is also true if
      * we should encounter the object which is referenced before we find the reference. So for these cases
@@ -3087,11 +3126,11 @@ pdf_close(gx_device * dev)
      * There is a 'gotcha' here; previously we used to free the 'resourceOther' resources *before* calling
      * pdf_document_metadata(), now we call it after. The problem is that the metadata is stored as a resourceOther
      * resource *and* referenced from the Catalog dictionary, which is a 'global named resource'. We free global
-     * named resoruces as the absolute last action. Previously because we had free resourceOther resoruces before
+     * named resoruces as the absolute last action. Previously because we had free resourceOther resources before
      * creating the new reference to the Metadata, the fact that it was freed by the action of releasing the
      * global named resources wasn't a problem, now it is. If we free the metadata as a 'resourceOther' then when
      * we try to free it as a global named resource we will run into trouble again. So pdf_document_metadata() has been
-     * specifally altered to remove the reference to the metadata from the resourceOther resource chain immediately
+     * specifically altered to remove the reference to the metadata from the resourceOther resource chain immediately
      * after it has been created. Ick.....
      */
     {
@@ -3170,7 +3209,7 @@ pdf_close(gx_device * dev)
 
             for (; pres != 0;) {
                 if (pres->object) {
-                    gs_free_object(pdev->pdf_memory, (byte *)pres->object, "Free CharProc");
+                    cos_free(pres->object, "free CharProc resource");
                     pres->object = 0;
                 }
                 pres = pres->next;
@@ -3366,23 +3405,30 @@ pdf_close(gx_device * dev)
 
     /* Free named objects. */
 
-    cos_release((cos_object_t *)pdev->NI_stack, "Release Name Index stack");
-    gs_free_object(mem, pdev->NI_stack, "Free Name Index stack");
-    pdev->NI_stack = 0;
+    if (pdev->NI_stack != NULL) {
+        cos_release((cos_object_t *)pdev->NI_stack, "Release Name Index stack");
+        gs_free_object(mem, pdev->NI_stack, "Free Name Index stack");
+        pdev->NI_stack = 0;
+    }
 
-    cos_dict_objects_delete(pdev->local_named_objects);
-    COS_FREE(pdev->local_named_objects, "pdf_close(local_named_objects)");
-    pdev->local_named_objects = 0;
+    if (pdev->local_named_objects != NULL) {
+        cos_dict_objects_delete(pdev->local_named_objects);
+        COS_FREE(pdev->local_named_objects, "pdf_close(local_named_objects)");
+        pdev->local_named_objects = 0;
+    }
 
-    /* global resources include the Catalog object and apparently the Info dict */
-    cos_dict_objects_delete(pdev->global_named_objects);
-    COS_FREE(pdev->global_named_objects, "pdf_close(global_named_objects)");
-    pdev->global_named_objects = 0;
+    if (pdev->global_named_objects != NULL) {
+        /* global resources include the Catalog object and apparently the Info dict */
+        cos_dict_objects_delete(pdev->global_named_objects);
+        COS_FREE(pdev->global_named_objects, "pdf_close(global_named_objects)");
+        pdev->global_named_objects = 0;
+    }
 
     /* Wrap up. */
 
     pdev->font_cache = 0;
 
+    if (pdev->pages != NULL)
     {
         int i;
         for (i=0;i < pdev->next_page;i++) {
@@ -3402,24 +3448,32 @@ pdf_close(gx_device * dev)
     gs_free_object(mem, pdev->sbstack, "Free sbstack");
     pdev->sbstack = 0;
 
-    text_data_free(mem, pdev->text);
+    if (pdev->text != NULL)
+        text_data_free(mem, pdev->text);
     pdev->text = 0;
 
-    cos_release((cos_object_t *)pdev->Pages, "release Pages dict");
-    gs_free_object(mem, pdev->Pages, "Free Pages dict");
-    pdev->Pages = 0;
+    if (pdev->Pages != NULL) {
+        cos_release((cos_object_t *)pdev->Pages, "release Pages dict");
+        gs_free_object(mem, pdev->Pages, "Free Pages dict");
+        pdev->Pages = 0;
+    }
 
+    if (pdev->vgstack != NULL)
     {
         int i;
-        for (i=0;i < pdev->vgstack_depth;i++)
-            gs_free_object(pdev->memory->non_gc_memory, pdev->vgstack[i].dash_pattern, "pdfwrite final free stored dash in gstate");
+        for (i=0;i < pdev->vgstack_size;i++) {
+            if (pdev->vgstack[i].dash_pattern != NULL)
+                gs_free_object(pdev->memory->non_gc_memory, pdev->vgstack[i].dash_pattern, "pdfwrite final free stored dash in gstate");
+        }
+        gs_free_object(pdev->pdf_memory, pdev->vgstack, "pdf_close(graphics state stack)");
+        pdev->vgstack = 0;
     }
-    gs_free_object(pdev->pdf_memory, pdev->vgstack, "pdf_close(graphics state stack)");
-    pdev->vgstack = 0;
 
-    cos_release((cos_object_t *)pdev->Namespace_stack, "release Name space stack");
-    gs_free_object(mem, pdev->Namespace_stack, "Free Name space stack");
-    pdev->Namespace_stack = 0;
+    if (pdev->Namespace_stack != NULL) {
+        cos_release((cos_object_t *)pdev->Namespace_stack, "release Name space stack");
+        gs_free_object(mem, pdev->Namespace_stack, "Free Name space stack");
+        pdev->Namespace_stack = 0;
+    }
 
     pdev->Catalog = 0;
     pdev->Info = 0;
@@ -3429,6 +3483,7 @@ pdf_close(gx_device * dev)
     pdev->outline_depth = -1;
     pdev->max_outline_depth = 0;
 
+    if (s != NULL)
     {
         /* pdf_open_dcument could set up filters for entire document.
            Removing them now. */

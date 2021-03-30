@@ -1,4 +1,4 @@
-# Copyright (C) 2001-2020 Artifex Software, Inc.
+# Copyright (C) 2001-2021 Artifex Software, Inc.
 # All Rights Reserved.
 #
 # This software is provided AS-IS with no warranty, either express or
@@ -192,8 +192,8 @@ nsis: $(PSSRC)nsisinst.nsi $(GSCONSOLE_XE) $(GS_ALL) $(GS_XE) $(GSDLL_DLL) $(BIN
 !endif
 
 # -------------------- Distribution source archive ------------------- #
-# This creates a zip file containing the files needed to build 
-# ghostscript on MS-Windows.  We don't distribute this zip file, 
+# This creates a zip file containing the files needed to build
+# ghostscript on MS-Windows.  We don't distribute this zip file,
 # but use it to build the executable distribution.
 #
 # The MS-Windows build process for a release is

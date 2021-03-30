@@ -1,4 +1,4 @@
-/* Copyright (C) 2001-2020 Artifex Software, Inc.
+/* Copyright (C) 2001-2021 Artifex Software, Inc.
    All Rights Reserved.
 
    This software is provided AS-IS with no warranty, either express or
@@ -95,12 +95,13 @@ cmd_compress_bitmap(stream_state * st, const byte * data, uint width_bits,
     uint mask = (0xff00>>(width_bits & 7)) & 0xff;
     uint padding = width_bytes - ((width_bits+7)>>3);
 
-    r.ptr = data - 1;
     if (raster == whole_bytes) {
-        r.limit = r.ptr + raster * height;
+        stream_cursor_read_init(&r, data, raster * (size_t)height);
         status = (*st->templat->process) (st, &r, pw, true);
     } else {			/* Compress row-by-row. */
         uint y;
+
+        stream_cursor_read_init(&r, data, whole_bytes);
 
         for (y = height-1; (r.limit = r.ptr + whole_bytes), y > 0; y--) {
             status = go_process(st, &r, pw, false);
@@ -108,15 +109,14 @@ cmd_compress_bitmap(stream_state * st, const byte * data, uint width_bits,
                 break;
             if (mask) {
                 byte b = r.ptr[1] & mask;
-                r2.limit = &b;
-                r2.ptr = r2.limit-1;
+
+                stream_cursor_read_init(&r2, &b, 1);
                 status = go_process(st, &r2, pw, false);
                 if (status)
                     break;
             }
             if (padding) {
-                r2.ptr = zeros - 1;
-                r2.limit = r2.ptr + padding;
+                stream_cursor_read_init(&r2, zeros, padding);
                 status = go_process(st, &r2, pw, false);
                 if (status)
                     break;
@@ -127,13 +127,12 @@ cmd_compress_bitmap(stream_state * st, const byte * data, uint width_bits,
             status = go_process(st, &r, pw, padding == 0 && mask == 0);
             if (status == 0 && mask) {
                 byte b = r.ptr[1] & mask;
-                r2.limit = &b;
-                r2.ptr = r2.limit-1;
+
+                stream_cursor_read_init(&r2, &b, 1);
                 status = go_process(st, &r2, pw, padding == 0);
             }
             if (status == 0 && padding) {
-                r2.ptr = zeros - 1;
-                r2.limit = r2.ptr + padding;
+                stream_cursor_read_init(&r2, zeros, padding);
                 status = go_process(st, &r2, pw, true);
             }
         }
@@ -234,7 +233,7 @@ cmd_put_bits(gx_device_clist_writer * cldev, gx_clist_state * pcls,
                 uint wcount = w.ptr - wbase;
 
                 cmd_shorten_list_op(cldev,
-                             (pcls ? &pcls->list : &cldev->band_range_list),
+                             (pcls ? &pcls->list : cldev->band_range_list),
                                     try_size - (op_size + wcount));
                 *psize = op_size + wcount;
                 goto out;
@@ -246,7 +245,7 @@ cmd_put_bits(gx_device_clist_writer * cldev, gx_clist_state * pcls,
                        "[L]Uncompressed bits %u too large for buffer\n",
                        uncompressed_size);
             cmd_shorten_list_op(cldev,
-                             (pcls ? &pcls->list : &cldev->band_range_list),
+                             (pcls ? &pcls->list : cldev->band_range_list),
                                 try_size);
             return_error(gs_error_limitcheck);
         }
@@ -254,7 +253,7 @@ cmd_put_bits(gx_device_clist_writer * cldev, gx_clist_state * pcls,
             if_debug2m('L',cldev->memory,"[L]Shortening bits from %u to %u\n",
                        try_size, op_size + short_size);
             cmd_shorten_list_op(cldev,
-                             (pcls ? &pcls->list : &cldev->band_range_list),
+                             (pcls ? &pcls->list : cldev->band_range_list),
                                 try_size - (op_size + short_size));
             *psize = op_size + short_size;
         }
@@ -273,7 +272,7 @@ cmd_put_bits(gx_device_clist_writer * cldev, gx_clist_state * pcls,
     if ((compression_mask & (1 << cmd_compress_const)) &&
         (code = bytes_rectangle_is_const(data, raster, uncompressed_raster << 3, height)) >= 0) {
         cmd_shorten_list_op(cldev,
-                            (pcls ? &pcls->list : &cldev->band_range_list),
+                            (pcls ? &pcls->list : cldev->band_range_list),
                             *psize - (op_size + 1));
         *psize = op_size + 1;
         dp[op_size] = code;

@@ -1,4 +1,4 @@
-/* Copyright (C) 2001-2020 Artifex Software, Inc.
+/* Copyright (C) 2001-2021 Artifex Software, Inc.
    All Rights Reserved.
 
    This software is provided AS-IS with no warranty, either express or
@@ -557,7 +557,12 @@ pdf_do_char_image(gx_device_pdf * pdev, const pdf_char_proc_t * pcp,
 int
 pdf_write_bitmap_fonts_Encoding(gx_device_pdf *pdev)
 {
-    pdf_bitmap_fonts_t *pbfs = pdev->text->bitmap_fonts;
+    pdf_bitmap_fonts_t *pbfs;
+
+    if (pdev->text == NULL || pdev->text->bitmap_fonts == NULL)
+        return 0;
+
+    pbfs = pdev->text->bitmap_fonts;
 
     if (pbfs->bitmap_encoding_id) {
         stream *s;

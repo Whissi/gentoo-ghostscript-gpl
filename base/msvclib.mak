@@ -1,4 +1,4 @@
-# Copyright (C) 2001-2020 Artifex Software, Inc.
+# Copyright (C) 2001-2021 Artifex Software, Inc.
 # All Rights Reserved.
 #
 # This software is provided AS-IS with no warranty, either express or
@@ -14,7 +14,7 @@
 #
 # makefile for Microsoft Visual C++ 4.1 or later, Windows NT or Windows 95 LIBRARY.
 #
-# All configurable options are surrounded by !ifndef/!endif to allow 
+# All configurable options are surrounded by !ifndef/!endif to allow
 # preconfiguration from within another makefile.
 
 # If we are building MEMENTO=1, then adjust default debug flags
@@ -387,47 +387,14 @@ TIFFPLATFORM=win32
 TIFF_CFLAGS=-DJPEG_SUPPORT -DOJPEG_SUPPORT -DJPEG_LIB_MK1_OR_12BIT=0
 !endif
 
-# Define which jbig2 library to use
-!if !defined(JBIG2_LIB) && (!defined(NO_LURATECH) || "$(NO_LURATECH)" != "1")
-!if exist("luratech\ldf_jb2")
-JBIG2_LIB=luratech
-!endif
-!endif
-
 !ifndef JBIG2_LIB
 JBIG2_LIB=jbig2dec
 !endif
 
-!if "$(JBIG2_LIB)" == "luratech" || "$(JBIG2_LIB)" == "ldf_jb2"
-# Set defaults for using the Luratech JB2 implementation
-!ifndef JBIG2SRCDIR
-# CSDK source code location
-JBIG2SRCDIR=luratech\ldf_jb2
-!endif
-!ifndef JBIG2_CFLAGS
-# required compiler flags
-!ifdef WIN64
-JBIG2_CFLAGS=-DUSE_LDF_JB2 -DWIN64
-!else
-JBIG2_CFLAGS=-DUSE_LDF_JB2 -DWIN32
-!endif
-!endif
-!else
 # Use jbig2dec by default. See jbig2.mak for more information.
 !ifndef JBIG2SRCDIR
 # location of included jbig2dec library source
 JBIG2SRCDIR=jbig2dec
-!endif
-!endif
-
-# Alternatively, you can build a separate DLL
-# and define SHARE_JBIG2=1 in src/winlib.mak
-
-# Define which jpeg2k library to use
-!if !defined(JPX_LIB) && (!defined(NO_LURATECH) || "$(NO_LURATECH)" != "1")
-!if exist("luratech\lwf_jp2")
-JPX_LIB=luratech
-!endif
 !endif
 
 # Alternatively, you can build a separate DLL
@@ -612,6 +579,37 @@ MS_TOOLSET_VERSION=14.26.28806
 !if "$(_NMAKE_VER)" == "14.27.29111.0"
 # VS2019 (Toolset v142)
 MSVC_VERSION=16
+MS_TOOLSET_VERSION=14.27.29111
+!endif
+!if "$(_NMAKE_VER)" == "14.27.29112.0"
+# VS2019 (Toolset v142)
+MSVC_VERSION=16
+MS_TOOLSET_VERSION=14.27.29112
+!endif
+!if "$(_NMAKE_VER)" == "14.28.29333.0"
+# VS2019 (Toolset v142)
+MSVC_VERSION=16
+MS_TOOLSET_VERSION=14.28.29333
+!endif
+!if "$(_NMAKE_VER)" == "14.28.29334.0"
+# VS2019 (Toolset v142)
+MSVC_VERSION=16
+MS_TOOLSET_VERSION=14.28.29333
+!endif
+!if "$(_NMAKE_VER)" == "14.28.29335.0"
+# VS2019 (Toolset v142)
+MSVC_VERSION=16
+MS_TOOLSET_VERSION=14.28.29333
+!endif
+!if "$(_NMAKE_VER)" == "14.28.29336.0"
+# VS2019 (Toolset v142)
+MSVC_VERSION=16
+MS_TOOLSET_VERSION=14.28.29333
+!endif
+!if "$(_NMAKE_VER)" == "14.28.29910.0"
+# VS2019 (Toolset v142)
+MSVC_VERSION=16
+MS_TOOLSET_VERSION=14.28.29333
 !endif
 !endif
 
@@ -905,20 +903,55 @@ LINKLIBPATH=/LIBPATH:"$(COMPBASE)\lib\amd64" /LIBPATH:"$(COMPBASE)\PlatformSDK\L
 !endif
 
 !if $(MSVC_VERSION) == 15
+! ifndef DEVSTUDIO
+DEVSTUDIO=C:\Program Files (x86)\Microsoft Visual Studio\2017\Community\VC\Tools\MSVC\$(MS_TOOLSET_VERSION)
+! endif
 ! if "$(DEVSTUDIO)"==""
 COMPBASE=
 SHAREDBASE=
 ! else
-!MESSAGE Compilation is unlikely to work like this. Build from VS solution for now.
+!  if $(BUILD_SYSTEM) == 64
+DEVSTUDIO_HOST=Hostx64
+!  else
+DEVSTUDIO_HOST=Hostx86
+!  endif
+!  ifdef WIN64
+DEVSTUDIO_TARGET=x64
+!  else
+DEVSTUDIO_TARGET=x86
+!  endif
+COMPDIR=$(DEVSTUDIO)\bin\$(DEVSTUDIO_HOST)\$(DEVSTUDIO_TARGET)
+RCDIR=
+LINKLIBPATH=/LIBPATH:"$(DEVSTUDIO)\lib\$(DEVSTUDIO_TARGET)"
 ! endif
 !endif
 
 !if $(MSVC_VERSION) == 16
+! ifndef DEVSTUDIO
+!  if exist("C:\Program Files (x86)\Microsoft Visual Studio\2019\Professional")
+DEVSTUDIO_VARIANT=Professional
+!  else
+DEVSTUDIO_VARIANT=Community
+!  endif
+DEVSTUDIO=C:\Program Files (x86)\Microsoft Visual Studio\2019\$(DEVSTUDIO_VARIANT)\VC\Tools\MSVC\$(MS_TOOLSET_VERSION)
+! endif
 ! if "$(DEVSTUDIO)"==""
 COMPBASE=
 SHAREDBASE=
 ! else
-!MESSAGE Compilation is unlikely to work like this. Build from VS solution for now.
+!  if $(BUILD_SYSTEM) == 64
+DEVSTUDIO_HOST=Hostx64
+!  else
+DEVSTUDIO_HOST=Hostx86
+!  endif
+!  ifdef WIN64
+DEVSTUDIO_TARGET=x64
+!  else
+DEVSTUDIO_TARGET=x86
+!  endif
+COMPDIR=$(DEVSTUDIO)\bin\$(DEVSTUDIO_HOST)\$(DEVSTUDIO_TARGET)
+RCDIR=
+LINKLIBPATH=/LIBPATH:"$(DEVSTUDIO)\lib\$(DEVSTUDIO_TARGET)"
 ! endif
 !endif
 
@@ -1112,24 +1145,6 @@ JPX_SSE_CFLAGS=
 
 !ifndef SYNC
 SYNC=winsync
-!endif
-
-# Luratech jp2 flags depend on the compiler version
-#
-!if "$(JPX_LIB)" == "luratech" || "$(JPX_LIB)" == "lwf_jp2"
-# Set defaults for using the Luratech JP2 implementation
-!ifndef JPXSRCDIR
-# CSDK source code location
-JPXSRCDIR=luratech\lwf_jp2
-!endif
-!ifndef JPX_CFLAGS
-# required compiler flags
-!ifdef WIN64
-JPX_CFLAGS=-DUSE_LWF_JP2 -DWIN64 -DNO_ASSEMBLY
-!else
-JPX_CFLAGS=-DUSE_LWF_JP2 -DWIN32 -DNO_ASSEMBLY
-!endif
-!endif
 !endif
 
 # OpenJPEG compiler flags

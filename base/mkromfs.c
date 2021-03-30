@@ -1,4 +1,4 @@
-/* Copyright (C) 2001-2020 Artifex Software, Inc.
+/* Copyright (C) 2001-2021 Artifex Software, Inc.
    All Rights Reserved.
 
    This software is provided AS-IS with no warranty, either express or
@@ -159,6 +159,18 @@ int gp_stat_impl(const gs_memory_t *mem, const char *path, struct _stat64 *buf)
     (void)buf;
     return 0;
 }
+#ifdef MEMENTO
+#undef malloc
+#undef free
+void* Memento_malloc(size_t s)
+{
+    return malloc(s);
+}
+void Memento_free(void* blk)
+{
+    free(blk);
+}
+#endif
 #endif
 
 int
@@ -200,26 +212,6 @@ int outprintf(const gs_memory_t *mem, const char *fmt, ...)
     return count;
 }
 
-#ifndef GS_THREADSAFE
-int errprintf_nomem(const char *fmt, ...)
-{
-    int count;
-    char buf[PRINTF_BUF_LENGTH];
-    va_list args;
-
-    va_start(args, fmt);
-    count = vsnprintf(buf, sizeof(buf), fmt, args);
-    if (count < 0 || count >= sizeof(buf))  { /* MSVC || C99 */
-        fwrite(buf, 1, sizeof(buf) - 1, stderr);
-        fwrite(msg_truncated, 1, sizeof(msg_truncated) - 1, stderr);
-    } else {
-        fwrite(buf, 1, count, stderr);
-    }
-    va_end(args);
-    return count;
-}
-#endif
-
 int errprintf(const gs_memory_t *mem, const char *fmt, ...)
 {
     int count;
@@ -238,19 +230,36 @@ int errprintf(const gs_memory_t *mem, const char *fmt, ...)
     return count;
 }
 
+int errprintf_nomem(const char *fmt, ...)
+{
+    int count;
+    char buf[PRINTF_BUF_LENGTH];
+    va_list args;
+
+    va_start(args, fmt);
+    count = vsnprintf(buf, sizeof(buf), fmt, args);
+    if (count < 0 || count >= sizeof(buf))  { /* MSVC || C99 */
+        fwrite(buf, 1, sizeof(buf) - 1, stderr);
+        fwrite(msg_truncated, 1, sizeof(msg_truncated) - 1, stderr);
+    } else {
+        fwrite(buf, 1, count, stderr);
+    }
+    va_end(args);
+    return count;
+}
 
 #ifndef GS_THREADSAFE
 #if __LINE__                    /* compiler provides it */
 void
 lprintf_file_and_line(const char *file, int line)
 {
-    epf("%s(%d): ", file, line);
+    errprintf(NULL, "%s(%d): ", file, line);
 }
 #else
 void
 lprintf_file_only(FILE * f, const char *file)
 {
-    epf("%s(?): ", file);
+    errprintf(NULL, "%s(?): ", file);
 }
 #endif
 
@@ -259,13 +268,13 @@ eprintf_program_ident(const char *program_name,
                       long revision_number)
 {
     if (program_name) {
-        epf((revision_number ? "%s " : "%s"), program_name);
+        errprintf(NULL, (revision_number ? "%s " : "%s"), program_name);
         if (revision_number) {
             int fpart = revision_number % 100;
 
-            epf("%d.%02d", (int)(revision_number / 100), fpart);
+            errprintf(NULL, "%d.%02d", (int)(revision_number / 100), fpart);
         }
-        epf(": ");
+        errprintf(NULL, ": ");
     }
 }
 #endif
@@ -290,9 +299,9 @@ int
 gs_log_error(int err, const char *file, int line)
 {
     if (file == NULL)
-        errprintf_nomem("Returning error %d.\n", err);
+        errprintf(NULL, "Returning error %d.\n", err);
     else
-        errprintf_nomem("%s(%d): Returning error %d.\n",
+        errprintf(NULL, "%s(%d): Returning error %d.\n",
                  (const char *)file, line, err);
     return err;
 }
@@ -341,6 +350,22 @@ minimal_free_string(gs_memory_t * mem, byte * data, size_t nbytes, client_name_t
 {
     free(data);
     return;
+}
+
+/* Minimal thread functions (needed by gs_next_ids */
+int gp_monitor_enter(gp_monitor *);
+int gp_monitor_leave(gp_monitor *);
+
+int
+gp_monitor_enter(gp_monitor * mon)
+{
+    return 0;
+}
+
+int
+gp_monitor_leave(gp_monitor * mon)
+{
+    return 0;
 }
 
 void basic_enum_ptrs(void);

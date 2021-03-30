@@ -1,4 +1,4 @@
-# Copyright (C) 2001-2020 Artifex Software, Inc.
+# Copyright (C) 2001-2021 Artifex Software, Inc.
 # All Rights Reserved.
 #
 # This software is provided AS-IS with no warranty, either express or
@@ -24,7 +24,7 @@ DEVVECSRC=$(DEVVEC)$(D)
 DEVI_=$(DEVGENDIR) $(II)$(GLSRCDIR) $(II)$(GLGENDIR) $(II)$(DEVSRCDIR)
 DEVF_=
 
-DEVCCFLAGS=$(I_)$(DEVI_)$(_I) $(I_)$(DEVVEC)$(_I) $(DEVF_)
+DEVCCFLAGS=$(I_)$(DEVI_)$(_I) $(I_)$(DEVVEC)$(_I) $(D_)OCR_VERSION=$(OCR_VERSION)$(_D) $(DEVF_)
 DEVCC=$(CC_) $(DEVCCFLAGS)
 XPSDEVCC=$(CC_) $(XPSPRINTCFLAGS) $(DEVCCFLAGS)
 
@@ -117,6 +117,7 @@ DEVGEN=$(DEVGENDIR)$(D)
 # High-level file formats:
 #	pdfwrite	PDF output (like Adobe Acrobat Distiller)
 #	txtwrite	ASCII or Unicode text output
+#	docxwrite	Docx output
 #	pxlmono 	Black-and-white PCL XL
 #	pxlcolor	Color PCL XL
 # Other raster file formats and devices:
@@ -633,14 +634,14 @@ $(DEVOBJ)gdevpsdi.$(OBJ) : $(DEVVECSRC)gdevpsdi.c $(GXERR)\
  $(scfx_h) $(slzwx_h) $(spngpx_h)\
  $(strimpl_h) $(szlibx_h) $(sisparam_h)\
  $(gdevpsdf_h) $(gdevpsds_h) $(gxdevmem_h) $(gxcspace_h) $(gxparamx_h)\
- $(sjbig2_luratech_h) $(sjpx_luratech_h) $(gsicc_manage_h) $(DEVS_MAK) $(MAKEDIRS)
+ $(gsicc_manage_h) $(DEVS_MAK) $(MAKEDIRS)
 	$(GDEVLWFJB2JPXCC) $(DEVO_)gdevpsdi.$(OBJ) $(C_) $(DEVVECSRC)gdevpsdi.c
 
 $(DEVOBJ)gdevpsdp.$(OBJ) : $(DEVVECSRC)gdevpsdp.c $(GDEVH)\
  $(string__h) $(jpeglib__h)\
  $(scfx_h) $(sdct_h) $(slzwx_h) $(srlx_h) $(strimpl_h) $(szlibx_h)\
  $(gsparamx_h) $(gsutil_h) $(gdevpsdf_h)\
- $(sjbig2_luratech_h) $(sjpx_luratech_h) $(DEVS_MAK) $(MAKEDIRS)
+ $(DEVS_MAK) $(MAKEDIRS)
 	$(GDEVLWFJB2JPXCC) $(DEVO_)gdevpsdp.$(OBJ) $(C_) $(DEVVECSRC)gdevpsdp.c
 
 $(DEVOBJ)gdevpsds.$(OBJ) : $(DEVVECSRC)gdevpsds.c $(GX) $(memory__h)\
@@ -659,7 +660,7 @@ $(DEVOBJ)gdevpsdu.$(OBJ) : $(DEVVECSRC)gdevpsdu.c $(GXERR)\
 
 gdevagl_h=$(DEVVECSRC)gdevagl.h
 
-txtwrite_=$(DEVOBJ)gdevtxtw.$(OBJ) $(DEVOBJ)gdevagl.$(OBJ)
+txtwrite_=$(DEVOBJ)gdevtxtw.$(OBJ) $(DEVOBJ)gdevagl.$(OBJ) $(DEVOBJ)doc_common.$(OBJ)
 
 $(DD)txtwrite.dev : $(ECHOGS_XE) $(txtwrite_) $(GDEV)\
  $(gdevagl_h) $(DEVS_MAK) $(MAKEDIRS)
@@ -668,12 +669,38 @@ $(DD)txtwrite.dev : $(ECHOGS_XE) $(txtwrite_) $(GDEV)\
 $(DEVOBJ)gdevtxtw.$(OBJ) : $(DEVVECSRC)gdevtxtw.c $(GDEV) $(gdevkrnlsclass_h) \
   $(memory__h) $(string__h) $(gp_h) $(gsparam_h) $(gsutil_h) \
   $(gsdevice_h) $(gxfont_h) $(gxfont0_h) $(gstext_h) $(gxfcid_h)\
-  $(gxgstate_h) $(gxpath_h) $(gdevagl_h) $(DEVS_MAK) $(MAKEDIRS)
+  $(gxgstate_h) $(gxpath_h) $(gdevagl_h) $(DEVS_MAK) $(MAKEDIRS) $(DEVVECSRC)doc_common.h
 	$(DEVCC) $(DEVO_)gdevtxtw.$(OBJ) $(C_) $(DEVVECSRC)gdevtxtw.c
 
 $(DEVOBJ)gdevagl.$(OBJ) : $(DEVVECSRC)gdevagl.c $(GDEV)\
  $(gdevagl_h) $(DEVS_MAK) $(MAKEDIRS)
 	$(DEVCC) $(DEVO_)gdevagl.$(OBJ) $(C_) $(DEVVECSRC)gdevagl.c
+
+
+# Docx writer
+
+gdevagl_h=$(DEVVECSRC)gdevagl.h
+
+docxwrite_=$(DEVOBJ)gdevdocxw.$(OBJ) $(DEVOBJ)gdevagl.$(OBJ) $(DEVOBJ)doc_common.$(OBJ)
+
+$(DD)docxwrite.dev : $(ECHOGS_XE) $(docxwrite_) $(GDEV)\
+ $(gdevagl_h) $(DEVS_MAK) $(MAKEDIRS) $(EXTRACT_OBJS)
+	$(SETDEV2) $(DD)docxwrite $(docxwrite_) $(EXTRACT_OBJS)
+
+$(DEVOBJ)gdevdocxw.$(OBJ) : $(DEVVECSRC)gdevdocxw.c $(GDEV) $(gdevkrnlsclass_h) \
+  $(memory__h) $(string__h) $(gp_h) $(gsparam_h) $(gsutil_h) \
+  $(gsdevice_h) $(gxfont_h) $(gxfont0_h) $(gstext_h) $(gxfcid_h)\
+  $(gxgstate_h) $(gxpath_h) $(gdevagl_h) $(DEVS_MAK) $(MAKEDIRS) \
+  $(DEVVECSRC)doc_common.h
+	$(DEVCC) $(DEVO_)gdevdocxw.$(OBJ) $(C_) $(DEVVECSRC)gdevdocxw.c
+
+# Shared code used by txtwrite and docxwrite.
+
+$(DEVOBJ)doc_common.$(OBJ) : $(DEVVECSRC)doc_common.c $(GDEV) $(gdevkrnlsclass_h) \
+  $(memory__h) $(string__h) $(gp_h) $(gsparam_h) $(gsutil_h) \
+  $(gsdevice_h) $(gxfont_h) $(gxfont0_h) $(gstext_h) $(gxfcid_h)\
+  $(gxgstate_h) $(gxpath_h) $(gdevagl_h) $(DEVS_MAK) $(MAKEDIRS) $(DEVVECSRC)doc_common.h
+	$(DEVCC) $(DEVO_)doc_common.$(OBJ) $(C_) $(DEVVECSRC)doc_common.c
 
 
 ################ BEGIN PDF WRITER ################
@@ -847,7 +874,7 @@ $(DEVOBJ)gdevpdfu.$(OBJ) : $(DEVVECSRC)gdevpdfu.c $(GXERR)\
  $(gsdsrc_h) $(gsfunc_h) $(gsfunc3_h)\
  $(sa85x_h) $(scfx_h) $(sdct_h) $(slzwx_h) $(spngpx_h)\
  $(srlx_h) $(sarc4_h) $(smd5_h) $(sstring_h) $(strimpl_h) $(szlibx_h)\
- $(strmio_h) $(sjbig2_luratech_h) $(sjpx_luratech_h)\
+ $(strmio_h) \
  $(opdfread_h) $(gdevagl_h) $(gs_mro_e_h) $(gs_mgl_e_h) \
  $(DEVS_MAK) $(MAKEDIRS)
 	$(GDEVLWFJB2JPXCC) $(DEVO_)gdevpdfu.$(OBJ) $(C_) $(DEVVECSRC)gdevpdfu.c
@@ -1248,38 +1275,6 @@ $(DEVOBJ)gdevperm.$(OBJ) : $(DEVSRC)gdevperm.c $(PDEVH) $(math__h)\
  $(gdevdcrd_h) $(gscrd_h) $(gscrdp_h) $(gsparam_h) $(gxlum_h) $(DEVS_MAK) $(MAKEDIRS)
 	$(DEVCC) $(DEVO_)gdevperm.$(OBJ) $(C_) $(DEVSRC)gdevperm.c
 
-### ------------------------ JBIG2 testing device ---------------------- ###
-
-gdevjbig2_=$(DEVOBJ)gdevjbig2.$(OBJ)
-
-$(DD)gdevjbig2.dev : $(gdevjbig2_) $(GLD)page.dev $(GDEV) \
- $(DEVS_MAK) $(MAKEDIRS)
-	$(SETPDEV2) $(DD)gdevjbig2 $(gdevjbig2_)
-
-$(DEVOBJ)gdevjbig2.$(OBJ) : $(DEVSRC)gdevjbig2.c $(PDEVH)\
- $(stream_h) $(strimpl_h) $(sjbig2_luratech_h) $(DEVS_MAK) $(MAKEDIRS)
-	$(GDEVLDFJB2CC) $(DEVO_)gdevjbig2.$(OBJ) $(C_) $(DEVSRC)gdevjbig2.c
-
-### ------------------------ JPX testing device ----------------------
-###
-
-gdevjpx_=$(DEVOBJ)gdevjpx.$(OBJ)
-
-$(DD)jpxrgb.dev : $(gdevjpx_) $(GLD)page.dev $(GDEV) \
- $(DEVS_MAK) $(MAKEDIRS)
-	$(SETPDEV2) $(DD)jpxrgb $(gdevjpx_)
-
-$(DD)jpxgray.dev : $(gdevjpx_) $(GLD)page.dev $(GDEV) \
- $(DEVS_MAK) $(MAKEDIRS)
-	$(SETPDEV2) $(DD)jpxgray $(gdevjpx_)
-
-$(DD)jpxcmyk.dev : $(gdevjpx_) $(GLD)page.dev $(GDEV) \
- $(DEVS_MAK) $(MAKEDIRS)
-	$(SETPDEV2) $(DD)jpxcmyk $(gdevjpx_)
-
-$(DEVOBJ)gdevjpx.$(OBJ) : $(DEVSRC)gdevjpx.c $(PDEVH)\
- $(stream_h) $(strimpl_h) $(sjpx_luratech_h) $(DEVS_MAK) $(MAKEDIRS)
-	$(GDEVLWFJPXCC) $(DEVO_)gdevjpx.$(OBJ) $(C_) $(DEVSRC)gdevjpx.c
 
 ### ------------------------- JPEG file format ------------------------- ###
 
@@ -1709,7 +1704,7 @@ $(DEVOBJ)gdevtsep_1.$(OBJ) : $(DEVSRC)gdevtsep.c $(PDEVH) $(stdint__h)\
 
 $(DEVOBJ)gdevtsep.$(OBJ) : $(DEVOBJ)gdevtsep_$(WITH_CAL).$(OBJ)
 	$(CP_) $(DEVOBJ)gdevtsep_$(WITH_CAL).$(OBJ) $(DEVOBJ)gdevtsep.$(OBJ)
-			 
+
 
 # TIFF Scaled (downscaled gray -> mono), configurable compression
 

@@ -1,4 +1,4 @@
-# Copyright (C) 2001-2020 Artifex Software, Inc.
+# Copyright (C) 2001-2021 Artifex Software, Inc.
 # All Rights Reserved.
 #
 # This software is provided AS-IS with no warranty, either express or
@@ -44,14 +44,14 @@ SHARE_LCUPS=0
 LCUPS_NAME=
 LCUPSSRCDIR=cups
 LCUPSBUILDTYPE=win
-CUPS_CC=$(CC) $(CFLAGS) -DWIN32 
+CUPS_CC=$(CC) $(CFLAGS) -DWIN32
 !endif
 
 !ifndef LCUPSISRCDIR
 SHARE_LCUPSI=0
 LCUPSI_NAME=
 LCUPSISRCDIR=cups
-CUPS_CC=$(CC) $(CFLAGS) -DWIN32 
+CUPS_CC=$(CC) $(CFLAGS) -DWIN32
 !endif
 
 # Define the platform name.
@@ -64,7 +64,7 @@ GSPLATFORM=mswin32_
 !endif
 !endif
 
-# Define the auxiliary program dependency. We use this to 
+# Define the auxiliary program dependency. We use this to
 # preconstruct ccf32.tr to get around the limit on the maximum
 # length of a command line.
 
@@ -152,8 +152,6 @@ BEGINFILES=$(GLGENDIR)\ccf32.tr\
 !include $(GLSRCDIR)\png.mak
 !include $(GLSRCDIR)\tiff.mak
 !include $(GLSRCDIR)\jbig2.mak
-!include $(GLSRCDIR)\ldf_jb2.mak
-!include $(GLSRCDIR)\lwf_jp2.mak
 !include $(GLSRCDIR)\openjpeg.mak
 !include $(GLSRCDIR)\cal.mak
 !include $(GLSRCDIR)\ocr.mak
@@ -165,6 +163,7 @@ BEGINFILES=$(GLGENDIR)\ccf32.tr\
 !include $(GLSRCDIR)\ijs.mak
 !include $(GLSRCDIR)\lcups.mak
 !include $(GLSRCDIR)\lcupsi.mak
+!include $(DEVSRCDIR)\extract.mak
 !include $(DEVSRCDIR)\devs.mak
 !include $(DEVSRCDIR)\dcontrib.mak
 !include $(CONTRIBDIR)\contrib.mak

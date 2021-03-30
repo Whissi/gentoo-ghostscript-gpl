@@ -1,4 +1,4 @@
-/* Copyright (C) 2001-2020 Artifex Software, Inc.
+/* Copyright (C) 2001-2021 Artifex Software, Inc.
    All Rights Reserved.
 
    This software is provided AS-IS with no warranty, either express or
@@ -1704,7 +1704,7 @@ decode_bytes(byte *p, const byte *s, int l, int lenIV)
 
 static int
 get_type1_data(gs_fapi_font *ff, const ref *type1string,
-               byte *buf, ushort buf_length)
+               byte *buf, int buf_length)
 {
     gs_font_type1 *pfont = (gs_font_type1 *) ff->client_font_data;
     int lenIV = max(pfont->data.lenIV, 0);
@@ -1899,6 +1899,7 @@ sfnt_get_glyph_offset(ref *pdr, gs_font_type42 *pfont42, int index,
 {                               /* Note : TTC is not supported and probably is unuseful for Type 42. */
     sfnts_reader r;
     int glyf_elem_size = (pfont42->data.indexToLocFormat) ? 4 : 2;
+    ulong fullsize;
 
     if (index < pfont42->data.trueNumGlyphs) {
         sfnts_reader_init(&r, pdr);
@@ -1906,6 +1907,10 @@ sfnt_get_glyph_offset(ref *pdr, gs_font_type42 *pfont42, int index,
         *offset0 =
             pfont42->data.glyf + (glyf_elem_size ==
                               2 ? r.rword(&r) * 2 : r.rlong(&r));
+        r.error = sfnt_get_sfnt_length(pdr, &fullsize);
+        if (r.error < 0 || *offset0 > fullsize) {
+            r.error = gs_note_error(gs_error_invalidaccess);
+        }
     }
     else {
         r.error = gs_note_error(gs_error_rangecheck);
@@ -2118,15 +2123,14 @@ FAPI_FF_get_glyph(gs_fapi_font *ff, gs_glyph char_code, byte *buf, int buf_lengt
                 }
                 else {
                     ulong noffs, endoffs;
-                    int code;
                     /* If we haven't got a len_glyphs array, try using the offset of the next glyph offset
                      * to work out the length
                      */
                     error = sfnt_get_glyph_offset(pdr, pfont42, char_code + 1, &noffs);
                     if (error == 0) {
                         glyph_length = noffs - offset0;
-                        code = sfnt_get_sfnt_length(pdr, &endoffs);
-                        if (code < 0) {
+                        error = sfnt_get_sfnt_length(pdr, &endoffs);
+                        if (error < 0) {
                             glyph_length = gs_fapi_glyph_invalid_index;
                         }
                         else {
@@ -2139,8 +2143,8 @@ FAPI_FF_get_glyph(gs_fapi_font *ff, gs_glyph char_code, byte *buf, int buf_lengt
                         /* And if we can't get the next glyph offset, use the end of the sfnt data
                          * to work out the length.
                          */
-                        code = sfnt_get_sfnt_length(pdr, &noffs);
-                        if (code < 0) {
+                        error = sfnt_get_sfnt_length(pdr, &noffs);
+                        if (error < 0) {
                             glyph_length = gs_fapi_glyph_invalid_index;
                         }
                         else {
@@ -2873,7 +2877,7 @@ ps_get_glyphname_or_cid(gs_text_enum_t *penum,
                         cmapnmlen = r_size(&CMapNameStr);
                     }
                 }
-                /* We only have to lookup the char code if we're *not* using an identity ordering 
+                /* We only have to lookup the char code if we're *not* using an identity ordering
                    with the exception of Identity-UTF16 which is a different beast altogether */
                 if (unicode_cp || (cmapnmlen > 0 && !strncmp(cmapnm, utfcmap, cmapnmlen > utfcmaplen ? utfcmaplen : cmapnmlen))
                     || (dict_find_string(pdr, "CIDSystemInfo", &CIDSystemInfo) > 0

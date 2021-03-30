@@ -1,4 +1,4 @@
-/* Copyright (C) 2001-2020 Artifex Software, Inc.
+/* Copyright (C) 2001-2021 Artifex Software, Inc.
    All Rights Reserved.
 
    This software is provided AS-IS with no warranty, either express or
@@ -69,7 +69,7 @@ gdev_fax_get_params(gx_device * dev, gs_param_list * plist)
         ecode = code;
      if ((code = param_write_bool(plist, "BlackIs1", &fdev->BlackIs1)) < 0)
         ecode = code;
- 
+
     return ecode;
 }
 int

@@ -1,4 +1,4 @@
-/* Copyright (C) 2001-2020 Artifex Software, Inc.
+/* Copyright (C) 2001-2021 Artifex Software, Inc.
    All Rights Reserved.
 
    This software is provided AS-IS with no warranty, either express or
@@ -497,7 +497,7 @@ bbox_strip_tile_rectangle(gx_device * dev, const gx_strip_bitmap * tiles,
 
 static int
 bbox_strip_tile_rect_devn(gx_device * dev, const gx_strip_bitmap * tiles,
-   int x, int y, int w, int h, const gx_drawing_color *pdcolor0, 
+   int x, int y, int w, int h, const gx_drawing_color *pdcolor0,
    const gx_drawing_color *pdcolor1, int px, int py)
 {
     gx_device_bbox *const bdev = (gx_device_bbox *) dev;
@@ -1245,7 +1245,7 @@ bbox_create_compositor(gx_device * dev,
             (target, &temp_cdev, pcte, pgs, memory, cindev);
 
         /* If the target did not create a new compositor then we are done. */
-        if (code < 0 || target == temp_cdev) {
+        if (code <= 0) {
             *pcdev = dev;
             return code;
         }
@@ -1261,7 +1261,9 @@ bbox_create_compositor(gx_device * dev,
         bbcdev->box_procs = box_procs_forward;
         bbcdev->box_proc_data = bdev;
         *pcdev = (gx_device *) bbcdev;
-        return 0;
+        /* We return 1 to indicate that a new compositor was created
+         * that wrapped dev. */
+        return 1;
     }
 }
 

@@ -1,4 +1,4 @@
-/* Copyright (C) 2001-2020 Artifex Software, Inc.
+/* Copyright (C) 2001-2021 Artifex Software, Inc.
    All Rights Reserved.
 
    This software is provided AS-IS with no warranty, either express or
@@ -441,7 +441,7 @@ cmap_separation_capture_cmyk_color(frac all, gx_device_color * pdc,
     dmprintf(pgs->memory, "cmap_separation_capture_cmyk_color - this routine should not be executed\n");
 }
 
-/* The call to this is actually going to occur if we happen to be using a 
+/* The call to this is actually going to occur if we happen to be using a
    named color profile and doing a replacement.  Since the destination profile
    will have been CMYK based during the swap out to find the equivalent color, we can
    go ahead and just grab the cmyk portion */
@@ -478,8 +478,8 @@ capture_spot_equivalent_cmyk_colors(gx_device * pdev, const gs_gstate * pgs,
                           0 /* blend_profile */, 0 /* postren_profile */,
                           { {0} } /* rendercond[] */, 0 /* devicegraytok */,
                           0 /* graydection */, 0 /* pageneutralcolor */,
-                          0 /* usefastcolor */, 0 /* supports_devn */,
-                          0 /* sim_overprint */, 0 /* spotnames */,
+                          0 /* usefastcolor */, 0 /* blacktext */, 0 /* supports_devn */,
+                          0 /* overprint_control */, 0 /* spotnames */,
                           0 /* prebandthreshold */, 0 /* memory */,
                           { 0 } /* rc_header */
                           };
@@ -487,6 +487,14 @@ capture_spot_equivalent_cmyk_colors(gx_device * pdev, const gs_gstate * pgs,
     dev_proc(pdev, get_profile)(pdev, &dev_profile);
     gsicc_extract_profile(pdev->graphics_type_tag,
                           dev_profile, &(curr_output_profile), &render_cond);
+
+    /* If the output profile is not CMYK based (which can happen during overprint
+       simulation. In particular when the blending space is RGB or Gray based.
+       Think of the case where the file has transparency and we are in an RGB
+       page group), then just use DefaultCMYK */
+    if (curr_output_profile->data_cs != gsCMYK)
+        curr_output_profile = pgs->icc_manager->default_cmyk;
+
     /*
      * Create a temp device.  The primary purpose of this device is pass the
      * separation number and a pointer to the original device's equivalent
@@ -499,6 +507,7 @@ capture_spot_equivalent_cmyk_colors(gx_device * pdev, const gs_gstate * pgs,
     temp_device.memory = pgs->memory;
 
     temp_profile.usefastcolor = false;  /* This avoids a few headaches */
+    temp_profile.blacktext = false;
     temp_profile.prebandthreshold = true;
     temp_profile.supports_devn = false;
     temp_profile.rendercond[0] = render_cond;
@@ -518,10 +527,10 @@ capture_spot_equivalent_cmyk_colors(gx_device * pdev, const gs_gstate * pgs,
        for the CMYK + OG values. */
 
     if (curr_output_profile->data_cs == gsNCHANNEL) {
-        temp_profile.device_profile[GS_DEFAULT_DEVICE_PROFILE] = 
+        temp_profile.device_profile[GS_DEFAULT_DEVICE_PROFILE] =
             temp_state.icc_manager->default_cmyk;
     } else {
-        temp_profile.device_profile[GS_DEFAULT_DEVICE_PROFILE] = 
+        temp_profile.device_profile[GS_DEFAULT_DEVICE_PROFILE] =
             curr_output_profile;
     }
     set_dev_proc(&temp_device, get_profile, gx_default_get_profile);

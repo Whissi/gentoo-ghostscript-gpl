@@ -1,4 +1,4 @@
-# Copyright (C) 2001-2020 Artifex Software, Inc.
+# Copyright (C) 2001-2021 Artifex Software, Inc.
 # All Rights Reserved.
 #
 # This software is provided AS-IS with no warranty, either express or
@@ -93,7 +93,7 @@ jbig2.config-clean :
 
 JBIG2DEP=$(AK)
 
-JBIG2_CC=$(CC_) $(CFLAGS) $(I_)$(JBIG2GENDIR) $(II)$(JB2I_)$(_I) $(JB2CF_) -DJBIG_EXTERNAL_MEMENTO_H=\"../base/memento.h\"
+JBIG2_CC=$(CC) $(I_)$(JBIG2GENDIR) $(II)$(JB2I_)$(_I) $(JB2CF_) -DJBIG_EXTERNAL_MEMENTO_H=\"../base/memento.h\" $(CCFLAGS)
 JBIG2O_=$(O_)$(JBIG2OBJ)
 
 # switch in the version of libjbig2.dev we're actually using
@@ -109,7 +109,7 @@ $(JBIG2GEN)jbig2dec_0.dev : $(JBIG2_MAK) $(ECHOGS_XE) $(libjbig2_OBJS) $(JBIG2_M
 	$(SETMOD) $(JBIG2GEN)jbig2dec_0 $(libjbig2_OBJS1)
 	$(ADDMOD) $(JBIG2GEN)jbig2dec_0 $(libjbig2_OBJS2)
 
-# explicit rules for building the source files. 
+# explicit rules for building the source files.
 
 $(JBIG2OBJ)snprintf.$(OBJ) : $(JBIG2SRC)snprintf.c $(JBIG2DEP) $(JBIG2_MAK) $(MAKEDIRS)
 	$(JBIG2_CC) $(JBIG2O_)snprintf.$(OBJ) $(C_) $(JBIG2SRC)snprintf.c
@@ -137,7 +137,7 @@ $(JBIG2OBJ)jbig2_generic.$(OBJ) : $(JBIG2SRC)jbig2_generic.c $(libjbig2_HDRS) $(
 
 $(JBIG2OBJ)jbig2_refinement.$(OBJ) : $(JBIG2SRC)jbig2_refinement.c $(libjbig2_HDRS) $(JBIG2DEP) $(JBIG2_MAK) $(MAKEDIRS)
 	$(JBIG2_CC) $(JBIG2O_)jbig2_refinement.$(OBJ) $(C_) $(JBIG2SRC)jbig2_refinement.c
- 
+
 $(JBIG2OBJ)jbig2_huffman.$(OBJ) : $(JBIG2SRC)jbig2_huffman.c $(libjbig2_HDRS) $(JBIG2DEP) $(JBIG2_MAK) $(MAKEDIRS)
 	$(JBIG2_CC) $(JBIG2O_)jbig2_huffman.$(OBJ) $(C_) $(JBIG2SRC)jbig2_huffman.c
 

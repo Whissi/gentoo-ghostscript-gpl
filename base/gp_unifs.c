@@ -1,4 +1,4 @@
-/* Copyright (C) 2001-2020 Artifex Software, Inc.
+/* Copyright (C) 2001-2021 Artifex Software, Inc.
    All Rights Reserved.
 
    This software is provided AS-IS with no warranty, either express or
@@ -247,7 +247,7 @@ int gp_pwrite_impl(const char *buf, size_t count, gs_offset_t offset, FILE *f)
 
 /* Set a file into binary or text mode. */
 int
-gp_setmode_binary_impl(FILE * pfile, bool mode)
+gp_setmode_binary_impl(FILE * pfile, bool mode) /* lgtm [cpp/useless-expression] */
 {
     return 0;                   /* Noop under Unix */
 }

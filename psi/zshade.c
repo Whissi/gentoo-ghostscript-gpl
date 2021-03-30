@@ -1,4 +1,4 @@
-/* Copyright (C) 2001-2020 Artifex Software, Inc.
+/* Copyright (C) 2001-2021 Artifex Software, Inc.
    All Rights Reserved.
 
    This software is provided AS-IS with no warranty, either express or
@@ -381,6 +381,10 @@ build_directional_shading(i_ctx_t *i_ctx_p, const ref * op, float *Coords, int n
                                  num_Coords, Coords, NULL);
     static const float default_Domain[2] = {0, 1};
     ref *pExtend;
+
+    if (code >= 0 && code < num_Coords) {
+        code = gs_note_error(gs_error_rangecheck);
+    }
 
     *pFunction = 0;
     if (code < 0 ||

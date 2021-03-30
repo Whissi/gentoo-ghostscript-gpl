@@ -1,4 +1,4 @@
-# Copyright (C) 2001-2020 Artifex Software, Inc.
+# Copyright (C) 2001-2021 Artifex Software, Inc.
 # All Rights Reserved.
 #
 # This software is provided AS-IS with no warranty, either express or
@@ -22,6 +22,7 @@
 #	FT_CFLAGS   - The include options for the freetype library
 #	SHARE_FT - 0 to compile in freetype, 1 to link a shared library
 #	FT_LIBS  - if SHARE_FT=1, the link options for the shared library
+#	FT_LIB_PATH - if SHARE_FT=1, the path(s) for the shared library
 
 # (Rename directories.)
 FTSRC=$(FTSRCDIR)$(D)src$(D)
@@ -33,7 +34,9 @@ FTO_=$(O_)$(FTOBJ)
 # we must define FT2_BUILD_LIBRARY to get internal declarations
 # If GS is using the system zlib, freetype should also do so,
 # FT_CONFIG_SYSTEM_ZLIB is set by the top makefile.
-FTCC=$(CC_) $(I_)$(FTGEN)$(_I) $(I_)$(FTSRCDIR)$(D)include$(_I) $(D_)FT_CONFIG_OPTIONS_H=\"$(FTCONFH)\"$(_D) $(D_)FT2_BUILD_LIBRARY$(_D) $(D_)DARWIN_NO_CARBON$(_D) $(FT_CONFIG_SYSTEM_ZLIB)
+FTCC=$(CC) $(I_)$(FTGEN)$(_I) $(I_)$(FTSRCDIR)$(D)include$(_I) \
+     $(D_)FT_CONFIG_OPTIONS_H=\"$(FTCONFH)\"$(_D) $(D_)FT2_BUILD_LIBRARY$(_D) \
+     $(D_)DARWIN_NO_CARBON$(_D) $(FT_CONFIG_SYSTEM_ZLIB) $(CCFLAGS)
 
 # Define the name of this makefile.
 FT_MAK=$(GLSRC)freetype.mak $(TOP_MAKEFILES)
@@ -213,7 +216,8 @@ $(FTGEN)freetype.dev : $(FTGEN)freetype_$(SHARE_FT).dev $(FT_MAK) $(GENFTCONFH) 
 
 # Define the shared version.
 $(FTGEN)freetype_1.dev : $(TOP_MAKEFILES) $(FT_MAK) $(ECHOGS_XE) $(FT_MAK) $(GENFTCONFH) $(MAKEDIRS)
-	$(SETMOD) $(FTGEN)freetype_1 -link $(FT_LIBS)
+	$(SETMOD) $(FTGEN)freetype_1 -lib $(FT_LIBS)
+	$(ADDMOD) $(FTGEN)freetype_1 -libpath $(FT_LIB_PATH)
 
 # Define the non-shared version.
 $(FTGEN)freetype_0.dev : $(FT_MAK) $(ECHOGS_XE) \

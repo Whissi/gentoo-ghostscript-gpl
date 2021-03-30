@@ -1,4 +1,4 @@
-/* Copyright (C) 2001-2020 Artifex Software, Inc.
+/* Copyright (C) 2001-2021 Artifex Software, Inc.
    All Rights Reserved.
 
    This software is provided AS-IS with no warranty, either express or
@@ -187,7 +187,7 @@ show_n_begin(gs_show_enum *penum, gs_gstate *pgs, int code, gs_text_enum_t *pte)
         dev_proc_text_begin((*text_begin)) = dev_proc(dev, text_begin);
 
         text = pte->text;
-        gs_text_release(pte, "show_n_begin");
+        gs_text_release(NULL, pte, "show_n_begin");
         /* Temporarily reset the text_begin procedure to the default. */
         set_dev_proc(dev, text_begin, gx_default_text_begin);
         code = gs_text_begin(pgs, &text, mem, &pte);

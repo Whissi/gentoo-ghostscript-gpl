@@ -1,4 +1,4 @@
-/* Copyright (C) 2001-2020 Artifex Software, Inc.
+/* Copyright (C) 2001-2021 Artifex Software, Inc.
    All Rights Reserved.
 
    This software is provided AS-IS with no warranty, either express or
@@ -1232,7 +1232,7 @@ int main(int argc, char *argv[])
                 code = 0;
             }
         }
-        
+
         if (code == 0)
             code = gsapi_init_with_args(instance, nargc, nargv);
 

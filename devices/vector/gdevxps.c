@@ -1,4 +1,4 @@
-/* Copyright (C) 2001-2020 Artifex Software, Inc.
+/* Copyright (C) 2001-2021 Artifex Software, Inc.
    All Rights Reserved.
 
    This software is provided AS-IS with no warranty, either express or
@@ -118,9 +118,10 @@ typedef struct gx_device_xps_f2i_s {
     char *filename;
     gx_device_xps_zinfo_t *info;
     struct gx_device_xps_f2i_s *next;
+    gs_memory_t *memory;
 } gx_device_xps_f2i_t;
 
-/* Used for keeping track of icc profiles that we have written.   This way we 
+/* Used for keeping track of icc profiles that we have written.   This way we
    avoid writing the same one multiple times.  It would be nice to do this
    based upon the gs_id for images, but that id is really created after we
    have already drawn the path.  Not clear to me how to get a source ID. */
@@ -129,6 +130,16 @@ typedef struct xps_icc_data_s {
     int index;
     struct xps_icc_data_s *next;
 } xps_icc_data_t;
+
+/* Add new page relationships to this linked list, avoiding duplicates.
+   When page is closed write out all the relationships */
+typedef struct xps_relations_s xps_relations_t;
+
+struct xps_relations_s {
+    char* relation;
+    xps_relations_t *next;
+    gs_memory_t *memory;
+};
 
 typedef enum {
     xps_solidbrush,
@@ -169,7 +180,8 @@ typedef struct gx_device_xps_s {
     /* local state */
     int page_count;     /* how many output_page calls we've seen */
     int image_count;    /* number of images so far */
-    int relationship_count;  /* Pages relationships */
+    xps_relations_t *relations_head;
+    xps_relations_t *relations_tail;
     xps_icc_data_t *icc_data;
     gx_color_index strokecolor, fillcolor;
     xps_brush_t stroketype, filltype;
@@ -373,18 +385,19 @@ zip_new_info_node(gx_device_xps *xps_dev, const char *filename)
     int lenstr;
 
     /* NB should use GC */
-    gx_device_xps_zinfo_t *info = 
+    gx_device_xps_zinfo_t *info =
         (gx_device_xps_zinfo_t *)gs_alloc_bytes(mem->non_gc_memory, sizeof(gx_device_xps_zinfo_t), "zinfo");
-    gx_device_xps_f2i_t *f2i = 
+    gx_device_xps_f2i_t *f2i =
         (gx_device_xps_f2i_t *)gs_alloc_bytes(mem->non_gc_memory, sizeof(gx_device_xps_f2i_t), "zinfo node");
 
     if_debug1m('_', dev->memory, "new node %s\n", filename);
-    
+
     if (info == NULL || f2i == NULL)
-        return gs_throw_code(gs_error_Fatal);
+        return gs_throw_code(gs_error_VMerror);
 
     f2i->info = info;
     f2i->next = NULL;
+    f2i->memory = mem->non_gc_memory;
 
     if (xps_dev->f2i == 0) { /* no head */
         xps_dev->f2i = f2i;
@@ -396,8 +409,10 @@ zip_new_info_node(gx_device_xps *xps_dev, const char *filename)
 
     lenstr = strlen(filename);
     f2i->filename = (char*)gs_alloc_bytes(mem->non_gc_memory, lenstr + 1, "zinfo_filename");
+    if (f2i->filename == NULL)
+        return gs_throw_code(gs_error_VMerror);
     strcpy(f2i->filename, filename);
-        
+
     info->data.fp = 0;
     info->data.count = 0;
     info->saved = false;
@@ -408,7 +423,7 @@ zip_new_info_node(gx_device_xps *xps_dev, const char *filename)
         int node = 1;
         gx_device_xps_f2i_t *prev_f2i;
 #endif
-        
+
         while (f2i != NULL) {
             if_debug2m('_', dev->memory, "node:%d %s\n", node++, f2i->filename);
 #ifdef DEBUG
@@ -454,14 +469,14 @@ zip_append_data(gs_memory_t *mem, gx_device_xps_zinfo_t *info, byte *data, uint 
        archive file, open a temporary file to store the data. */
     if (info->data.count == 0) {
         char *filename =
-          (char *)gs_alloc_bytes(mem->non_gc_memory, gp_file_name_sizeof, 
+          (char *)gs_alloc_bytes(mem->non_gc_memory, gp_file_name_sizeof,
                 "zip_append_data(filename)");
         gp_file *fp;
-        
+
         if (!filename) {
             return(gs_throw_code(gs_error_VMerror));
         }
-        
+
         fp = gp_open_scratch_file_rm(mem, "xpsdata-",
                                         filename, "wb+");
         gs_free_object(mem->non_gc_memory, filename, "zip_append_data(filename)");
@@ -737,7 +752,7 @@ zip_close_archive_file(gx_device_xps *xps_dev, const char *filename)
         }
         /* If this is a TIFF file, then update the data count information.
            During the writing of the TIFF directory there is seeking and
-           relocations that occur, which make data.count incorrect. 
+           relocations that occur, which make data.count incorrect.
            We could just do this for all the files and avoid the test. */
         len = strlen(filename);
         if (len > 3 && (strncmp("tif", &(filename[len - 3]), 3) == 0)) {
@@ -908,7 +923,8 @@ xps_open_device(gx_device *dev)
 
     /* xps-specific initialization goes here */
     xps->page_count = 0;
-    xps->relationship_count = 0;
+    xps->relations_head = NULL;
+    xps->relations_tail = NULL;
     xps->strokecolor = gx_no_color_index;
     xps->fillcolor = gx_no_color_index;
     xps_setstrokebrush(xps, xps_solidbrush);
@@ -934,7 +950,7 @@ xps_open_device(gx_device *dev)
                                  fixed_document_sequence);
     if (code < 0)
         return gs_rethrow_code(code);
-    
+
     code = write_str_to_zip_file(xps, (char *)"[Content_Types].xml",
                                  xps_content_types);
     if (code < 0)
@@ -969,7 +985,7 @@ write_str_to_current_page(gx_device_xps *xps, const char *str)
     int code = gs_sprintf(buf, page_template, xps->page_count+1);
     if (code < 0)
         return gs_rethrow_code(code);
-    
+
     return write_str_to_zip_file(xps, buf, str);
 }
 
@@ -977,26 +993,38 @@ write_str_to_current_page(gx_device_xps *xps, const char *str)
 static int
 add_new_relationship(gx_device_xps *xps, const char *str)
 {
-    const char *rels_template = "Documents/1/Pages/_rels/%d.fpage.rels";
-    char buf[128]; /* easily enough to accommodate the string and a page number */
-    char line[300];
-    const char *fmt;
+    xps_relations_t *rel;
 
-    int code = gs_sprintf(buf, rels_template, xps->page_count + 1);
-    if (code < 0)
-        return gs_rethrow_code(code);
+    /* See if we already have this one */
+    for (rel = xps->relations_head; rel; rel = rel->next)
+        if (!strcmp(rel->relation, str))
+            return 0;
 
-    /* Check if this is our first one */
-    if (xps->relationship_count == 0) 
-        write_str_to_zip_file(xps, buf, rels_header);
+    rel = (xps_relations_t*)gs_alloc_bytes(xps->memory->non_gc_memory,
+        sizeof(xps_relations_t), "add_new_relationship");
+    if (!rel) {
+        return gs_throw_code(gs_error_VMerror);
+    }
+    rel->memory = xps->memory->non_gc_memory;
+    rel->next = NULL;
 
-    /* Now add the reference */
-    fmt = "<Relationship Target = \"/%s\" Id = \"R%d\" Type = %s/>\n";
-    gs_sprintf(line, fmt, str, xps->relationship_count, rels_req_type);
+    rel->relation = (char*)gs_alloc_bytes(xps->memory->non_gc_memory,
+        strlen(str) + 1, "add_new_relationship");
+    if (!rel->relation) {
+        gs_free_object(rel->memory, rel, "add_new_relationship");
+        return gs_throw_code(gs_error_VMerror);
+    }
+    memcpy(rel->relation, str, strlen(str) + 1);
 
-    xps->relationship_count++;
+    if (!xps->relations_head) {
+        xps->relations_head = rel;
+        xps->relations_tail = rel;
+    } else {
+        xps->relations_tail->next = rel;
+        xps->relations_tail = rel;
+    }
 
-    return write_str_to_zip_file(xps, buf, line);
+    return 0;
 }
 
 static int
@@ -1013,6 +1041,51 @@ close_page_relationship(gx_device_xps *xps)
     return 0;
 }
 
+static int
+write_page_relationship(gx_device_xps* xps)
+{
+    const char* rels_template = "Documents/1/Pages/_rels/%d.fpage.rels";
+    char buf[128]; /* easily enough to accommodate the string and a page number */
+    char line[300];
+    const char* fmt;
+    int count = 0;
+    xps_relations_t *rel = xps->relations_head;
+
+    int code = gs_sprintf(buf, rels_template, xps->page_count + 1);
+    if (code < 0)
+        return gs_rethrow_code(code);
+
+    write_str_to_zip_file(xps, buf, rels_header);
+    fmt = "<Relationship Target = \"/%s\" Id = \"R%d\" Type = %s/>\n";
+
+    while (rel) {
+        gs_sprintf(line, fmt, rel->relation, count, rels_req_type);
+        write_str_to_zip_file(xps, buf, line);
+        rel = rel->next;
+        count++;
+    }
+
+    return 0;
+}
+
+static void
+release_relationship(gx_device_xps* xps)
+{
+    xps_relations_t *rel = xps->relations_head;
+    xps_relations_t *old;
+
+    while (rel) {
+        old = rel;
+        rel = rel->next;
+        gs_free_object(old->memory, old->relation, "release_relationship");
+        gs_free_object(old->memory, old, "release_relationship");
+    }
+
+    xps->relations_head = NULL;
+    xps->relations_tail = NULL;
+    return;
+}
+
         /* Page management */
 
 /* Complete a page */
@@ -1024,14 +1097,22 @@ xps_output_page(gx_device *dev, int num_copies, int flush)
     int code;
 
     write_str_to_current_page(xps, "</Canvas></FixedPage>");
-    if (xps->relationship_count > 0)
+
+    if (xps->relations_head)
     {
+        /* Write all the relations for the page */
+        code = write_page_relationship(xps);
+        if (code < 0)
+            return gs_rethrow_code(code);
+
         /* Close the relationship xml */
         code = close_page_relationship(xps);
         if (code < 0)
             return gs_rethrow_code(code);
-        xps->relationship_count = 0;  /* Reset for next page */
+
+        release_relationship(xps);
     }
+
     xps->page_count++;
 
     if (gp_ferror(xps->file))
@@ -1070,6 +1151,23 @@ xps_release_icc_info(gx_device *dev)
     return;
 }
 
+static void
+xps_release_achive_file_names(gx_device* dev)
+{
+    gx_device_xps* xps = (gx_device_xps*)dev;
+    gx_device_xps_f2i_t *curr;
+    gx_device_xps_f2i_t *f2i = xps->f2i;
+
+    while (f2i) {
+        curr = f2i;
+        f2i = f2i->next;
+        gs_free_object(curr->memory, curr->info, "xps_release_achive_file_names(info)");
+        gs_free_object(curr->memory, curr->filename, "xps_release_achive_file_names(filename)");
+        gs_free_object(curr->memory, curr, "xps_release_achive_file_names(f2i)");
+    }
+    return;
+}
+
 /* Close the device */
 static int
 xps_close_device(gx_device *dev)
@@ -1091,6 +1189,9 @@ xps_close_device(gx_device *dev)
 
     /* Release the icc info */
     xps_release_icc_info(dev);
+
+    /* Release the archive file names */
+    xps_release_achive_file_names(dev);
 
     code = gdev_vector_close_file((gx_device_vector*)dev);
     if (code < 0)
@@ -1232,10 +1333,10 @@ static int
 set_state_color(gx_device_vector *vdev, const gx_drawing_color *pdc, gx_color_index *color)
 {
     gx_device_xps *xps = (gx_device_xps *)vdev;
-    
+
     /* hack so beginpage is called */
     (void)gdev_vector_stream((gx_device_vector*)xps);
- 
+
     /* Usually this is not an actual error but a signal to the
        graphics library to simplify the color */
     if (!gx_dc_is_pure(pdc)) {
@@ -1252,7 +1353,7 @@ xps_setfillcolor(gx_device_vector *vdev, const gs_gstate *pgs, const gx_drawing_
     gx_device_xps *xps = (gx_device_xps *)vdev;
 
     if_debug1m('_', xps->memory, "xps_setfillcolor:%06X\n", (uint32_t)gx_dc_pure_color(pdc));
-    
+
     return set_state_color(vdev, pdc, &xps->fillcolor);
 }
 
@@ -1260,9 +1361,9 @@ static int
 xps_setstrokecolor(gx_device_vector *vdev, const gs_gstate *pgs, const gx_drawing_color *pdc)
 {
     gx_device_xps *xps = (gx_device_xps *)vdev;
-    
+
     if_debug1m('_', xps->memory, "xps_setstrokecolor:%06X\n", (uint32_t)gx_dc_pure_color(pdc));
-    
+
     return set_state_color(vdev, pdc, &xps->strokecolor);
 }
 
@@ -1473,8 +1574,8 @@ xps_dorect(gx_device_vector *vdev, fixed x0, fixed y0,
                 fixed2float(x0), fixed2float(y1),
                 fixed2float(x1), fixed2float(y1),
                 fixed2float(x1), fixed2float(y0));
-               
-    
+
+
     /* skip non-drawing paths for now */
     if (!drawing_path(type, xps->filltype)) {
         if_debug1m('_', xps->memory, "xps_dorect: type not supported %x\n", type);
@@ -1552,7 +1653,7 @@ gdev_xps_stroke_path(gx_device * dev, const gs_gstate * pgs, gx_path * ppath,
     }
     return gdev_vector_stroke_path(dev, pgs, ppath, params, pdcolor, pcpath);
 }
-           
+
 static int
 xps_beginpath(gx_device_vector *vdev, gx_path_type_t type)
 {
@@ -1560,7 +1661,7 @@ xps_beginpath(gx_device_vector *vdev, gx_path_type_t type)
     gx_device_xps *xps = (gx_device_xps *)vdev;
     uint32_t c;
     const char *fmt;
-    
+
     (void)gdev_vector_stream((gx_device_vector*)xps);
 
     /* skip non-drawing paths for now */
@@ -1588,7 +1689,7 @@ xps_beginpath(gx_device_vector *vdev, gx_path_type_t type)
     else {
         write_str_to_current_page(xps, "<Path Data=\"");
     }
-    
+
     if_debug1m('_', xps->memory, "xps_beginpath %s\n", line);
 
     return 0;
@@ -1623,7 +1724,7 @@ xps_lineto(gx_device_vector *vdev, double x0, double y0,
     char line[200];
 
     if_debug2m('_', xps->memory, "xps_lineto %g %g\n", x, y);
-    
+
     /* skip non-drawing paths for now */
     if (!drawing_path(type, xps->filltype)) {
         if_debug1m('_', xps->memory, "xps_lineto: type not supported %x\n", type);
@@ -1642,18 +1743,18 @@ xps_curveto(gx_device_vector *vdev, double x0, double y0,
 {
     gx_device_xps *xps = (gx_device_xps *)vdev;
     char line[200];
-    
+
     /* skip non-drawing paths for now */
     if (!drawing_path(type, xps->filltype)) {
         if_debug1m('_', xps->memory, "xps_curveto: type not supported %x\n", type);
         return 0;
     }
-    
+
     gs_sprintf(line, " C %g,%g %g,%g %g,%g", x1, y1,
             x2,y2,x3,y3);
     write_str_to_current_page(xps,line);
     if_debug1m('_', xps->memory, "xps_curveto %s\n", line);
-            
+
     return 0;
 }
 
@@ -1716,9 +1817,10 @@ static const gx_image_enum_procs_t xps_image_enum_procs = {
 /* Prototypes */
 static TIFF* tiff_from_name(gx_device_xps *dev, const char *name, int big_endian,
     bool usebigtiff);
-static int tiff_set_values(xps_image_enum_t *pie, TIFF *tif, 
+static int tiff_set_values(xps_image_enum_t *pie, TIFF *tif,
                             cmm_profile_t *profile, bool force8bit);
 static void xps_tiff_set_handlers(void);
+static void tiff_client_release(gx_device_xps* dev, TIFF* t);
 
 /* Check if we have the ICC profile in the package */
 static xps_icc_data_t*
@@ -1770,7 +1872,7 @@ xps_add_icc_relationship(xps_image_enum_t *pie)
     return 0;
 }
 
-static int 
+static int
 xps_add_image_relationship(xps_image_enum_t *pie)
 {
     gx_device_xps *xps = (gx_device_xps*) (pie->dev);
@@ -1796,8 +1898,8 @@ xps_write_profile(const gs_gstate *pgs, char *name, cmm_profile_t *profile, gx_d
 }
 
 static int
-xps_begin_image(gx_device *dev, const gs_gstate *pgs, 
-                const gs_image_t *pim, gs_image_format_t format, 
+xps_begin_image(gx_device *dev, const gs_gstate *pgs,
+                const gs_image_t *pim, gs_image_format_t format,
                 const gs_int_rect *prect, const gx_drawing_color *pdcolor,
                 const gx_clip_path *pcpath, gs_memory_t *mem,
                 gx_image_enum_common_t **pinfo)
@@ -1814,7 +1916,7 @@ xps_begin_image(gx_device *dev, const gs_gstate *pgs,
     int bits_per_pixel;
     int num_components;
     int bsize;
-    cmm_profile_t *icc_profile = NULL; 
+    cmm_profile_t *icc_profile = NULL;
     gs_color_space_index csindex;
     float index_decode[2];
     gsicc_rendering_param_t rendering_params;
@@ -1856,8 +1958,8 @@ xps_begin_image(gx_device *dev, const gs_gstate *pgs,
     /* We need this set a bit early for the ICC relationship writing */
     pie->dev = (gx_device*) xdev;
 
-    /* If the color space is DeviceN, Sep or indexed these end up getting 
-       mapped to the color space defined by the device profile.  XPS only 
+    /* If the color space is DeviceN, Sep or indexed these end up getting
+       mapped to the color space defined by the device profile.  XPS only
        support RGB indexed images so we just expand if for now. ICC link
        creation etc is handled during the remap/concretization of the colors */
     if (csindex == gs_color_space_index_Indexed ||
@@ -1927,7 +2029,7 @@ xps_begin_image(gx_device *dev, const gs_gstate *pgs,
             xdev->icc_data = icc_data;
         }
 
-        /* Get name for mark up and for relationship. Have to wait and do 
+        /* Get name for mark up and for relationship. Have to wait and do
            this after it is added to the package */
         code = xps_create_icc_name(xdev, icc_profile, &(pie->icc_name[0]));
         if (code < 0)
@@ -1944,10 +2046,13 @@ xps_begin_image(gx_device *dev, const gs_gstate *pgs,
         /* Add ICC relationship */
         xps_add_icc_relationship(pie);
     } else {
-        /* Get name for mark up.  We already have it in the relationship and list */
+        /* Get name for mark up.  We already have it in the resource list */
         code = xps_create_icc_name(xdev, icc_profile, &(pie->icc_name[0]));
         if (code < 0)
             return gs_rethrow_code(code);
+
+        /* Add ICC relationship.  It may not yet be present for this page. */
+        xps_add_icc_relationship(pie);
     }
 
     /* Get image name for mark up */
@@ -1965,8 +2070,8 @@ xps_begin_image(gx_device *dev, const gs_gstate *pgs,
         pcpath = &cpath;
     } else {
         /* Force vector device to do new path as the clip path is the image
-           path.  I had a case where the clip path ids were the same but the 
-           CTM was changing which resulted in subsequent images coming up 
+           path.  I had a case where the clip path ids were the same but the
+           CTM was changing which resulted in subsequent images coming up
            missing on the page. i.e. only the first one was shown. */
         ((gx_device_vector*) vdev)->clip_path_id = vdev->no_clip_path_id;
     }
@@ -1996,7 +2101,7 @@ xps_begin_image(gx_device *dev, const gs_gstate *pgs,
     pie->bytes_comp = (pie->decode_st.bps > 8 ? 2 : 1);
     pie->decode_st.spp = num_components;
     pie->decode_st.unpack = NULL;
-    get_unpack_proc((gx_image_enum_common_t*)pie, &(pie->decode_st), pim->format, 
+    get_unpack_proc((gx_image_enum_common_t*)pie, &(pie->decode_st), pim->format,
         pim->Decode);
 
     /* The decode mapping for index colors needs an adjustment */
@@ -2011,7 +2116,7 @@ xps_begin_image(gx_device *dev, const gs_gstate *pgs,
         }
         get_map(&(pie->decode_st), pim->format, index_decode);
     } else {
-        get_map(&(pie->decode_st), pim->format, pim->Decode); 
+        get_map(&(pie->decode_st), pim->format, pim->Decode);
     }
 
     /* Allocate our decode buffer. */
@@ -2173,9 +2278,11 @@ const gx_image_plane_t *planes, int height, int *rows_used)
             gsicc_init_buffer(&output_buff_desc, 3, bytes_comp,
                 false, false, false, 0, width * bytes_comp * 3,
                 1, width);
-            (pie->icc_link->procs.map_buffer)(pie->dev, pie->icc_link,
+            code = (pie->icc_link->procs.map_buffer)(pie->dev, pie->icc_link,
                 &input_buff_desc, &output_buff_desc, (void*)buffer,
                 (void*)pie->buffer);
+            if (code < 0)
+                return code;
             outbuffer = pie->buffer;
         }
         code = TIFFWriteScanline(pie->tif, outbuffer, pie->y, 0);
@@ -2207,6 +2314,7 @@ xps_image_end_image(gx_image_enum_common_t * info, bool draw_last)
     /* N.B. Write the final strip, if any. */
 
     code = TIFFWriteDirectory(pie->tif);
+    tiff_client_release((gx_device_xps*)(pie->dev), pie->tif);
     TIFFCleanup(pie->tif);
 
     /* Stuff the image into the zip archive and close the file */
@@ -2232,7 +2340,7 @@ exit:
 #define TIFF_PRINT_BUF_LENGTH 1024
 static const char tifs_msg_truncated[] = "\n*** Previous line has been truncated.\n";
 
-static int 
+static int
 tiff_set_values(xps_image_enum_t *pie, TIFF *tif, cmm_profile_t *profile,
                 bool force8bit)
 {
@@ -2283,7 +2391,7 @@ tiff_set_values(xps_image_enum_t *pie, TIFF *tif, cmm_profile_t *profile,
 typedef struct tifs_io_xps_t
 {
     gx_device_xps *pdev;
-    gp_file *fid; 
+    gp_file *fid;
 } tifs_io_xps;
 
 /* libtiff i/o hooks */
@@ -2384,7 +2492,7 @@ xps_tifsSizeProc(thandle_t fd)
 }
 
 static void
-xps_tifsWarningHandlerEx(thandle_t client_data, const char *module, 
+xps_tifsWarningHandlerEx(thandle_t client_data, const char *module,
                          const char *fmt, va_list ap)
 {
     tifs_io_xps *tiffio = (tifs_io_xps *)client_data;
@@ -2403,7 +2511,7 @@ xps_tifsWarningHandlerEx(thandle_t client_data, const char *module,
 }
 
 static void
-xps_tifsErrorHandlerEx(thandle_t client_data, const char *module, 
+xps_tifsErrorHandlerEx(thandle_t client_data, const char *module,
                        const char *fmt, va_list ap)
 {
     tifs_io_xps *tiffio = (tifs_io_xps *)client_data;
@@ -2481,6 +2589,13 @@ tiff_from_name(gx_device_xps *dev, const char *name, int big_endian, bool usebig
         xps_tifsCloseProc, (TIFFSizeProc)xps_tifsSizeProc, xps_tifsDummyMapProc,
         xps_tifsDummyUnmapProc);
     return t;
+}
+
+static void
+tiff_client_release(gx_device_xps *dev, TIFF *t)
+{
+    gs_free_object(dev->memory->non_gc_memory, TIFFClientdata(t),
+        "tiff_client_release");
 }
 
 static void

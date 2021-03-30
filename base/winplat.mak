@@ -1,4 +1,4 @@
-# Copyright (C) 2001-2020 Artifex Software, Inc.
+# Copyright (C) 2001-2021 Artifex Software, Inc.
 # All Rights Reserved.
 #
 # This software is provided AS-IS with no warranty, either express or
@@ -34,7 +34,7 @@ $(GLD)winplat1.dev : $(WINPLAT_MAK) $(ECHOGS_XE) $(winplatxpsprint_) $(WINPLAT_M
 	$(SETMOD) $(GLD)winplat1 $(winplatxpsprint_)
 
 $(GLD)winplat.dev : $(GLD)winplat$(XPSPRINT).dev
-	$(CP_) $(GLD)winplat$(XPSPRINT).dev $(GLD)winplat.dev 
+	$(CP_) $(GLD)winplat$(XPSPRINT).dev $(GLD)winplat.dev
 
 $(GLOBJ)gp_ntfs.$(OBJ): $(GLSRC)gp_ntfs.c $(AK)\
  $(dos__h) $(memory__h) $(stdio__h) $(string__h) $(windows__h)\

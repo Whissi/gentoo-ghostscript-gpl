@@ -1,4 +1,4 @@
-/* Copyright (C) 2001-2020 Artifex Software, Inc.
+/* Copyright (C) 2001-2021 Artifex Software, Inc.
    All Rights Reserved.
 
    This software is provided AS-IS with no warranty, either express or
@@ -29,6 +29,7 @@
 #include "gdevpdfo.h"
 #include "gdevpdtb.h"
 #include "gdevpdtf.h"
+#include "gdevpdtd.h"
 #include "smd5.h"
 #include "gxfcache.h"   /* for gs_purge_font_from_char_caches_completely */
 /*
@@ -372,7 +373,7 @@ pdf_base_font_alloc(gx_device_pdf *pdev, pdf_base_font_t **ppbfont,
     *ppbfont = pbfont;
     return 0;
  fail:
-    gs_free_object(mem, pbfont, "pdf_base_font_alloc");
+    pdf_base_font_free(pdev, pbfont);
     return code;
 }
 
@@ -412,6 +413,11 @@ pdf_base_font_is_subset(const pdf_base_font_t *pbfont)
 void
 pdf_base_font_drop_complete(pdf_base_font_t *pbfont)
 {
+    /* gs_font is a subset of gs_font_base and we only want to
+     * free the members which are common to both, so this cast is
+     * (at the time of writing) safe.
+     */
+    gs_free_copied_font((gs_font *)pbfont->complete);
     pbfont->complete = NULL;
 }
 
@@ -654,10 +660,17 @@ pdf_write_embedded_font(gx_device_pdf *pdev, pdf_base_font_t *pbfont, font_type 
             /* Write the type 1 font with no converting to CFF. */
             int lengths[3];
 
-            code = psf_write_type1_font(writer.binary.strm,
+            if (pbfont->do_subset != DO_SUBSET_NO)
+                code = psf_write_type1_font(writer.binary.strm,
                                 (gs_font_type1 *)out_font,
                                 WRITE_TYPE1_WITH_LENIV | WRITE_TYPE1_EEXEC |
                                 WRITE_TYPE1_EEXEC_PAD | WRITE_TYPE1_ASCIIHEX,
+                                NULL, 0, &fnstr, lengths);
+            else
+                code = psf_write_type1_font(writer.binary.strm,
+                                (gs_font_type1 *)out_font,
+                                WRITE_TYPE1_WITH_LENIV | WRITE_TYPE1_EEXEC |
+                                WRITE_TYPE1_EEXEC_PAD | WRITE_TYPE1_ASCIIHEX | WRITE_TYPE1_XUID,
                                 NULL, 0, &fnstr, lengths);
             if (lengths[0] > 0) {
                 if (code < 0)
@@ -689,7 +702,8 @@ pdf_write_embedded_font(gx_device_pdf *pdev, pdf_base_font_t *pbfont, font_type 
             code = psf_write_type2_font(writer.binary.strm,
                                         (gs_font_type1 *)out_font,
                                         TYPE2_OPTIONS |
-                            (pdev->CompatibilityLevel < 1.3 ? WRITE_TYPE2_AR3 : 0),
+                            (pdev->CompatibilityLevel < 1.3 ? WRITE_TYPE2_AR3 : 0) |
+                            (pbfont->do_subset == DO_SUBSET_NO ? WRITE_TYPE2_XUID : 0),
                                         NULL, 0, &fnstr, FontBBox);
         }
         goto finish;

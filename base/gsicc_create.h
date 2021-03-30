@@ -1,4 +1,4 @@
-/* Copyright (C) 2001-2020 Artifex Software, Inc.
+/* Copyright (C) 2001-2021 Artifex Software, Inc.
    All Rights Reserved.
 
    This software is provided AS-IS with no warranty, either express or
@@ -42,6 +42,6 @@ cmm_profile_t* gsicc_create_from_cal(float *white, float *black, float *gamma,
                                      float *matrix, gs_memory_t *memory,
                                      int num_colors);
 byte* gsicc_getv2buffer(cmm_profile_t *srcprofile, int *size);
-byte* gsicc_create_getv2buffer(const gs_gstate *pgs, 
+byte* gsicc_create_getv2buffer(const gs_gstate *pgs,
                                 cmm_profile_t *srcprofile, int *size);
 #endif

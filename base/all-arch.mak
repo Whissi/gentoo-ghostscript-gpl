@@ -1,4 +1,4 @@
-# Copyright (C) 2001-2020 Artifex Software, Inc.
+# Copyright (C) 2001-2021 Artifex Software, Inc.
 # All Rights Reserved.
 #
 # This software is provided AS-IS with no warranty, either express or
@@ -44,7 +44,7 @@
 # Usage:
 #	make <arch-name> TARGETS='...'
 #
-# or, for convenience at Utah, 
+# or, for convenience at Utah,
 #
 #	make `hostname`
 #
@@ -665,7 +665,7 @@ sgi-mips-irix6.1:	init
 		XINCLUDE=-I/usr/include/X11 \
 		XLIBDIRS='-L/usr/local/lib -L/usr/lib/X11'
 
-# 
+#
 sgi-mips-irix6.3:	init
 	$(MAKE) $(ARGS) \
 		CC='cc $(SGIARCHFLAGS) -D_POSIX_4SOURCE ' \

@@ -1,4 +1,4 @@
-/* Copyright (C) 2001-2020 Artifex Software, Inc.
+/* Copyright (C) 2001-2021 Artifex Software, Inc.
    All Rights Reserved.
 
    This software is provided AS-IS with no warranty, either express or
@@ -36,7 +36,7 @@ typedef struct gs_pattern_instance_s gs_pattern_instance_t;
 #  define GS_CLIENT_COLOR_MAX_COMPONENTS (64)
 #endif
 
-#ifndef MAX_COMPONENTS_IN_DEVN		
+#ifndef MAX_COMPONENTS_IN_DEVN
 #  define MAX_COMPONENTS_IN_DEVN (64)
 #endif
 

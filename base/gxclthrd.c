@@ -1,4 +1,4 @@
-/* Copyright (C) 2001-2020 Artifex Software, Inc.
+/* Copyright (C) 2001-2021 Artifex Software, Inc.
    All Rights Reserved.
 
    This software is provided AS-IS with no warranty, either express or
@@ -119,7 +119,7 @@ setup_device_and_mem_for_thread(gs_memory_t *chunk_base_mem, gx_device *dev, boo
               OI_PROFILE, strlen(OI_PROFILE)) == 0)
         || (dev->icc_struct->proof_profile != NULL &&
         strncmp(dev->icc_struct->proof_profile->name, OI_PROFILE, strlen(OI_PROFILE)) == 0)))) {
-        ndev->icc_struct = gsicc_new_device_profile_array(ndev->memory);
+        ndev->icc_struct = gsicc_new_device_profile_array(ndev);
         if (!ndev->icc_struct) {
             emprintf1(ndev->memory,
                   "Error setting up device profile array, code=%d. Rendering threads not started.\n",

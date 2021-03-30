@@ -1,4 +1,4 @@
-# Copyright (C) 2001-2020 Artifex Software, Inc.
+# Copyright (C) 2001-2021 Artifex Software, Inc.
 # All Rights Reserved.
 #
 # This software is provided AS-IS with no warranty, either express or
@@ -36,8 +36,8 @@ IJSO_=$(O_)$(IJSOBJ)
 # IJSI_ and IJSF_ are defined in gs.mak (why?)
 # as are IJSGENDIR and IJSOBJDIR above.
 IJS_INCL=$(I_)$(IJSI_)$(_I)
-IJS_CCFLAGS=$(IJS_INCL) $(IJSF_) 
-IJS_CC=$(CC_) $(IJS_CCFLAGS)
+IJS_CCFLAGS=$(IJS_INCL) $(IJSF_)
+IJS_CC=$(CC) $(IJS_CCFLAGS) $(CCFLAGS)
 
 # Define the name of this makefile.
 IJS_MAK=$(GLSRC)ijs.mak $(TOP_MAKEFILES)

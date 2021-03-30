@@ -1,4 +1,4 @@
-/* Copyright (C) 2001-2020 Artifex Software, Inc.
+/* Copyright (C) 2001-2021 Artifex Software, Inc.
    All Rights Reserved.
 
    This software is provided AS-IS with no warranty, either express or
@@ -159,8 +159,13 @@ s_std_init(register stream * s, byte * ptr, uint len, const stream_procs * pp,
 {
     s->templat = &s_no_template;
     s->cbuf = ptr;
-    s->cursor.r.ptr = s->cursor.r.limit = s->cursor.w.ptr = ptr - 1;
-    s->cursor.w.limit = ptr - 1 + len;
+
+    /* IMPORTANT: "read" MUST come before "write" - see comment in scommon.h about
+     * the layout of read/write cursor structures.
+     */
+    stream_cursor_read_init(&s->cursor.r, ptr, 0);
+    stream_cursor_write_init(&s->cursor.w, ptr, len);
+
     s->end_status = 0;
     s->foreign = 0;
     s->modes = modes;

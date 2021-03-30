@@ -1,4 +1,4 @@
-/* Copyright (C) 2001-2020 Artifex Software, Inc.
+/* Copyright (C) 2001-2021 Artifex Software, Inc.
    All Rights Reserved.
 
    This software is provided AS-IS with no warranty, either express or
@@ -116,11 +116,11 @@ const gx_device_pdf PDF_DEVICE_IDENT =
  -1,				/* EndPage */
  1,				/* StartPage */
  1 /*true*/,			/* Optimize */
- 0 /*false*/,			/* ParseDSCCommentsForDocInfo */
+ 1 /*true*/,			/* ParseDSCCommentsForDocInfo */
  1 /*true*/,			/* ParseDSCComments */
  0 /*false*/,			/* EmitDSCWarnings */
  0 /*false*/,			/* CreateJobTicket */
- 0 /*false*/,			/* PreserveEPSInfo */
+ 1 /*true*/,			/* PreserveEPSInfo */
  1 /*true*/,			/* AutoPositionEPSFiles */
  1 /*true*/,			/* PreserveCopyPage */
  0 /*false*/,			/* UsePrologue */
@@ -128,6 +128,8 @@ const gx_device_pdf PDF_DEVICE_IDENT =
  {0,0},				/* PDFXTrimBoxToMediaBoxOffset */
  {0,0},				/* PDFXBleedBoxToTrimBoxOffset */
  1 /* true */,			/* PDFXSetBleedBoxToMediaBox */
+ "",                            /* ocr_language */
+ 0,                             /* ocr_engine */
  1 /*true*/,			/* ReAssignCharacters */
  1 /*true*/,			/* ReEncodeCharacters */
  1,				/* FirstObjectNumber */
@@ -263,6 +265,7 @@ const gx_device_pdf PDF_DEVICE_IDENT =
  0,				/* image_mask_id */
  0,				/* image_mask_is_SMask */
  0,				/* image_mask_skip */
+ 0,             /* smask_construction */
  0,				/* image_with_SMask */
  {0,0,0,0,0,0}, 		/* gs_matrix converting_image_matrix */
  0,				/* image_mask_scale */
@@ -283,6 +286,7 @@ const gx_device_pdf PDF_DEVICE_IDENT =
  true,				/* DetectDuplicateImages */
  false,				/* AllowIncrementalCFF */
  !PDF_FOR_OPDFREAD,		/* WantsToUnicode */
+ !PDF_FOR_OPDFREAD,		/* PdfmarkCapable */
  !PDF_FOR_OPDFREAD,		/* WantsPageLabels */
  PDF_FOR_OPDFREAD,		/* AllowPSRepeatFunctions */
  true,				/* IsDistiller (true even for ps2write!) */
@@ -298,7 +302,14 @@ const gx_device_pdf PDF_DEVICE_IDENT =
  0,                     /* ExtensionMetadata */
  0,                     /* PDFFormName */
  0,                     /* PassThroughWriter */
- 1.0                    /* UserUnit */
+ 1.0,                   /* UserUnit */
+ 0,                     /* UseOCR */
+ NULL,                  /* OCRSaved */
+ 0,                     /* OCRStage */
+ NULL,                  /* OCRUnicode */
+ 0,                     /* OCR_char_code */
+ 0,                     /* OCR_glyph */
+ NULL                   /* ocr_glyphs */
 };
 
 #else

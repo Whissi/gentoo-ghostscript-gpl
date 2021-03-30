@@ -1,6 +1,6 @@
 #!/usr/bin/python
 
-# Copyright (C) 2001-2020 Artifex Software, Inc.
+# Copyright (C) 2001-2021 Artifex Software, Inc.
 # All Rights Reserved.
 #
 # This software is provided AS-IS with no warranty, either express or
@@ -51,7 +51,9 @@ else:
   for csum in commit_list:
     # we have to use the slightly baroque syntax: git log --cc --topo-order <commit>^...<commit>
     # where the "^" indicates the commit prior to the one we're processing with
-    cmd="git log --name-only --topo-order --date=iso -n1 " + csum + "^" + "..." + csum
+#    cmd="git log --name-only --topo-order --date=iso -n1 " + csum + "^" + "..." + csum
+
+    cmd="git log --name-only --topo-order --date=iso -n1 " + csum + "^" + "..." + csum # this leaves out the file list for each commit
     res = os.popen(cmd, "r")
     commit=res.readlines()
     # This assumes the order of the lines.....

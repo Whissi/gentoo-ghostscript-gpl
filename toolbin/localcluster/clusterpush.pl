@@ -7,7 +7,7 @@ use Data::Dumper;
 
 my $verbose=0;
 
-# bmpcmp usage: [gs] [pcl] [xps] [mupdf] [mujstest] [murun] [mudrawpy] [bmpcmp] [arm] [lowres] [highres] [32] [pdfwrite] [ps2write] [xpswrite] [nopdfwrite] [relaxtimeout] [extended] [smoke] [cull] [avx2] [$user] | abort
+# bmpcmp usage: [gs] [pcl] [xps] [mupdf] [mujstest] [murun] [mudrawpy] [runtests] [extract] [extractmu] [extractgs] [bmpcmp] [arm] [lowres] [highres] [32] [pdfwrite] [ps2write] [xpswrite] [nopdfwrite] [relaxtimeout] [extended] [smoke] [cull] [avx2] [$user] | abort
 
 
 
@@ -24,7 +24,11 @@ my %products=('abort' =>1,
               'mupdf'=>1,
               'mujstest'=>1,
               'murun'=>1,
-              'mudrawpy'=>1);
+              'mudrawpy'=>1,
+              'runtests'=>1,
+              'extract'=>1,
+              'extractmu'=>1,
+              'extractgs'=>1);
 
 my $user;
 my $product="";
@@ -72,7 +76,7 @@ while ($t1=shift) {
     $cull="cull";
   } elsif ($t1 eq "avx2") {
     $avx2="avx2";
-  } elsif ($t1 eq "nr" || $t1 eq "nonredundnat") {
+  } elsif ($t1 eq "nr" || $t1 eq "nonredundant") {
     $nr="nonredundant";
   } elsif ($t1 eq "pdfwrite" || $t1 eq "ps2write" || $t1 eq "xpswrite") {
     $pdfwrite="pdfwrite";
@@ -137,8 +141,17 @@ my $directory=`pwd`;
 chomp $directory;
 
 $directory =~ s|.+/||;
-if ($directory ne 'gs' && $directory ne 'ghostpdl' && $directory ne 'mupdf' && $directory ne 'ghostpdl.git' && $directory ne 'mupdf.git') {
+if ($directory ne 'gs' &&
+    $directory ne 'ghostpdl' &&
+    $directory ne 'mupdf' &&
+    $directory ne 'ghostpdl.git' &&
+    $directory ne 'mupdf.git' &&
+    $directory ne 'extract' &&
+    $directory ne 'extract.git') {
   $directory="";
+  if (-f "include/extract.h") {
+    $directory='extract';
+  }
   if (-d "base" && -d "Resource") {
     $directory='gs';
   }
@@ -153,11 +166,13 @@ if ($directory ne 'gs' && $directory ne 'ghostpdl' && $directory ne 'mupdf' && $
 #$directory="gs" if ($directory eq "" && $product eq "bmpcmp");
 $directory="gs" if ($directory eq "" && $product && $product eq "abort");
 
-die "can't figure out if this is a ghostpdl, gs, or mupdf source directory" if ($directory eq "");
+die "can't figure out if this is a ghostpdl, gs, mupdf or extract source directory" if ($directory eq "");
 
 if (!$product) {
   if ($directory eq 'mupdf') {
     $product='mupdf';
+  } elsif ($directory eq 'extract') {
+    $product='extract';
   } else {
     $product='gs pcl xps gpdl'
   }
@@ -197,8 +212,19 @@ if ($msys) {
   $hostpath="regression:$dir/$user/$directory";
 }
 
-my $cmd="rsync -avxcz ".
-" --max-size=30000000".
+my $cmd="rsync -axcz";
+
+if ($product eq "extractgs") {
+  $cmd .= "L"; # expand links.
+}
+
+if ($verbose) {
+  $cmd .= "i";
+} else {
+  $cmd .= "v";
+}
+
+$cmd .= " --max-size=30000000".
 " --delete --delete-excluded".
 " --exclude .svn --exclude .git".
 " --exclude _darcs --exclude .bzr --exclude .hg".
@@ -227,6 +253,11 @@ my $cmd="rsync -avxcz ".
 " --exclude include/latex".
 
 " --exclude /build/".
+
+# Excludes for extract library.
+" --exclude /src/build/".
+" --exclude extract/src/build/".
+" --exclude extract/test/generated/".
 
 # " --exclude Makefile". We can't just exclude Makefile, since the MuPDF Makefile is not a derived file.
 " -e \"$ssh\" ".

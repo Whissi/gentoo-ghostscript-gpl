@@ -1,4 +1,4 @@
-/* Copyright (C) 2001-2020 Artifex Software, Inc.
+/* Copyright (C) 2001-2021 Artifex Software, Inc.
    All Rights Reserved.
 
    This software is provided AS-IS with no warranty, either express or
@@ -101,7 +101,7 @@
     #define std_device_part1_(devtype, ptr_procs, dev_name, stype, open_init)\
         sizeof(devtype), ptr_procs, dev_name,\
         0 /*memory*/, stype, 0 /*stype_is_dynamic*/, 0 /*finalize*/,\
-        { 0 } /*rc*/, 0 /*retained*/, 0 /* parent */, 0 /* child */, 0 /* subclass_data */, 0, /* PageList */\
+        { 0 } /*rc*/, 0 /*retained*/, 0 /* parent */, 0 /* child */, 0 /* subclass_data */, 0 /* PageList */,\
         open_init() /*is_open, max_fill_band*/
         /* color_info goes here */
 /*
@@ -119,12 +119,14 @@
 
 /* offsets and margins go here */
 #define std_device_part3_()\
-        0/*FirstPage*/, 0/*LastPage*/, 0/*PageHandlerPushed*/, 0/*DisablePageHandler*/, 0/* Object Filter*/, 0/*ObjectHandlerPushed*/,\
+        0/*FirstPage*/, 0/*LastPage*/, 0/*PageHandlerPushed*/, 0/*DisablePageHandler*/,\
+        0/* Object Filter*/, 0/*ObjectHandlerPushed*/,\
+        0, /* NupControl */ 0, /* NupHandlerPushed */\
         0/*PageCount*/, 0/*ShowpageCount*/, 1/*NumCopies*/, 0/*NumCopies_set*/,\
         0/*IgnoreNumCopies*/, 0/*UseCIEColor*/, 0/*LockSafetyParams*/,\
         0/*band_offset_x*/, 0/*band_offset_y*/, false /*BLS_force_memory*/, \
         {false}/* sgr */,\
-        0/* MaxPatternBitmap */, 0/*page_uses_transparency*/,\
+        0/* MaxPatternBitmap */, 0/*page_uses_transparency*/, 0/*page_uses_overprint*/,\
         { MAX_BITMAP, BUFFER_SPACE,\
              { BAND_PARAMS_INITIAL_VALUES },\
            0/*false*/, /* params_are_read_only */\

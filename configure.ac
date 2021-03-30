@@ -1,4 +1,4 @@
-dnl Copyright (C) 2001-2020 Artifex Software, Inc.
+dnl Copyright (C) 2001-2021 Artifex Software, Inc.
 dnl All Rights Reserved.
 dnl
 dnl This software is provided AS-IS with no warranty, either express or
@@ -153,7 +153,7 @@ if test x"$host" != x"$build" ; then
   echo $AUXFLAGS_MAK_LINE07 >> $AUXFLAGS_MAK.in
 
   AC_MSG_NOTICE([Begin recursive call to configure script (for auxiliary tools)])
-  "$absolute_source_path/configure" CC="$CCAUX" CFLAGS="$CFLAGSAUX" CPPFLAGS="$CPPFLAGSAUX" LDFLAGS="$LDFLAGSAUX" CCAUX= CFLAGSAUX= CFLAGSAUX= MAKEFILE=$AUXFLAGS_MAK --host=$build --build=$build --enable-auxtools_only --disable-hidden-visibility --with-local-zlib --without-libtiff --disable-contrib --disable-fontconfig --disable-dbus --disable-freetype --disable-fapi --disable-cups --disable-openjpeg --disable-gtk --with-libiconv=no --without-libidn --without-libpaper --without-pdftoraster --without-ijs --without-luratech --without-jbig2dec --without-x --with-drivers=""
+  "$absolute_source_path/configure" CC="$CCAUX" CFLAGS="$CFLAGSAUX" CPPFLAGS="$CPPFLAGSAUX" LDFLAGS="$LDFLAGSAUX" CCAUX= CFLAGSAUX= CFLAGSAUX= MAKEFILE=$AUXFLAGS_MAK --host=$build --build=$build --enable-auxtools_only --disable-hidden-visibility --with-local-zlib --without-libtiff --disable-contrib --disable-fontconfig --disable-dbus --disable-freetype --disable-fapi --disable-cups --disable-openjpeg --disable-gtk --with-libiconv=no --without-libidn --without-libpaper --without-pdftoraster --without-ijs --without-jbig2dec --without-x --with-drivers=""
   status=$?
   cp config.log "$olddir/configaux.log"
   if test $status -eq 0 ; then
@@ -473,17 +473,28 @@ dnl check for sanitize support
 dnl ----------------------------
 AC_MSG_CHECKING([compiler/linker address santizer support])
 
+AC_ARG_WITH([sanitizer], AC_HELP_STRING([--with-sanitizer=@<:@address/memory@:>@],
+                                   [Sanitizer for 'sanitize' target (defaults to 'address')]),
+            [SANITIZER=$with_sanitizer], [SANITIZER=address])
+
 CFLAGS_SANITIZE=""
-CFLAGS_SANITIZE_TRY="-fsanitize=address -fno-omit-frame-pointer"
+CFLAGS_SANITIZE_TRY="-fsanitize=$SANITIZER -fno-omit-frame-pointer"
 CFLAGS_SAVED="$CFLAGS"
 CFLAGS="$CFLAGS_SANITIZE_TRY"
-
 
 AC_LINK_IFELSE(
   [AC_LANG_PROGRAM([#include <stdio.h>], [
   return(0);
   ])],
-  [CFLAGS_SANITIZE="$CFLAGS"], [CFLAGS_SANITIZE="'****************ADDRESS_SANITIZER_NOT_SUPPORTED*********************'"])
+  [CFLAGS_SANITIZE="$CFLAGS"],
+  [
+    if test x"$with_sanitizer" != x; then
+      AC_MSG_ERROR([--with-sanitizer=$with_sanitizer not supported by compiler])
+    else
+      CFLAGS_SANITIZE="'****************ADDRESS_SANITIZER_NOT_SUPPORTED*********************'"
+    fi
+  ]
+  )
 
 CFLAGS="$CFLAGS_SAVED"
 
@@ -837,17 +848,37 @@ if test x$with_tesseract != xno; then
     AC_LANG_PUSH(C++)
     AC_TRY_COMPILE([],
                    [return 0;],
-                   [HAVE_CXX_COMPILER=yes],
+                   [HAVE_CXX_COMPILER=yes; AC_SUBST(CXX)],
                    [HAVE_CXX_COMPILER=no])
     if test x$HAVE_CXX_COMPILER != xyes; then
       AC_MSG_WARN([Disabling tesseract as no working C++ compiler])
+    elif test x$SYNC = xnosync ; then
+      AC_MSG_ERROR([Threading disabled or not available. Tesseract OCR relies on threading. Rerun configure with "--without-tesseract" to exclude OCR from the build])
     else
+
+      save_cxxflags="$CXXFLAGS"
+      cxxflags_to_try="-std=c++17 -stdlib=libstdc++"
+      CXXFLAGS_TO_USE=""
+
+      AC_MSG_CHECKING([supported C++ compiler flags])
+      for flag in $cxxflags_to_try ; do
+        CXXFLAGS="$CXXFLAGS $flag"
+
+        AC_TRY_COMPILE(, [return 0;], [
+                echo "   $flag"; CXXFLAGS_TO_USE="$CXXFLAGS_TO_USE $flag"
+        ])
+
+        CXXFLAGS="$old_cflags"
+      done
+
+      CXXFLAGS="$save_cxxflags $CXXFLAGS_TO_USE"
+
       dnl --------------------------------------------------
       dnl check for sse4.1, avx, avx2 or fma
       dnl --------------------------------------------------
       AC_MSG_CHECKING([sse4.1 support])
       save_cxxflags=$CXXFLAGS
-      TESS_CXXFLAGS=""
+      TESS_CXXFLAGS="$CXXFLAGS"
       CXXFLAGS="$CXXFLAGS -msse4.1"
 
       TESS_SSE4_1=""
@@ -1030,6 +1061,7 @@ if test x$with_libidn != xno; then
     if $PKGCONFIG --exists libidn; then
             AC_MSG_RESULT(yes)
             LIBS="$LIBS `$PKGCONFIG --libs libidn`"
+            CFLAGS="$CFLAGS `$PKGCONFIG --cflags libidn`"
             HAVE_LIBIDN=-DHAVE_LIBIDN
     else
             AC_MSG_RESULT(no)
@@ -1102,7 +1134,7 @@ if test "$enable_fontconfig" != "no"; then
                 if $PKGCONFIG --exists fontconfig; then
                         AC_MSG_RESULT(yes)
                         FONTCONFIG_CFLAGS="$CFLAGS `$PKGCONFIG --cflags fontconfig`"
-                        FONTCONFIG_LIBS="`$PKGCONFIG --libs-only-l fontconfig`"
+                        FONTCONFIG_LIBS="`$PKGCONFIG --libs fontconfig`"
                         HAVE_FONTCONFIG=-DHAVE_FONTCONFIG
                 else
                         AC_MSG_RESULT(no)
@@ -1241,9 +1273,16 @@ if test x"$enable_fapi" != xno; then
             # There is a table of corresponding ft2<->libtool numbers in freetype/docs/VERSION.DLL
             if $PKGCONFIG --atleast-version=12.0.6 freetype2; then
                 AC_MSG_RESULT(yes)
-                FT_CFLAGS="$CFLAGS `$PKGCONFIG --cflags freetype2`"
-                FT_LIBS="`$PKGCONFIG --libs-only-l freetype2`"
-                FT_BRIDGE=1
+                if test "x$FT_CFLAGS" = "x"; then
+                  FT_CFLAGS="$CFLAGS `$PKGCONFIG --cflags freetype2`"
+		fi
+		if test "x$FT_LIBS" = "x"; then
+                  FT_LIBS="`$PKGCONFIG --libs-only-l freetype2`"
+                fi
+		if test "x$FT_LIB_PATH" = "x"; then
+		  FT_LIB_PATH="`$PKGCONFIG --libs-only-L freetype2`"
+		fi
+		FT_BRIDGE=1
                 SHARE_FT=1
             else
                 AC_MSG_RESULT(no)
@@ -1297,6 +1336,7 @@ AC_SUBST(SHARE_FT)
 AC_SUBST(FTSRCDIR)
 AC_SUBST(FT_CFLAGS)
 AC_SUBST(FT_LIBS)
+AC_SUBST(FT_LIB_PATH)
 
 TIFF_JPEG_INCLUDE=
 
@@ -1527,7 +1567,7 @@ XPSWRITEDEVICE=''
 
 
 LIBTIFFDIR='src'
-LIBTIFFCONFDIR=''
+LIBTIFFCONFDIR='src'
 TIFFCFLAGS=''
 
 TIFFDEVS_ALL='tiffs tiff12nc tiff24nc tiff48nc tiff32nc tiff64nc tiffcrle tifflzw tiffpack tiffgray tiffsep tiffsep1 tiffscaled tiffscaled4 tiffscaled8 tiffscaled24 tiffscaled32'
@@ -1620,7 +1660,7 @@ esac
 # Skip this check for the recursive configure call.
 # Not relevant for AUX tools.
 if test x"$enable_auxtools_only" != x"yes" ; then
-  if test x"$SHARE_LIBTIFF" != x"$SHARE_LIBJPEG" ; then
+  if test x"$ENABLETIFF" != x"" && test x"$SHARE_LIBTIFF" != x"$SHARE_LIBJPEG" ; then
     AC_MSG_ERROR([Mixing local libtiff with shared libjpeg not supported])
   fi
 fi
@@ -1918,48 +1958,6 @@ SHARE_JBIG2=0
 JBIG2DEVS=''
 JBIG2_AUTOCONF_CFLAGS=
 
-dnl Luratech detection
-LURATECHDIR=luratech
-
-AC_ARG_WITH([luratech], AC_HELP_STRING([--without-luratech],
-    [do not try to use the Luratech library for JBIG2 nor JPX decoding]))
-
-
-if test x$with_luratech != xno; then
-  AC_MSG_CHECKING([for local Luratech JBIG2 library source])
-  if test -d $srcdir/luratech/ldf_jb2; then
-    AC_MSG_RESULT([yes])
-    JBIG2_DECODER=luratech
-    SHARE_JBIG2=0
-    JBIG2DIR=$srcdir/luratech/ldf_jb2
-
-    if test x"$JBIG2_CFLAGS" != x""; then
-      JBIG2_AUTOCONF_CFLAGS="$JBIG2_CFLAGS"
-    else
-      case $host in
-        *-darwin*)
-          JBIG2_AUTOCONF_CFLAGS="-DUSE_LDF_JB2 -DMAC -DMAC_OS_X_BUILD -fsigned-char"
-        ;;
-        *-aix*)
-          if test $GCC = yes; then
-            JBIG2_AUTOCONF_CFLAGS="-DUSE_LDF_JB2 -fsigned-char -DLINUX=1 -DFORTE"
-          else
-            JBIG2_AUTOCONF_CFLAGS="-DUSE_LDF_JB2 -qchars=signed -DLINUX=1 -DFORTE"
-          fi
-        ;;
-        *)
-          JBIG2_AUTOCONF_CFLAGS="-DUSE_LDF_JB2 -fsigned-char -DLINUX=1 -DFORTE"
-        ;;
-      esac
-    fi
-
-    JBIG2FILEDEVS='$(DD)gdevjbig2.dev'
-    JBIG2DEVS='$(PSD)jbig2.dev'
-  else
-    AC_MSG_RESULT([no])
-  fi
-fi
-
 JB2_STDINT_TYPES_IN=
 JBIG2DEC_REQ=0.19
 
@@ -2065,39 +2063,6 @@ JPXDEVS=''
 JPX_DECODER=
 JPX_AUTOCONF_CFLAGS=
 JPX_LRINTF_SUBST=
-
-if test x$with_luratech != xno; then
-  AC_MSG_CHECKING([for local Luratech JPEG2K library source])
-  if test -d $srcdir/luratech/lwf_jp2; then
-    AC_MSG_RESULT([yes])
-    JPX_DECODER=luratech
-    SHARE_JPX=0
-    JPXDIR=$srcdir/luratech/lwf_jp2
-
-    if test x"$JPX_CFLAGS" != x""; then
-      JPX_AUTOCONF_CFLAGS="$JPX_CFLAGS"
-    else
-      case $host in
-        *-darwin*)
-          JPX_AUTOCONF_CFLAGS="-DUSE_LWF_JP2 -DMAC -DMAC_OS_X_BUILD"
-        ;;
-        *-aix*)
-          if test $GCC = yes; then
-            JPX_AUTOCONF_CFLAGS="-DUSE_LWF_JP2 -fsigned-char -DLINUX=1 -DFORTE"
-          else
-            JPX_AUTOCONF_CFLAGS="-DUSE_LWF_JP2 -qchars=signed -DLINUX=1 -DFORTE"
-          fi
-        ;;
-        *)
-          JPX_AUTOCONF_CFLAGS="-DUSE_LWF_JP2 -DLINUX=1 -DFORTE"
-        ;;
-      esac
-    fi
-    JPXDEVS='$(PSD)jpx.dev'
-  else
-    AC_MSG_RESULT([no])
-  fi
-fi
 
 if test "x$ac_cv_header_stdint_h" = "xyes"; then
   CFLAGS_OPJ_HAVE_STDINT_H="-DOPJ_HAVE_STDINT_H=1"
@@ -2618,8 +2583,7 @@ IBM_DEVS='ibmpro jetp3852'
 OKI_DEVS='oki182 okiibm oki4w'
 JAPAN_DEVS='lips4 lips4v ljet4pjl lj4dithp dj505j picty180 lips2p bjc880j pr201 pr150 pr1000 pr1000_4 jj100 bj10v bj10vh mj700v2c mj500c mj6000c mj8000c fmpr fmlbp ml600 lbp310 lbp320 md50Mono md50Eco md1xMono escpage lp2000 npdl rpdl'
 MISC_PDEVS='uniprint ap3250 atx23 atx24 atx38 itk24i itk38 coslw2p coslwxl declj250 fs600 imagen lj250 m8510 necp6 oce9050 r4081 sj48 tek4696 t4693d2 t4693d4 t4693d8 dl2100 la50 la70 la75 la75plus ln03 xes md2k md5k gdi samsunggdi'
-
-AC_ARG_WITH([openprinting],, OPVP_DEVS='opvp oprp', OPVP_DEVS='')
+OPVP_DEVS='opvp oprp'
 
 ETS_HALFTONING_DEVS='rinkj'
 
@@ -2632,6 +2596,25 @@ JPEG_DEVS='jpeg jpeggray jpegcmyk'
 PCX_DEVS='pcxmono pcxgray pcx16 pcx256 pcx24b pcxcmyk'
 PBM_DEVS='pbm pbmraw pgm pgmraw pgnm pgnmraw pnm pnmraw ppm ppmraw pkm pkmraw pksm pksmraw pam pamcmyk4 pamcmyk32 plan plang planm planc plank'
 PS_DEVS='psdf psdcmyk psdrgb psdcmyk16 psdrgb16 pdfwrite ps2write eps2write bbox txtwrite inkcov ink_cov psdcmykog fpng pdfimage8 pdfimage24 pdfimage32 PCLm'
+
+# Handle --with-extract-dir=EXTRACT_DIR - build extract library and docxwrite
+# device.
+#
+AC_ARG_WITH([extract-dir],
+    AC_HELP_STRING([--with-extract-dir=EXTRACT_DIR]),
+    [
+        EXTRACT_DIR="$withval"
+        AS_IF([test x"$EXTRACT_DIR" != x"no"],
+        [AS_IF([test -e $EXTRACT_DIR],[ PS_DEVS="$PS_DEVS docxwrite"] ,AC_MSG_ERROR([EXTRACT_DIR does not exist: $EXTRACT_DIR]))])
+    ],
+    [
+        AC_MSG_CHECKING([Checking for "extract" in default location])
+        EXTRACT_DIR="extract"
+        AS_IF([test -e $EXTRACT_DIR], [AC_MSG_RESULT(yes); PS_DEVS="$PS_DEVS docxwrite"], [EXTRACT_DIR=""; AC_MSG_RESULT(no)])
+    ]
+)
+
+AC_SUBST(EXTRACT_DIR)
 
 # the "display" device isn't an ideal fit in the list below, but it saves adding a "list" for just that one entry
 MISC_FDEVS='ccr cif inferno mgr4 mgr8 mgrgray2 mgrgray4 mgrgray8 mgrmono miff24 plan9bm bit bitrgb bitrgbtags bitcmyk devicen spotcmyk xcf plib plibg plibm plibc plibk display'
@@ -2659,12 +2642,10 @@ while test -n "$drivers"; do
         PRINTERS)
                 P_DEVS0="$P_DEVS0 $CANON_DEVS $EPSON_DEVS $HP_DEVS $LEXMARK_DEVS $BROTHER_DEVS $APPLE_DEVS $IBM_DEVS $OKI_DEVS $JAPAN_DEVS $MISC_PDEVS $ETS_HALFTONING_DEVS $URF_DEVS"
                 IJS_DEVS0="$IJSDEVS"
-                if test x"$OPVP_DEVS" != x"" ; then
-                  if test x$ac_cv_lib_dl_dlopen != xno -a x$found_iconv != xno; then
-                    P_DEVS0="$P_DEVS0 $OPVP_DEVS"
-                  else
-                    AC_MSG_ERROR(Unable to include opvp/oprp driver due to missing or disabled prerequisites...)
-                  fi
+                if test x$ac_cv_lib_dl_dlopen != xno -a x$found_iconv != xno; then
+                        P_DEVS0="$P_DEVS0 $OPVP_DEVS"
+                else
+                        AC_MSG_WARN(Unable to include opvp/oprp driver due to missing or disabled prerequisites...)
                 fi
                 ;;
         FILES)
@@ -3007,6 +2988,7 @@ case $host in
       GS_DYNAMIC_LDFLAGS="-shared -Wl,\$(LD_SET_DT_SONAME)\$(LDFLAGS_SO_PREFIX)\$(GS_SONAME_MAJOR)"
       PCL_DYNAMIC_LDFLAGS="-shared -Wl,\$(LD_SET_DT_SONAME)\$(LDFLAGS_SO_PREFIX)\$(PCL_SONAME_MAJOR)"
       XPS_DYNAMIC_LDFLAGS="-shared -Wl,\$(LD_SET_DT_SONAME)\$(LDFLAGS_SO_PREFIX)\$(XPS_SONAME_MAJOR)"
+      PDL_DYNAMIC_LDFLAGS="-shared -Wl,\$(LD_SET_DT_SONAME)\$(LDFLAGS_SO_PREFIX)\$(GPDL_SONAME_MAJOR)"
       DYNAMIC_LIBS=""
       SO_LIB_EXT=".so"
     ;;
@@ -3176,6 +3158,16 @@ if test "x$fontpath" = "x"; then
 fi
 
 AC_SUBST(fontpath)
+
+dnl look for default tessdata...
+AC_ARG_WITH([tessdata],  AC_HELP_STRING([--with-tessdata],
+    [set tesseract data search path]), tessdata="$withval", tessdata="")
+
+if test "x$tessdata" = "x"; then
+        tessdata="${datadir}/tessdata"
+fi
+
+AC_SUBST(tessdata)
 
 dnl --------------------------------------------------
 dnl Check for library functions

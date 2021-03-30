@@ -1,4 +1,4 @@
-/* Copyright (C) 2009-2020 Artifex Software, Inc.
+/* Copyright (C) 2009-2021 Artifex Software, Inc.
    All Rights Reserved.
 
    This software is provided AS-IS with no warranty, either express or
@@ -185,6 +185,7 @@
 #ifndef MEMENTO_H
 
 #include <stdlib.h>
+#include <stdarg.h>
 
 #define MEMENTO_H
 
@@ -237,9 +238,15 @@ void *Memento_malloc(size_t s);
 void *Memento_realloc(void *, size_t s);
 void  Memento_free(void *);
 void *Memento_calloc(size_t, size_t);
+char *Memento_strdup(const char*);
+#if !defined(MEMENTO_GS_HACKS) && !defined(MEMENTO_MUPDF_HACKS)
+int Memento_asprintf(char **ret, const char *format, ...);
+int Memento_vasprintf(char **ret, const char *format, va_list ap);
+#endif
 
 void Memento_info(void *addr);
 void Memento_listBlockInfo(void);
+void Memento_blockInfo(void *blk);
 void *Memento_takeByteRef(void *blk);
 void *Memento_dropByteRef(void *blk);
 void *Memento_takeShortRef(void *blk);
@@ -259,8 +266,10 @@ int Memento_checkIntPointerOrNull(void *blk);
 void Memento_startLeaking(void);
 void Memento_stopLeaking(void);
 
+/* Returns number of allocation events so far. */
 int Memento_sequence(void);
 
+/* Returns non-zero if our process was forked by Memento squeeze. */
 int Memento_squeezing(void);
 
 void Memento_fin(void);
@@ -270,18 +279,28 @@ void Memento_bt(void);
 #ifdef MEMENTO
 
 #ifndef COMPILING_MEMENTO_C
-#define malloc  Memento_malloc
-#define free    Memento_free
-#define realloc Memento_realloc
-#define calloc  Memento_calloc
+#define malloc    Memento_malloc
+#define free      Memento_free
+#define realloc   Memento_realloc
+#define calloc    Memento_calloc
+#define strdup    Memento_strdup
+#if !defined(MEMENTO_GS_HACKS) && !defined(MEMENTO_MUPDF_HACKS)
+#define asprintf  Memento_asprintf
+#define vasprintf Memento_vasprintf
+#endif
 #endif
 
 #else
 
-#define Memento_malloc  MEMENTO_UNDERLYING_MALLOC
-#define Memento_free    MEMENTO_UNDERLYING_FREE
-#define Memento_realloc MEMENTO_UNDERLYING_REALLOC
-#define Memento_calloc  MEMENTO_UNDERLYING_CALLOC
+#define Memento_malloc    MEMENTO_UNDERLYING_MALLOC
+#define Memento_free      MEMENTO_UNDERLYING_FREE
+#define Memento_realloc   MEMENTO_UNDERLYING_REALLOC
+#define Memento_calloc    MEMENTO_UNDERLYING_CALLOC
+#define Memento_strdup    strdup
+#if !defined(MEMENTO_GS_HACKS) && !defined(MEMENTO_MUPDF_HACKS)
+#define Memento_asprintf  asprintf
+#define Memento_vasprintf vasprintf
+#endif
 
 #define Memento_checkBlock(A)              0
 #define Memento_checkAllMemory()           0
@@ -303,6 +322,7 @@ void Memento_bt(void);
 #define Memento_label(A,B)                 (A)
 #define Memento_info(A)                    do {} while (0)
 #define Memento_listBlockInfo()            do {} while (0)
+#define Memento_blockInfo(A)               do {} while (0)
 #define Memento_takeByteRef(A)             (A)
 #define Memento_dropByteRef(A)             (A)
 #define Memento_takeShortRef(A)            (A)

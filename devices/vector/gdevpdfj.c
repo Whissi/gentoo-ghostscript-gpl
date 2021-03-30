@@ -1,4 +1,4 @@
-/* Copyright (C) 2001-2020 Artifex Software, Inc.
+/* Copyright (C) 2001-2021 Artifex Software, Inc.
    All Rights Reserved.
 
    This software is provided AS-IS with no warranty, either express or
@@ -526,6 +526,21 @@ smask_image_check(gx_device_pdf * pdev, pdf_resource_t *pres0, pdf_resource_t *p
         }
     }
     return 1;
+}
+
+
+/* Abort an image without writing it.
+ * Frees any associated memory.
+ */
+int
+pdf_end_abort_image(gx_device_pdf * pdev, pdf_image_writer * piw)
+{
+    pdf_resource_t *pres = piw->pres;
+
+    if (!pres) {
+        COS_FREE(piw->data, "pdf_end_write_image");
+    }
+    return 0;
 }
 
 /*

@@ -1,4 +1,4 @@
-/* Copyright (C) 2001-2020 Artifex Software, Inc.
+/* Copyright (C) 2001-2021 Artifex Software, Inc.
    All Rights Reserved.
 
    This software is provided AS-IS with no warranty, either express or
@@ -30,12 +30,6 @@
 #include "srlx.h"
 #include "szlibx.h"
 #include "gdevvec.h"
-#ifdef USE_LDF_JB2
-#include "sjbig2_luratech.h"
-#endif
-#ifdef USE_LWF_JP2
-#include "sjpx_luratech.h"
-#endif
 
 /* Define a (bogus) GC descriptor for gs_param_string. */
 /* The only ones we use are GC-able and not persistent. */
@@ -98,9 +92,6 @@ static const psdf_image_filter_name Poly_filters[] = {
     {"DCTEncode", &s_DCTE_template},
     {"FlateEncode", &s_zlibE_template, psdf_version_ll3},
     {"LZWEncode", &s_LZWE_template},
-#ifdef USE_LWF_JP2
-    {"JPXEncode", &s_jpxe_template},
-#endif
     {0, 0}
 };
 
@@ -109,9 +100,6 @@ static const psdf_image_filter_name Mono_filters[] = {
     {"FlateEncode", &s_zlibE_template, psdf_version_ll3},
     {"LZWEncode", &s_LZWE_template},
     {"RunLengthEncode", &s_RLE_template},
-#ifdef USE_LDF_JB2
-    {"JBIG2Encode", &s_jbig2encode_template},
-#endif
     {0, 0}
 };
 
@@ -415,12 +403,6 @@ int gdev_psdf_get_image_param(gx_device_psdf *pdev, const psdf_image_param_names
                                    (params->Filter == 0 ?
                                     image_names->filter_names[0].pname :
                                     params->Filter));
-#ifdef USE_LWF_JP2
-    if (image_names->AutoFilterStrategy != 0)
-        if (strcmp(Param, image_names->AutoFilterStrategy) == 0)
-            return psdf_write_name(plist, image_names->AutoFilterStrategy,
-                    AutoFilterStrategy_names[params->AutoFilterStrategy]);
-#endif
     return_error(gs_error_undefined);
 }
 int
@@ -1055,11 +1037,8 @@ psdf_put_image_params(const gx_device_psdf * pdev, gs_param_list * plist,
  */
 static int psdf_copy_param_string_array(gs_memory_t *mem, gs_param_list * plist, gs_param_string_array *sa, gs_param_string_array *da)
 {
-    int code;
-
     if (sa->size > 0) {
         int ix;
-        byte **dest;
 
         if (da->data != NULL) {
             for (ix = 0; ix < da->size;ix++)
@@ -1088,7 +1067,7 @@ static int psdf_copy_param_string_array(gs_memory_t *mem, gs_param_list * plist,
     return 0;
 }
 
-static int psdf_read_copy_param_string_array(gs_memory_t *mem, gs_param_list * plist, char *Key, gs_param_string_array *da)
+static int psdf_read_copy_param_string_array(gs_memory_t *mem, gs_param_list * plist, const char *Key, gs_param_string_array *da)
 {
     gs_param_string_array sa;
     int code;

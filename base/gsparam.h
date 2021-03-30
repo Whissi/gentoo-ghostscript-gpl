@@ -1,4 +1,4 @@
-/* Copyright (C) 2001-2020 Artifex Software, Inc.
+/* Copyright (C) 2001-2021 Artifex Software, Inc.
    All Rights Reserved.
 
    This software is provided AS-IS with no warranty, either express or
@@ -576,5 +576,9 @@ int gs_param_list_add_parsed_value(gs_param_list *plist, gs_param_name key, cons
  * of bytes required for the text version (including terminator) in the
  * address pointed to be len. */
 int gs_param_list_to_string(gs_param_list *plist, gs_param_name key, char *value, int *len);
+
+/* Debug function to dump a list of params. Do NOT use in production
+ * code! */
+int gs_param_list_dump(gs_param_list *plist);
 
 #endif /* gsparam_INCLUDED */

@@ -1,4 +1,4 @@
-/* Copyright (C) 2001-2020 Artifex Software, Inc.
+/* Copyright (C) 2001-2021 Artifex Software, Inc.
    All Rights Reserved.
 
    This software is provided AS-IS with no warranty, either express or
@@ -126,6 +126,7 @@ rc_free_proc(rc_free_text_enum);
     int bytes_decoded; \
     gs_point FontBBox_as_Metrics2;  /* used with FontType 9,11 && WMode 1 */\
     ulong text_enum_id; /* debug purpose only - not used by algorythm. */\
+    bool k_text_release; /* Set at time of gs_text_begin to know to do release of black_text_state */\
     /* The following is controlled by a device. */\
     bool device_disabled_grid_fitting;\
     /* Following two members moved from the show enumerator */\
@@ -168,7 +169,7 @@ rc_free_proc(rc_free_text_enum);
     show_width_status width_status; \
     /*gs_log2_scale_point log2_scale;*/ \
     int (*continue_proc) (gs_show_enum *)	/* continuation procedure */
-    
+
 /* The typedef is in gstext.h. */
 struct gs_text_enum_s {
     gs_text_enum_common;

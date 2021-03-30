@@ -1,4 +1,4 @@
-/* Copyright (C) 2001-2020 Artifex Software, Inc.
+/* Copyright (C) 2001-2021 Artifex Software, Inc.
    All Rights Reserved.
 
    This software is provided AS-IS with no warranty, either express or
@@ -310,7 +310,7 @@ struct gx_device_clist_writer_s {
     byte *cnext;		/* next slot in command buffer */
     byte *cend;			/* end of command buffer */
     cmd_list *ccl;		/* &clist_state.list of last command */
-    cmd_list band_range_list;	/* list of band-range commands */
+    cmd_list *band_range_list;	/* list of band-range commands */
     int band_range_min, band_range_max;		/* range for list */
     uint tile_max_size;		/* max size of a single tile (bytes) */
     uint tile_max_count;	/* max # of hash table entries */
@@ -418,7 +418,7 @@ extern_st(st_device_clist);
 #define CLIST_IS_WRITER(cdev) ((cdev)->common.ymin < 0)
 
 /* setup before opening clist device */
-#define clist_init_params(xclist, xdata, xdata_size, xtarget, xbuf_procs, xband_params, xexternal, xmemory, xdisable, pageusestransparency)\
+#define clist_init_params(xclist, xdata, xdata_size, xtarget, xbuf_procs, xband_params, xexternal, xmemory, xdisable, pageusestransparency, pageusesoverprint)\
     BEGIN\
         (xclist)->common.data = (xdata);\
         (xclist)->common.data_size = (xdata_size);\
@@ -429,6 +429,7 @@ extern_st(st_device_clist);
         (xclist)->common.bandlist_memory = (xmemory);\
         (xclist)->writer.disable_mask = (xdisable);\
         (xclist)->writer.page_uses_transparency = (pageusestransparency);\
+        (xclist)->writer.page_uses_overprint = (pageusesoverprint);\
         (xclist)->writer.pinst = NULL;\
     END
 
@@ -492,6 +493,10 @@ int clist_put_data(const gx_device_clist *cdev, int select, int64_t offset, cons
 
 /* Write out the array of color usage entries (one per band) */
 int clist_write_color_usage_array(gx_device_clist_writer *cldev);
+
+/* Write out simulated overprint CMYK equiv. values for spot colors */
+int clist_write_op_equiv_cmyk_colors(gx_device_clist_writer *cldev,
+    equivalent_cmyk_color_params *op_equiv_cmyk);
 
 /* get the color_usage summary over a Y range from the clist writer states */
 /* Not expected to be used */
@@ -660,5 +665,15 @@ extern_st(st_device_clist_mutatable);
  * clist has undergone such a mutation. */
 #define CLIST_MUTATABLE_HAS_MUTATED(pdev) \
     (((gx_device_clist_mutatable *)(pdev))->buffer_space != 0)
+
+int
+clist_mutate_to_clist(gx_device_clist_mutatable  *pdev,
+                      gs_memory_t                *buffer_memory,
+                      byte                      **the_memory,
+                const gdev_space_params          *space_params,
+                      bool                        bufferSpace_is_exact,
+                const gx_device_buf_procs_t      *buf_procs,
+                      dev_proc_dev_spec_op(dev_spec_op),
+                      uint                        min_buffer_space);
 
 #endif /* gxclist_INCLUDED */

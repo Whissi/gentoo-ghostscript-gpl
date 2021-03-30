@@ -1,4 +1,4 @@
-/* Copyright (C) 2001-2020 Artifex Software, Inc.
+/* Copyright (C) 2001-2021 Artifex Software, Inc.
    All Rights Reserved.
 
    This software is provided AS-IS with no warranty, either express or
@@ -33,9 +33,7 @@
 #include "iname.h"
 #include "gdebug.h"
 
-#if defined(USE_LWF_JP2)
-#  include "sjpx_luratech.h"
-#elif defined(USE_OPENJPEG_JP2)
+#if defined(USE_OPENJPEG_JP2)
 #  include "sjpx_openjpeg.h"
 #else
 #  include "sjpx.h"

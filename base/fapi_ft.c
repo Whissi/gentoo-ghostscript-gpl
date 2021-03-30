@@ -1,4 +1,4 @@
-/* Copyright (C) 2001-2020 Artifex Software, Inc.
+/* Copyright (C) 2001-2021 Artifex Software, Inc.
    All Rights Reserved.
 
    This software is provided AS-IS with no warranty, either express or
@@ -125,7 +125,7 @@ static void
 delete_inc_int_info(gs_fapi_server * a_server,
                     FT_IncrementalRec * a_inc_int_info);
 
-FT_CALLBACK_DEF(void *)
+static void *
 FF_alloc(FT_Memory memory, long size)
 {
     gs_memory_t *mem = (gs_memory_t *) memory->user;
@@ -133,7 +133,7 @@ FF_alloc(FT_Memory memory, long size)
     return (gs_malloc(mem, size, 1, "FF_alloc"));
 }
 
-FT_CALLBACK_DEF(void *)
+static void *
     FF_realloc(FT_Memory memory, long cur_size, long new_size, void *block)
 {
     gs_memory_t *mem = (gs_memory_t *) memory->user;
@@ -153,7 +153,7 @@ FT_CALLBACK_DEF(void *)
     return (tmp);
 }
 
-FT_CALLBACK_DEF(void)
+static void
     FF_free(FT_Memory memory, void *block)
 {
     gs_memory_t *mem = (gs_memory_t *) memory->user;
@@ -621,23 +621,34 @@ load_glyph(gs_fapi_server * a_server, gs_fapi_font * a_fapi_font,
         face->ft_inc_int->object->fapi_font = a_fapi_font;
 
     /* Store the overriding metrics if they have been supplied. */
-    if (face->ft_inc_int
-        && a_char_ref->metrics_type != gs_fapi_metrics_notdef) {
+    if (face->ft_inc_int && a_char_ref->metrics_type != gs_fapi_metrics_notdef) {
 
-        FT_Incremental_MetricsRec *m =
-            &face->ft_inc_int->object->glyph_metrics;
+        FT_Incremental_MetricsRec *m = &face->ft_inc_int->object->glyph_metrics;
+
         m->bearing_x = a_char_ref->sb_x >> 16;
         m->bearing_y = a_char_ref->sb_y >> 16;
         m->advance = a_char_ref->aw_x >> 16;
-        face->ft_inc_int->object->glyph_metrics_index = index;
-        face->ft_inc_int->object->metrics_type = a_char_ref->metrics_type;
 
-        /* we only want this for fonts with TT outlines */
-        if (!a_fapi_font->is_type1) {
-            delta.y = 0;
-            delta.x = FT_MulFix(a_char_ref->sb_x, ft_face->size->metrics.x_scale);
-            FT_Vector_Transform( &delta, &face->ft_transform);
-       }
+        face->ft_inc_int->object->glyph_metrics_index = index;
+
+        /* For most font types, the original metrics come directly from the font, and
+           what we have here are customized (such as a Matrics dict in Postscript). We
+           only want to use the width, in that case, because other metrics can mess up
+           the hinting in Freetype. We'll apply custom lsb outselves, using the "delta"
+           stuff below.
+           The exception here is PCL/XL embedded TTF fonts, where the h/vmtx tables can
+           be missing, and we *have* to use the explicit metrics from the PCL/XL glyph
+           data. (NOTE: if those do not match the original font's metrics, again, the hinting
+           can be distorted)
+         */
+        if (a_char_ref->metrics_type == gs_fapi_metrics_replace && !a_fapi_font->is_mtx_skipped)
+            face->ft_inc_int->object->metrics_type = gs_fapi_metrics_replace_width;
+        else
+            face->ft_inc_int->object->metrics_type = a_char_ref->metrics_type;
+
+        delta.x = FT_MulFix(a_char_ref->sb_x >> 16, ft_face->size->metrics.x_scale);
+        delta.y = FT_MulFix(a_char_ref->sb_y >> 16, ft_face->size->metrics.y_scale);
+        FT_Vector_Transform( &delta, &face->ft_transform);
     }
     else if (face->ft_inc_int)
         /* Make sure we don't leave this set to the last value, as we may then use inappropriate metrics values */
@@ -699,10 +710,10 @@ load_glyph(gs_fapi_server * a_server, gs_fapi_font * a_fapi_font,
     /* If FT gives us an error, try to fall back to the notdef - if that doesn't work, we'll throw an error over to Ghostscript */
     if (ft_error) {
         gs_string notdef_str;
-        
+
         notdef_str.data = (byte *)".notdef";
         notdef_str.size = 7;
-        
+
         a_fapi_font->char_data = (void *)(&notdef_str);
         a_fapi_font->char_data_len = 0;
 
@@ -719,7 +730,7 @@ load_glyph(gs_fapi_server * a_server, gs_fapi_font * a_fapi_font,
     }
 
     if ((!ft_error || !ft_error_fb) && (delta.x != 0 || delta.y != 0)) {
-        FT_Outline_Translate( &ft_face->glyph->outline, delta.x >> 16, delta.y >> 16 );
+        FT_Outline_Translate( &ft_face->glyph->outline, delta.x, delta.y);
     }
 
     /* Previously we interpreted the glyph unscaled, and derived the metrics from that. Now we only interpret it
@@ -735,10 +746,10 @@ load_glyph(gs_fapi_server * a_server, gs_fapi_font * a_fapi_font,
          */
         hx = (FT_Long) (((double)ft_face->glyph->metrics.horiBearingX *
                          ft_face->units_per_EM * 72.0) /
-                        ((double)face->width * face->horz_res));
+                        ((double)face->width * face->horz_res))  + (a_fapi_font->is_mtx_skipped == 1 ? 0 : a_char_ref->sb_x >> 16);
         hy = (FT_Long) (((double)ft_face->glyph->metrics.horiBearingY *
                          ft_face->units_per_EM * 72.0) /
-                        ((double)face->height * face->vert_res));
+                        ((double)face->height * face->vert_res)) + (a_fapi_font->is_mtx_skipped == 1 ? 0 : a_char_ref->sb_y >> 16);
 
         w = (FT_Long) (((double)ft_face->glyph->metrics.width *
                         ft_face->units_per_EM * 72.0) / ((double)face->width *
@@ -1365,7 +1376,7 @@ gs_fapi_ft_get_scaled_font(gs_fapi_server * a_server, gs_fapi_font * a_font,
          */
 
         FT_Set_Transform(face->ft_face, &face->ft_transform, NULL);
-        
+
         if (!a_font->is_type1) {
             for (i = 0; i < GS_FAPI_NUM_TTF_CMAP_REQ && !cmap; i++) {
                 if (a_font->ttf_cmap_req[i].platform_id > 0) {
@@ -1817,7 +1828,7 @@ gs_fapi_ft_set_mm_weight_vector(gs_fapi_server *server, gs_fapi_font *ff, float 
             setit = true;
         }
     }
-    
+
     if (setit == true) {
         ft_error = FT_Set_MM_WeightVector(face->ft_face, length, nwv);
         if (ft_error != 0) return_error(gs_error_invalidaccess);

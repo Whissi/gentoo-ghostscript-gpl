@@ -1,4 +1,4 @@
-/* Copyright (C) 2001-2020 Artifex Software, Inc.
+/* Copyright (C) 2001-2021 Artifex Software, Inc.
    All Rights Reserved.
 
    This software is provided AS-IS with no warranty, either express or
@@ -226,6 +226,7 @@ pdf14_preserve_backdrop_cm(pdf14_buf *buf, cmm_profile_t *group_profile,
     int y0 = max(buf->rect.p.y, tos->rect.p.y);
     int y1 = min(buf->rect.q.y, tos->rect.q.y);
     bool deep = buf->deep;
+    int code;
 
     if (x0 < x1 && y0 < y1) {
         int width = x1 - x0;
@@ -283,9 +284,11 @@ pdf14_preserve_backdrop_cm(pdf14_buf *buf, cmm_profile_t *group_profile,
                               false, true, buf->planestride, buf->rowstride, height,
                               width);
             /* Transform the data.  */
-            (icc_link->procs.map_buffer)(dev, icc_link, &input_buff_desc,
+            code = (icc_link->procs.map_buffer)(dev, icc_link, &input_buff_desc,
                                          &output_buff_desc, tos_plane, buf_plane);
             gsicc_release_link(icc_link);
+            if (code < 0)
+                return gs_throw(gs_error_unknownerror, "ICC transform failed.  Trans backdrop");
         }
         /* Copy the alpha data */
         buf_plane += buf->planestride * (buf->n_chan - 1);
@@ -840,7 +843,7 @@ gx_blend_image_buffer(byte *buf_ptr, int width, int height, int rowstride,
 
 void
 gx_blend_image_buffer16(byte *buf_ptr_, int width, int height, int rowstride,
-                        int planestride, int num_comp, uint16_t bg)
+                        int planestride, int num_comp, uint16_t bg, bool keep_native)
 {
     uint16_t *buf_ptr = (uint16_t *)(void *)buf_ptr_;
     int x, y;
@@ -870,10 +873,12 @@ gx_blend_image_buffer16(byte *buf_ptr_, int width, int height, int rowstride,
             } else if (a == 0xffff) {
 #if ARCH_IS_BIG_ENDIAN
 #else
-                for (comp_num = 0; comp_num < num_comp; comp_num++) {
-                    comp  = buf_ptr[position + planestride * comp_num];
-                    ((byte *)&buf_ptr[position + planestride * comp_num])[0] = comp>>8;
-                    ((byte *)&buf_ptr[position + planestride * comp_num])[1] = comp;
+                if (!keep_native) {
+                    for (comp_num = 0; comp_num < num_comp; comp_num++) {
+                        comp = buf_ptr[position + planestride * comp_num];
+                        ((byte *)&buf_ptr[position + planestride * comp_num])[0] = comp >> 8;
+                        ((byte *)&buf_ptr[position + planestride * comp_num])[1] = comp;
+                    }
                 }
 #endif
             } else {

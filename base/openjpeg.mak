@@ -1,4 +1,4 @@
-# Copyright (C) 2001-2020 Artifex Software, Inc.
+# Copyright (C) 2001-2021 Artifex Software, Inc.
 # All Rights Reserved.
 #
 # This software is provided AS-IS with no warranty, either express or
@@ -64,7 +64,7 @@ open_jpeg_OBJS = \
 	$(OPEN_JPEG_OBJ)$(OPEN_JPEG_PREFIX)thix_manager.$(OBJ)			\
 	$(OPEN_JPEG_OBJ)$(OPEN_JPEG_PREFIX)tpix_manager.$(OBJ)			\
 	$(OPEN_JPEG_OBJ)$(OPEN_JPEG_PREFIX)thread.$(OBJ)                \
-        $(OPEN_JPEG_OBJ)$(OPEN_JPEG_PREFIX)sparse_array.$(OBJ) 
+        $(OPEN_JPEG_OBJ)$(OPEN_JPEG_PREFIX)sparse_array.$(OBJ)
 
 open_jpeg_HDRS = \
 	$(OPEN_JPEG_SRC)bio.h		\
@@ -115,7 +115,9 @@ $(OPEN_JPEG_GEN)openjpeg_0.dev : $(ECHOGS_XE) $(open_jpeg_OBJS) \
 	$(SETMOD) $(OPEN_JPEG_GEN)openjpeg_0 $(open_jpeg_OBJS)
 
 # define our specific compiler
-OPEN_JPEG_CC=$(CC) $(CFLAGS) $(D_)OPJ_STATIC$(_D) $(I_)$(OPEN_JPEG_GEN)$(_I) $(I_)$(JPX_OPENJPEG_I_)$(_I) $(I_)$(JPX_OPENJPEG_I_)$(D)..$(_I) $(JPXCF_)
+OPEN_JPEG_CC=$(CC) $(D_)OPJ_STATIC$(_D) $(I_)$(OPEN_JPEG_GEN)$(_I) $(I_)$(JPX_OPENJPEG_I_)$(_I) \
+$(I_)$(JPX_OPENJPEG_I_)$(D)..$(_I) $(JPXCF_) $(CCFLAGS)
+
 OPEN_JPEG_O=$(O_)$(OPEN_JPEG_OBJ)$(OPEN_JPEG_PREFIX)
 
 OPEN_JPEG_DEP=$(AK) $(OPEN_JPEG_MAK) $(MAKEDIRS)

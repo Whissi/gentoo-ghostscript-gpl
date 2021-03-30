@@ -1,4 +1,4 @@
-/* Copyright (C) 2001-2020 Artifex Software, Inc.
+/* Copyright (C) 2001-2021 Artifex Software, Inc.
    All Rights Reserved.
 
    This software is provided AS-IS with no warranty, either express or
@@ -218,7 +218,7 @@ const gs_color_space_type gs_color_space_type_Indexed = {
 };
 
 /* To keep things vectorized and avoid an if test during the remap proc we
-   have another set of procedures to use for indexed color spaces when 
+   have another set of procedures to use for indexed color spaces when
    someone has specified a named color profile and the base space of the
    index color space is DeviceN or Separation */
 const gs_color_space_type gs_color_space_type_Indexed_Named = {

@@ -1,4 +1,4 @@
-/* Copyright (C) 2001-2020 Artifex Software, Inc.
+/* Copyright (C) 2001-2021 Artifex Software, Inc.
    All Rights Reserved.
 
    This software is provided AS-IS with no warranty, either express or
@@ -320,12 +320,12 @@ pdf_scan_token(const byte **pscan, const byte * end, const byte **ptoken)
         int status;
 
         s_PSSD_init((stream_state *)&ss);
-        r.ptr = p;		/* skip the '(' */
-        r.limit = end - 1;
-        w.limit = buf + sizeof(buf) - 1;
+
+        /* "p + 1" - skip the '(' */
+        stream_cursor_read_init(&r, p + 1, (end - p) - 1);
+
         do {
-            /* One picky compiler complains if we initialize to buf - 1. */
-            w.ptr = buf;  w.ptr--;
+            stream_cursor_write_init(&w, buf, sizeof(buf));
             status = (*s_PSSD_template.process)
                 ((stream_state *) & ss, &r, &w, true);
         }
@@ -337,6 +337,7 @@ pdf_scan_token(const byte **pscan, const byte * end, const byte **ptoken)
         if (end - p < 2)
             return_error(gs_error_syntaxerror);
         if (p[1] != '<') {
+            /* This is handling a hex string, just skips across the entire string to the '>' */
             /*
              * We need the cast because some compilers declare memchar as
              * returning a char * rather than a void *.
@@ -344,12 +345,19 @@ pdf_scan_token(const byte **pscan, const byte * end, const byte **ptoken)
             p = (const byte *)memchr(p + 1, '>', end - p - 1);
             if (p == 0)
                 return_error(gs_error_syntaxerror);
+            *pscan = p + 1;
+            return 1;
+        } else {
+            /* This case is is beginning of a dict, "<<". Return it as a token. */
+            *pscan = p + 2;
+            return 1;
         }
-        goto m2;
+        break;
     case '>':
+        /* This case is the end of a dict, ">>". Return it as a token. */
         if (end - p < 2 || p[1] != '>')
             return_error(gs_error_syntaxerror);
-m2:	*pscan = p + 2;
+        *pscan = p + 2;
         return 1;
     case '[': case ']': case '{': case '}':
         *pscan = p + 1;
@@ -447,7 +455,7 @@ pdf_replace_names(gx_device_pdf * pdev, const gs_param_string * from,
 {
     const byte *start = from->data;
     const byte *end = start + from->size;
-    const byte *scan;
+    const byte *scan, *to_free = NULL;
     uint size = 0;
     cos_object_t *pco;
     bool any = false;
@@ -477,13 +485,17 @@ pdf_replace_names(gx_device_pdf * pdev, const gs_param_string * from,
     }
     to->persistent = true;	/* ??? */
     if (!any) {
-        to->data = start;
+        if (to->data != start) {
+            gs_free_object(pdev->pdf_memory, (byte *)to->data, "pdf_replace_names");
+            to->data = start;
+        }
         to->size = size;
         return 0;
     }
     sto = gs_alloc_bytes(pdev->pdf_memory, size, "pdf_replace_names");
     if (sto == 0)
         return_error(gs_error_VMerror);
+    to_free = to->data;
     to->data = sto;
     to->size = size;
     /* Do a second pass to do the actual substitutions. */
@@ -508,5 +520,6 @@ pdf_replace_names(gx_device_pdf * pdev, const gs_param_string * from,
         }
         scan = next;
     }
+    gs_free_object(pdev->pdf_memory, (byte *)to_free, "pdf_replace_names");
     return 0;
 }

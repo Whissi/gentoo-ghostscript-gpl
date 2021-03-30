@@ -1,4 +1,4 @@
-/* Copyright (C) 2001-2020 Artifex Software, Inc.
+/* Copyright (C) 2001-2021 Artifex Software, Inc.
    All Rights Reserved.
 
    This software is provided AS-IS with no warranty, either express or
@@ -429,6 +429,15 @@ void cs_adjust_counts_icc(gs_gstate *pgs, int delta)
     }
 }
 
+void cs_adjust_swappedcounts_icc(gs_gstate *pgs, int delta)
+{
+    gs_color_space *pcs = gs_swappedcolorspace_inline(pgs);
+
+    if (pcs) {
+        cs_adjust_swappedcounts(pgs, delta);
+    }
+}
+
 /* ------ Other implementation procedures ------ */
 
 /* Null color space installation procedure. */
@@ -497,7 +506,7 @@ gx_set_no_overprint(gs_gstate* pgs)
 
 /* Retain all the spot colorants and not the process
    colorants.  This occurs if we have a process color
-   mismatch between the source and the destination but 
+   mismatch between the source and the destination but
    the output device supports spot colors */
 int
 gx_set_spot_only_overprint(gs_gstate* pgs)
@@ -597,25 +606,25 @@ check_cmyk_color_model_comps(gx_device * dev)
                        dev,
                        "Cyan",
                        sizeof("Cyan") - 1,
-                       NO_COMP_NAME_TYPE )) < 0           ||
+                       NO_COMP_NAME_TYPE_OP)) < 0           ||
          cyan_c == GX_DEVICE_COLOR_MAX_COMPONENTS         ||
          (magenta_c = dev_proc(dev, get_color_comp_index)(
                           dev,
                           "Magenta",
                           sizeof("Magenta") - 1,
-                          NO_COMP_NAME_TYPE )) < 0        ||
+                          NO_COMP_NAME_TYPE_OP)) < 0        ||
          magenta_c == GX_DEVICE_COLOR_MAX_COMPONENTS      ||
          (yellow_c = dev_proc(dev, get_color_comp_index)(
                         dev,
                         "Yellow",
                         sizeof("Yellow") - 1,
-                        NO_COMP_NAME_TYPE )) < 0               ||
+                        NO_COMP_NAME_TYPE_OP)) < 0               ||
          yellow_c == GX_DEVICE_COLOR_MAX_COMPONENTS       ||
          (black_c = dev_proc(dev, get_color_comp_index)(
                         dev,
                         "Black",
                         sizeof("Black") - 1,
-                        NO_COMP_NAME_TYPE )) < 0                         ||
+                        NO_COMP_NAME_TYPE_OP)) < 0                         ||
          black_c == GX_DEVICE_COLOR_MAX_COMPONENTS          )
         return 0;
 
@@ -724,8 +733,7 @@ int gx_set_overprint_cmyk(const gs_color_space * pcs, gs_gstate * pgs)
     /* correct for any zero'ed color components.  But only if profiles
        match AND pgs->overprint_mode is true */
     if (pcs->cmm_icc_profile_data != NULL && output_profile != NULL) {
-        if (output_profile->hashcode ==
-            pcs->cmm_icc_profile_data->hashcode) {
+        if (gsicc_profiles_equal(output_profile, pcs->cmm_icc_profile_data)) {
             profile_ok = true;
         }
     }
@@ -759,13 +767,13 @@ int gx_set_overprint_cmyk(const gs_color_space * pcs, gs_gstate * pgs)
                space has to be CMYK. Trick is that we do need to worry about
                the colorant order on the target device */
             num_colorant[0] = (dev_proc(dev, get_color_comp_index))\
-                             (dev, "Cyan", strlen("Cyan"), NO_COMP_NAME_TYPE);
+                             (dev, "Cyan", strlen("Cyan"), NO_COMP_NAME_TYPE_OP);
             num_colorant[1] = (dev_proc(dev, get_color_comp_index))\
-                             (dev, "Magenta", strlen("Magenta"), NO_COMP_NAME_TYPE);
+                             (dev, "Magenta", strlen("Magenta"), NO_COMP_NAME_TYPE_OP);
             num_colorant[2] = (dev_proc(dev, get_color_comp_index))\
-                             (dev, "Yellow", strlen("Yellow"), NO_COMP_NAME_TYPE);
+                             (dev, "Yellow", strlen("Yellow"), NO_COMP_NAME_TYPE_OP);
             num_colorant[3] = (dev_proc(dev, get_color_comp_index))\
-                             (dev, "Black", strlen("Black"), NO_COMP_NAME_TYPE);
+                             (dev, "Black", strlen("Black"), NO_COMP_NAME_TYPE_OP);
             nz_comps = 0;
             one = 1;
             colorant_ok = true;

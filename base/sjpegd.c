@@ -1,4 +1,4 @@
-/* Copyright (C) 2001-2020 Artifex Software, Inc.
+/* Copyright (C) 2001-2021 Artifex Software, Inc.
    All Rights Reserved.
 
    This software is provided AS-IS with no warranty, either express or
@@ -39,7 +39,7 @@ gs_jpeg_create_decompress(stream_DCT_state * st)
         return_error(gs_jpeg_log_error(st));
 
     jpeg_stream_data_common_init(st->data.decompress);
-    
+
     if (gs_jpeg_mem_init (st->memory, (j_common_ptr)&st->data.decompress->dinfo) < 0)
         return_error(gs_error_VMerror);
 

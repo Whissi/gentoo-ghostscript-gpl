@@ -1,4 +1,4 @@
-/* Copyright (C) 2001-2020 Artifex Software, Inc.
+/* Copyright (C) 2001-2021 Artifex Software, Inc.
    All Rights Reserved.
 
    This software is provided AS-IS with no warranty, either express or
@@ -347,8 +347,8 @@ jbig2_image_compose(Jbig2Ctx *ctx, Jbig2Image *dst, Jbig2Image *src, int x, int 
     if (src == NULL)
         return 0;
 
-    if ((UINT32_MAX - src->width  < (x > 0 ? x : -x)) ||
-        (UINT32_MAX - src->height < (y > 0 ? y : -y)))
+    if ((UINT32_MAX - src->width  < (uint32_t) (x > 0 ? x : -x)) ||
+        (UINT32_MAX - src->height < (uint32_t) (y > 0 ? y : -y)))
     {
 #ifdef JBIG2_DEBUG
         jbig2_error(ctx, JBIG2_SEVERITY_DEBUG, JBIG2_UNKNOWN_SEGMENT_NUMBER, "overflow in compose_image");

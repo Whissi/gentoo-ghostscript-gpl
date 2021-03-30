@@ -1,4 +1,4 @@
-/* Copyright (C) 2001-2020 Artifex Software, Inc.
+/* Copyright (C) 2001-2021 Artifex Software, Inc.
    All Rights Reserved.
 
    This software is provided AS-IS with no warranty, either express or
@@ -65,5 +65,7 @@ int gs_cmap_ToUnicode_realloc(gs_memory_t *mem, int new_value_size, gs_cmap_t **
  * Write a code pair to ToUnicode CMap.
  */
 void gs_cmap_ToUnicode_add_pair(gs_cmap_t *pcmap, int code0, ushort *unicode, unsigned int length);
+
+int gs_cmap_ToUnicode_check_pair(gs_cmap_t *pcmap, int code0);
 
 #endif /* gsfcmap_INCLUDED */

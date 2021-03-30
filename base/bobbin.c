@@ -1,4 +1,4 @@
-/* Copyright (C) 2016-2020 Artifex Software, Inc.
+/* Copyright (C) 2016-2021 Artifex Software, Inc.
    All Rights Reserved.
 
    This software is provided AS-IS with no warranty, either express or
@@ -298,7 +298,7 @@ static int Bobbin_thread(void *thread)
     int i;
 
     for (i = 0; i < bobbins.num_threads; i++)
-        if (BOBBIN_THREAD_EQUAL(bobbins.thread[i].thread, thread) && 
+        if (BOBBIN_THREAD_EQUAL(bobbins.thread[i].thread, thread) &&
             (bobbins.thread[i].flags & BOBBIN_THREAD_FINISHED) == 0)
             break;
     if (i == bobbins.num_threads)

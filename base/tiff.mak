@@ -1,4 +1,4 @@
-# Copyright (C) 2001-2020 Artifex Software, Inc.
+# Copyright (C) 2001-2021 Artifex Software, Inc.
 # All Rights Reserved.
 #
 # This software is provided AS-IS with no warranty, either express or
@@ -33,7 +33,7 @@ TIFFCONF_H=$(TIFFCONF)libtiff$(D)tiffconf$(TIFFCONFIG_SUFFIX).h
 # Define the name of this makefile.
 LIBTIFF_MAK=$(GLSRC)tiff.mak $(TOP_MAKEFILES)
 
-TIFFCC=$(CC_) $(TIFF_CFLAGS) $(I_)$(TI_) $(II)$(JI_)$(_I) $(PF_)
+TIFFCC=$(CC) $(I_)$(TI_) $(II)$(JI_)$(_I) $(PF_) $(CCFLAGS) $(TIFF_CFLAGS)
 
 TIFFDEP = $(AK) $(TIFFGEN)tif_config.h $(TIFFGEN)tiffconf.h $(LIBTIFF_MAK) $(MAKEDIRS)
 gstiffio_h=$(GLSRC)gstiffio.h
@@ -203,10 +203,10 @@ $(TIFFOBJ)gstiffio.$(OBJ) : $(TIFFOBJ)gstiffio_$(SHARE_LIBTIFF).$(OBJ) $(LIBTIFF
 
 $(TIFFGEN)tif_config.h: $(TIFFCONFIG_H) $(LIBTIFF_MAK) $(MAKEDIRS)
 	$(CP_) $(TIFFCONFIG_H) $(TIFFGEN)tif_config.h
-	
+
 $(TIFFGEN)tiffconf.h: $(TIFFCONF_H) $(LIBTIFF_MAK) $(MAKEDIRS)
 	$(CP_) $(TIFFCONF_H) $(TIFFGEN)tiffconf.h
-	
+
 # Define the version of libtiff.dev that we are actually using.
 $(TIFFGEN)libtiff.dev : $(TIFFGEN)libtiff_$(SHARE_LIBTIFF).dev $(LIBTIFF_MAK) $(MAKEDIRS)
 	$(CP_) $(TIFFGEN)libtiff_$(SHARE_LIBTIFF).dev $(TIFFGEN)libtiff.dev

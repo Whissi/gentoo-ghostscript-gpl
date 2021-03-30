@@ -1,4 +1,4 @@
-/* Copyright (C) 2001-2020 Artifex Software, Inc.
+/* Copyright (C) 2001-2021 Artifex Software, Inc.
    All Rights Reserved.
 
    This software is provided AS-IS with no warranty, either express or
@@ -408,8 +408,8 @@ psdf_DCT_filter(gs_param_list *plist /* may be NULL */,
         /* Make sure we get at least a full scan line of input. */
         ss->scan_line_size = jcdp->cinfo.input_components *
             jcdp->cinfo.image_width;
-        /* Profile not used in pdfwrite output */        
-        ss->icc_profile = NULL; 
+        /* Profile not used in pdfwrite output */
+        ss->icc_profile = NULL;
         jcdp->templat.min_in_size =
             max(s_DCTE_template.min_in_size, ss->scan_line_size);
         /* Make sure we can write the user markers in a single go. */
@@ -510,10 +510,6 @@ psdf_create_compositor(
     if (gs_is_overprint_compositor(pct)) {
         *pcdev = dev;
         return 0;
-    } else {
-        if (dev->parent)
-            return gx_default_create_compositor(dev->parent, pcdev, pct, pgs, mem, cdev);
-        else
-            return gx_default_create_compositor(dev, pcdev, pct, pgs, mem, cdev);
     }
+    return gx_default_create_compositor(dev, pcdev, pct, pgs, mem, cdev);
 }

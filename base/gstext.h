@@ -1,4 +1,4 @@
-/* Copyright (C) 2001-2020 Artifex Software, Inc.
+/* Copyright (C) 2001-2021 Artifex Software, Inc.
    All Rights Reserved.
 
    This software is provided AS-IS with no warranty, either express or
@@ -215,8 +215,6 @@ gs_show_begin(gs_gstate *, const byte *, uint,
     gs_charboxpath_begin(gs_gstate *, const byte *, uint, bool,
                          gs_memory_t *, gs_text_enum_t **);
 
-/* Compute the number of characters in a text. */
-int gs_text_size(gs_gstate * pgs, gs_text_params_t *text, gs_memory_t * mem);
 /* Retrieve text params from enumerator. */
 gs_text_params_t *gs_get_text_params(gs_text_enum_t *pte);
 
@@ -301,7 +299,7 @@ int
 int gs_text_retry(gs_text_enum_t *pte);
 
 /* Release the text processing structures. */
-void gs_text_release(gs_text_enum_t *pte, client_name_t cname);
+void gs_text_release(gs_gstate *pgs, gs_text_enum_t *pte, client_name_t cname);
 
 /* Compute the number of characters in a text. */
 int gs_text_count_chars(gs_gstate * pgs, gs_text_params_t *text, gs_memory_t * mem);

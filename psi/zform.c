@@ -1,4 +1,4 @@
-/* Copyright (C) 2001-2020 Artifex Software, Inc.
+/* Copyright (C) 2001-2021 Artifex Software, Inc.
    All Rights Reserved.
 
    This software is provided AS-IS with no warranty, either express or
@@ -61,7 +61,7 @@ static int zbeginform(i_ctx_t *i_ctx_p)
     tmplate.BBox.p.y = BBox[1];
     tmplate.BBox.q.x = BBox[2];
     tmplate.BBox.q.y = BBox[3];
- 
+
     code = dict_floats_param(imemory, op, "Matrix", 6, Matrix, NULL);
     if (code < 0)
         return code;

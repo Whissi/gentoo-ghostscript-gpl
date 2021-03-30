@@ -1,4 +1,4 @@
-# Copyright (C) 2019 Artifex Software, Inc.
+# Copyright (C) 2019-2021 Artifex Software, Inc.
 # All Rights Reserved.
 #
 # This software is provided AS-IS with no warranty, either express or
@@ -82,7 +82,7 @@ $(GLOBJ)cal.dev : $(ECHOGS_XE) $(cal_OBJS) \
 	$(SETMOD) $(GLOBJ)cal $(cal_OBJS)
 
 # define our specific compiler
-CAL_CC=$(CC) $(CFLAGS) $(CAL_CFLAGS) $(I_)$(CAL_GEN)$(_I) $(I_)$(CAL_SRC)$(_I)
+CAL_CC=$(CC) $(CCFLAGS) $(CAL_CFLAGS) $(I_)$(CAL_GEN)$(_I) $(I_)$(CAL_SRC)$(_I)
 CAL_O=$(O_)$(CAL_OBJ)$(CAL_PREFIX)
 
 CAL_DEP=$(AK) $(CAL_MAK) $(MAKEDIRS)

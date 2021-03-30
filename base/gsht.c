@@ -1,4 +1,4 @@
-/* Copyright (C) 2001-2020 Artifex Software, Inc.
+/* Copyright (C) 2001-2021 Artifex Software, Inc.
    All Rights Reserved.
 
    This software is provided AS-IS with no warranty, either express or
@@ -27,6 +27,9 @@
 #include "gxdevice.h"           /* for gzht.h */
 #include "gzht.h"
 #include "gxfmap.h"             /* For effective transfer usage in threshold */
+#include "gp.h"
+
+#define DUMP_SCREENS 0
 
 /* Forward declarations */
 void gx_set_effective_transfer(gs_gstate *);
@@ -384,11 +387,19 @@ gx_ht_alloc_threshold_order(gx_ht_order * porder, uint width, uint height,
                             uint num_levels, gs_memory_t * mem)
 {
     gx_ht_order order;
-    uint num_bits = width * height;
-    const gx_ht_order_procs_t *procs =
-        (num_bits > 2000 && num_bits <= max_ushort ?
-         &ht_order_procs_short : &ht_order_procs_default);
+
+    unsigned long num_bits = bitmap_raster(width) * 8 * height;
+    const gx_ht_order_procs_t *procs;
     int code;
+
+    if (num_bits <= 2000)
+        procs = &ht_order_procs_default;
+    else if (num_bits <= max_ushort + 1)  /* We can index 0 to 65535 so a size of 65536 (max_ushort + 1) is OK */
+        procs = &ht_order_procs_short;
+    else if (num_bits <= max_uint)
+        procs = &ht_order_procs_uint;
+    else
+        return_error(gs_error_VMerror);  /* At this point in history, this is way too large of a screen */
 
     order = *porder;
     gx_compute_cell_values(&order.params);
@@ -636,10 +647,10 @@ gs_color_name_component_number(gx_device * dev, const char * pname,
     int num_colorant;
 
 #define check_colorant_name(dev, name) \
-    ((*dev_proc(dev, get_color_comp_index)) (dev, name, strlen(name), NO_COMP_NAME_TYPE))
+    ((*dev_proc(dev, get_color_comp_index)) (dev, name, strlen(name), NO_COMP_NAME_TYPE_HT))
 
 #define check_colorant_name_length(dev, name, length) \
-    ((*dev_proc(dev, get_color_comp_index)) (dev, name, length, NO_COMP_NAME_TYPE))
+    ((*dev_proc(dev, get_color_comp_index)) (dev, name, length, NO_COMP_NAME_TYPE_HT))
 
 #define check_name(str, pname, length) \
     ((strlen(str) == length) && (strncmp(pname, str, length) == 0))
@@ -1440,13 +1451,34 @@ gx_ht_construct_threshold( gx_ht_order *d_order, gx_device *dev,
     }
 #ifdef DEBUG
     if ( gs_debug_c('h') ) {
-         for( i=0; i<(int)d_order->height; i++ ) {
-            dmprintf1(memory, "threshold array row %3d= ", i);
-            for( j=0; j<(int)(d_order->width); j++ )
-                dmprintf1(memory, "%3d ", *(thresh+j+(i*d_order->width)) );
-            dmprintf(memory, "\n");
+         dmprintf3(memory, "threshold array component %d [ %d x %d ]:\n",
+                  plane_index, (int)(d_order->full_height), (int)(d_order->width));
+         for( i=0; i<(int)d_order->full_height; i++ ) {
+            dmprintf1(memory, "row %3d= ", i);
+            for( j=0; j<(int)(d_order->width); j++ ) {
+                dmprintf1(memory, "%02x ", *(thresh+j+(i*d_order->width)) );
+                if ((j&31) == 31)
+                    dmprintf(memory, "\n         ");
+            }
+            if ((j&31) != 0)
+                dmprintf(memory, "\n");
         }
    }
 #endif
+/* Large screens are easier to see as images */
+#if DUMP_SCREENS
+    {
+        char file_name[50];
+        gp_file *fid;
+
+        snprintf(file_name, 50, "Screen_From_Tiles_%dx%d.raw", d_order->width, d_order->full_height);
+        fid = gp_fopen(memory, file_name, "wb");
+        if (fid) {
+            gp_fwrite(thresh, sizeof(unsigned char), d_order->width * d_order->full_height, fid);
+            gp_fclose(fid);
+        }
+    }
+#endif
+
     return 0;
 }

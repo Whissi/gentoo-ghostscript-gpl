@@ -1,4 +1,4 @@
-/* Copyright (C) 2001-2020 Artifex Software, Inc.
+/* Copyright (C) 2001-2021 Artifex Software, Inc.
    All Rights Reserved.
 
    This software is provided AS-IS with no warranty, either express or
@@ -72,4 +72,4 @@ typedef struct stream_jpxd_state_s
 
 extern const stream_template s_jpxd_template;
 
-#endif 
+#endif

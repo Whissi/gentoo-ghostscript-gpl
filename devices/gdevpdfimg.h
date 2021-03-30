@@ -1,4 +1,4 @@
-/* Copyright (C) 2001-2020 Artifex Software, Inc.
+/* Copyright (C) 2001-2021 Artifex Software, Inc.
    All Rights Reserved.
 
    This software is provided AS-IS with no warranty, either express or
@@ -18,6 +18,13 @@
 
 #include "gdevprn.h"
 #include "gxdownscale.h"
+
+/* This is the number of always defined objects; object 0 the head
+ * of the free list, Object 1 the Root dictionary, Object 2
+ * the Pages dictionary and object 3 the Info dictionary
+ */
+#define PDFIMG_STATIC_OBJS 4
+#define OCR_MAX_FILE_OBJECTS 8
 
 typedef struct pdfimage_page_s {
     int ImageObjectNumber;
@@ -39,8 +46,6 @@ typedef struct PCLm_temp_file_s {
     byte *strm_buf;
 } PCLm_temp_file_t;
 
-#define OCR_MAX_FILE_OBJECTS 8
-
 typedef struct gx_device_pdf_image_s {
     gx_device_common;
     gx_prn_device_common;
@@ -55,6 +60,7 @@ typedef struct gx_device_pdf_image_s {
     int NumPages;
     gs_offset_t RootOffset;
     gs_offset_t PagesOffset;
+    gs_offset_t InfoOffset;
     gs_offset_t xrefOffset;
     pdfimage_page *Pages;
     PCLm_temp_file_t xref_stream;
@@ -64,6 +70,7 @@ typedef struct gx_device_pdf_image_s {
     /* OCR data */
     struct {
         char language[1024];
+        int engine;
         void *state;
 
         /* Number of "file level" objects - i.e. the number of objects

@@ -1,4 +1,4 @@
-/* Copyright (C) 2001-2020 Artifex Software, Inc.
+/* Copyright (C) 2001-2021 Artifex Software, Inc.
    All Rights Reserved.
 
    This software is provided AS-IS with no warranty, either express or
@@ -34,6 +34,7 @@
 #include "gxxfont.h"
 #include "gxttfb.h"
 #include "gxfont42.h"
+#include "gxobj.h"
 
 /* Define the descriptors for the cache structures. */
 private_st_cached_fm_pair();
@@ -79,7 +80,7 @@ gx_char_cache_alloc(gs_memory_t * struct_mem, gs_memory_t * bits_mem,
        cache character memory before filling the table.  The searching
        code uses an empty table entry as a sentinel. */
     chsize = max(chsize, ROUND_UP(bmax, sizeof_cached_char) / sizeof_cached_char + 1);
-    
+
     /* Round up chsize to a power of 2. */
     while (chsize & (chsize + 1))
         chsize |= chsize >> 1;
@@ -932,8 +933,8 @@ alloc_char(gs_font_dir * dir, ulong icdsize, cached_char **pcc)
             gs_memory_t *mem = dir->ccache.bits_memory;
             char_cache_chunk *cck_prev = dir->ccache.chunks;
             char_cache_chunk *cck;
-            uint cksize = dir->ccache.bmax / 5 + 1;
-            uint tsize = dir->ccache.bmax - dir->ccache.bspace;
+            uint cksize = ROUND_UP(dir->ccache.bmax / 5 + 1, obj_align_mod);
+            uint tsize = ROUND_UP(dir->ccache.bmax - dir->ccache.bspace, obj_align_mod);
             byte *cdata;
 
             if (cksize > tsize)

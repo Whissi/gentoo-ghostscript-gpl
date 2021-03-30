@@ -1,4 +1,4 @@
-/* Copyright (C) 2001-2020 Artifex Software, Inc.
+/* Copyright (C) 2001-2021 Artifex Software, Inc.
    All Rights Reserved.
 
    This software is provided AS-IS with no warranty, either express or
@@ -145,10 +145,13 @@ static int mask_suitable_for_interpolation(gx_image_enum *penum)
     int code;
     int high_level_color = 1;
 
-    if (gx_device_must_halftone(penum->dev)) {
+    if (gx_device_must_halftone(penum->dev))
         /* We don't interpolate when going to 1bpp outputs */
         return -1;
-    } else if (gx_dc_is_pure(pdc1) && (pdc1)->colors.pure != gx_no_color_index &&
+    if (dev_proc(penum->dev, dev_spec_op)(penum->dev, gxdso_copy_alpha_disabled, NULL, 0) == 1)
+        /* The target device has copy_alpha() disabled. */
+        return -1;
+    if (gx_dc_is_pure(pdc1) && (pdc1)->colors.pure != gx_no_color_index &&
         dev_proc(penum->dev, copy_alpha) != NULL &&
         dev_proc(penum->dev, copy_alpha) != gx_no_copy_alpha) {
         /* We have a 'pure' color, and a valid copy_alpha. We can work with that. */
@@ -173,6 +176,19 @@ static int mask_suitable_for_interpolation(gx_image_enum *penum)
     return high_level_color;
 }
 
+/*
+    Helper function to take an int64_t, and "fixed2int_pixround_perfect"
+    it while testing for overflow.
+*/
+static int
+safe64fixed2int(int64_t v, int *overflow)
+{
+    if (v > (int)((1U<<(sizeof(int)*8-1))-128) ||
+        v < 0)
+        *overflow = 1;
+    return fixed2int_pixround_perfect(v);
+}
+
 int
 gs_image_class_0_interpolate(gx_image_enum * penum, irender_proc_t *render_fn)
 {
@@ -192,6 +208,7 @@ gs_image_class_0_interpolate(gx_image_enum * penum, irender_proc_t *render_fn)
     int interpolate_control = penum->dev->interpolate_control;
     int abs_interp_limit = max(1, any_abs(interpolate_control));
     int limited_WidthOut, limited_HeightOut;
+    int overflow = 0;
 
     if (interpolate_control < 0)
         penum->interpolate = interp_on;		/* not the same as "interp_force" -- threshold still used */
@@ -275,6 +292,7 @@ gs_image_class_0_interpolate(gx_image_enum * penum, irender_proc_t *render_fn)
         if(!gx_device_uses_std_cmap_procs(penum->dev, penum->pgs)) {
             use_icc = false;
         }
+        pol = cs_polarity(pcs);
     }
 /*
  * USE_CONSERVATIVE_INTERPOLATION_RULES is normally NOT defined since
@@ -317,64 +335,63 @@ gs_image_class_0_interpolate(gx_image_enum * penum, irender_proc_t *render_fn)
     if (penum->posture == image_portrait) {
         fixed dw = any_abs(penum->dst_width);
         fixed dh = any_abs(penum->dst_height);
-        iss.WidthOut = fixed2int_pixround_perfect((fixed)((int64_t)(penum->rect.x + penum->rect.w) *
-                                                          dw / penum->Width))
-                     - fixed2int_pixround_perfect((fixed)((int64_t)penum->rect.x *
-                                                          dw / penum->Width));
-        iss.HeightOut = fixed2int_pixround_perfect((fixed)((int64_t)(penum->rect.y + penum->rect.h) *
-                                                           dh / penum->Height))
-                      - fixed2int_pixround_perfect((fixed)((int64_t)penum->rect.y *
-                                                           dh / penum->Height));
-        iss.EntireWidthOut = fixed2int_pixround(dw);
-        iss.EntireHeightOut = fixed2int_pixround(dh);
-        iss.TopMarginOut = fixed2int_pixround_perfect((fixed)((int64_t)(penum->rrect.y - penum->rect.y) *
-                                                              dh / penum->Height));
-        iss.PatchHeightOut = fixed2int_pixround_perfect((fixed)((int64_t)penum->rrect.h *
-                                                                dh / penum->Height))
+        iss.WidthOut = safe64fixed2int((int64_t)(penum->rect.x + penum->rect.w) *
+                                       dw / penum->Width, &overflow)
+                     - safe64fixed2int((int64_t)penum->rect.x *
+                                       dw / penum->Width, &overflow);
+        iss.HeightOut = safe64fixed2int((int64_t)(penum->rect.y + penum->rect.h) *
+                                        dh / penum->Height, &overflow)
+                      - safe64fixed2int((int64_t)penum->rect.y *
+                                        dh / penum->Height, &overflow);
+        iss.EntireWidthOut = safe64fixed2int(dw, &overflow);
+        iss.EntireHeightOut = safe64fixed2int(dh, &overflow);
+        iss.TopMarginOut = safe64fixed2int((int64_t)(penum->rrect.y - penum->rect.y) *
+                                           dh / penum->Height, &overflow);
+        iss.PatchHeightOut = safe64fixed2int((int64_t)penum->rrect.h *
+                                             dh / penum->Height, &overflow)
                            - iss.TopMarginOut;
-        iss.PatchWidthOut = fixed2int_pixround_perfect((fixed)((int64_t)(penum->rrect.x + penum->rrect.w) *
-                                                               dw / penum->Width))
-                          - fixed2int_pixround_perfect((fixed)((int64_t)penum->rrect.x *
-                                                               dw / penum->Width));
-        iss.LeftMarginOut = fixed2int_pixround_perfect((fixed)((int64_t)(penum->rrect.x - penum->rect.x) *
-                                                               dw / penum->Width));
-        iss.TopMarginOut2 = fixed2int_pixround_perfect((fixed)((int64_t)penum->rrect.y *
-                                                              dh / penum->Height));
-        iss.PatchHeightOut2 = fixed2int_pixround_perfect((fixed)((int64_t)(penum->rrect.y + penum->rrect.h) *
-                                                                dh / penum->Height))
+        iss.PatchWidthOut = safe64fixed2int((int64_t)(penum->rrect.x + penum->rrect.w) *
+                                            dw / penum->Width, &overflow)
+                          - safe64fixed2int((int64_t)penum->rrect.x *
+                                            dw / penum->Width, &overflow);
+        iss.LeftMarginOut = safe64fixed2int((int64_t)(penum->rrect.x - penum->rect.x) *
+                                            dw / penum->Width, &overflow);
+        iss.TopMarginOut2 = safe64fixed2int((int64_t)penum->rrect.y *
+                                            dh / penum->Height, &overflow);
+        iss.PatchHeightOut2 = safe64fixed2int((int64_t)(penum->rrect.y + penum->rrect.h) *
+                                              dh / penum->Height, &overflow)
                            - iss.TopMarginOut2;
         iss.pad_y = iss.TopMarginOut2
-                  - fixed2int_pixround_perfect(
-                                 (fixed)((int64_t)penum->rect.y *
-                                         dh / penum->Height));
+                  - safe64fixed2int((int64_t)penum->rect.y *
+                                    dh / penum->Height, &overflow);
     } else {
         fixed dw = any_abs(penum->dst_width);
         fixed dh = any_abs(penum->dst_height);
-        iss.WidthOut = fixed2int_pixround_perfect((fixed)((int64_t)(penum->rect.x + penum->rect.w) *
-                                                          dh / penum->Width))
-                     - fixed2int_pixround_perfect((fixed)((int64_t)penum->rect.x *
-                                                          dh / penum->Width));
-        iss.HeightOut = fixed2int_pixround_perfect((fixed)((int64_t)(penum->rect.y + penum->rect.h) *
-                                                           dw / penum->Height))
-                      - fixed2int_pixround_perfect((fixed)((int64_t)penum->rect.y *
-                                                           dw / penum->Height));
-        iss.EntireWidthOut = fixed2int_pixround(dh);
-        iss.EntireHeightOut = fixed2int_pixround(dw);
-        iss.TopMarginOut = fixed2int_pixround_perfect((fixed)((int64_t)(penum->rrect.y - penum->rect.y) *
-                                                              dw / penum->Height));
-        iss.PatchHeightOut = fixed2int_pixround_perfect((fixed)((int64_t)penum->rrect.h *
-                                                                dw / penum->Height))
+        iss.WidthOut = safe64fixed2int((int64_t)(penum->rect.x + penum->rect.w) *
+                                       dh / penum->Width, &overflow)
+                     - safe64fixed2int((int64_t)penum->rect.x *
+                                       dh / penum->Width, &overflow);
+        iss.HeightOut = safe64fixed2int((int64_t)(penum->rect.y + penum->rect.h) *
+                                        dw / penum->Height, &overflow)
+                      - safe64fixed2int((int64_t)penum->rect.y *
+                                        dw / penum->Height, &overflow);
+        iss.EntireWidthOut = safe64fixed2int(dh, &overflow);
+        iss.EntireHeightOut = safe64fixed2int(dw, &overflow);
+        iss.TopMarginOut = safe64fixed2int((int64_t)(penum->rrect.y - penum->rect.y) *
+                                           dw / penum->Height, &overflow);
+        iss.PatchHeightOut = safe64fixed2int((int64_t)penum->rrect.h *
+                                             dw / penum->Height, &overflow)
                            - iss.TopMarginOut;
-        iss.PatchWidthOut = fixed2int_pixround_perfect((fixed)((int64_t)(penum->rrect.x + penum->rrect.w) *
-                                                               dh / penum->Width))
-                          - fixed2int_pixround_perfect((fixed)((int64_t)penum->rrect.x *
-                                                               dh / penum->Width));
-        iss.LeftMarginOut = fixed2int_pixround_perfect((fixed)((int64_t)(penum->rrect.x - penum->rect.x) *
-                                                               dh / penum->Width));
-        iss.TopMarginOut2 = fixed2int_pixround_perfect((fixed)((int64_t)penum->rrect.y *
-                                                              dw / penum->Height));
-        iss.PatchHeightOut2 = fixed2int_pixround_perfect((fixed)((int64_t)(penum->rrect.y + penum->rrect.h) *
-                                                                dw / penum->Height))
+        iss.PatchWidthOut = safe64fixed2int((int64_t)(penum->rrect.x + penum->rrect.w) *
+                                            dh / penum->Width, &overflow)
+                          - safe64fixed2int((int64_t)penum->rrect.x *
+                                            dh / penum->Width, &overflow);
+        iss.LeftMarginOut = safe64fixed2int((int64_t)(penum->rrect.x - penum->rect.x) *
+                                            dh / penum->Width, &overflow);
+        iss.TopMarginOut2 = safe64fixed2int((int64_t)penum->rrect.y *
+                                            dw / penum->Height, &overflow);
+        iss.PatchHeightOut2 = safe64fixed2int((int64_t)(penum->rrect.y + penum->rrect.h) *
+                                              dw / penum->Height, &overflow)
                            - iss.TopMarginOut2;
         iss.pad_y = 0;
     }
@@ -399,7 +416,7 @@ gs_image_class_0_interpolate(gx_image_enum * penum, irender_proc_t *render_fn)
         iss.LeftMarginOut = iss.WidthOut - iss.LeftMarginOut - iss.PatchWidthOut;
     /* For interpolator cores that don't set Active, have us always active */
     iss.Active = 1;
-    if (iss.EntireWidthOut == 0 || iss.EntireHeightOut == 0)
+    if (iss.EntireWidthOut == 0 || iss.EntireHeightOut == 0 || overflow)
     {
         penum->interpolate = interp_off;
         return 0;
@@ -2171,9 +2188,12 @@ image_render_interpolate_icc(gx_image_enum * penum, const byte * buffer,
                           1, width_in);
             /* Do the transformation */
             psrc = (byte*) (stream_r.ptr + 1);
-            (penum->icc_link->procs.map_buffer)(dev, penum->icc_link, &input_buff_desc,
+            code = (penum->icc_link->procs.map_buffer)(dev, penum->icc_link, &input_buff_desc,
                                                 &output_buff_desc, (void*) psrc,
                                                 (void*) p_cm_buff);
+            if (code < 0)
+                return code;
+
             /* Re-set the reading stream to use the cm data */
             stream_r.ptr = p_cm_buff - 1;
             stream_r.limit = stream_r.ptr + num_bytes_decode * width_in * spp_cm;
@@ -2232,11 +2252,13 @@ image_render_interpolate_icc(gx_image_enum * penum, const byte * buffer,
                     pinterp += (pss->params.LeftMarginOut / abs_interp_limit) * spp_decode;
                     p_cm_interp = (unsigned short *) p_cm_buff;
                     p_cm_interp += (pss->params.LeftMarginOut / abs_interp_limit) * spp_cm;
-                    (penum->icc_link->procs.map_buffer)(dev, penum->icc_link,
+                    code = (penum->icc_link->procs.map_buffer)(dev, penum->icc_link,
                                                         &input_buff_desc,
                                                         &output_buff_desc,
                                                         (void*) pinterp,
                                                         (void*) p_cm_interp);
+                    if (code < 0)
+                        return code;
                 }
                 code = irii_core(penum, xo, xe, spp_cm, p_cm_interp, dev, abs_interp_limit, bpp, raster, yo, dy, lop);
                 if (code < 0)
@@ -2660,9 +2682,12 @@ image_render_interpolate_landscape_icc(gx_image_enum * penum,
                           1, width_in);
             /* Do the transformation */
             psrc = (byte*) (stream_r.ptr + 1);
-            (penum->icc_link->procs.map_buffer)(dev, penum->icc_link, &input_buff_desc,
+            code = (penum->icc_link->procs.map_buffer)(dev, penum->icc_link, &input_buff_desc,
                                                 &output_buff_desc, (void*) psrc,
                                                 (void*) p_cm_buff);
+            if (code < 0)
+                return code;
+
             /* Re-set the reading stream to use the cm data */
             stream_r.ptr = p_cm_buff - 1;
             stream_r.limit = stream_r.ptr + num_bytes_decode * width_in * spp_cm;
@@ -2728,18 +2753,20 @@ image_render_interpolate_landscape_icc(gx_image_enum * penum,
                 if (penum->icc_link->is_identity || pss->params.early_cm) {
                     /* Fastest case. No CM needed */
                     p_cm_interp = (unsigned short *) pinterp;
+                    p_cm_interp += (pss->params.LeftMarginOut / abs_interp_limit) * spp_cm;
                 } else {
                     /* Transform */
                     pinterp += (pss->params.LeftMarginOut / abs_interp_limit) * spp_decode;
                     p_cm_interp = (unsigned short *) p_cm_buff;
                     p_cm_interp += (pss->params.LeftMarginOut / abs_interp_limit) * spp_cm;
-                    (penum->icc_link->procs.map_buffer)(dev, penum->icc_link,
+                    code = (penum->icc_link->procs.map_buffer)(dev, penum->icc_link,
                                                         &input_buff_desc,
                                                         &output_buff_desc,
                                                         (void*) pinterp,
                                                         (void*) p_cm_interp);
+                    if (code < 0)
+                        return code;
                 }
-                p_cm_interp += (pss->params.LeftMarginOut / abs_interp_limit) * spp_cm;
                 for (x = xo; x < xe;) {
 #ifdef DEBUG
                     if (gs_debug_c('B')) {

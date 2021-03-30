@@ -1,4 +1,4 @@
-/* Copyright (C) 2001-2020 Artifex Software, Inc.
+/* Copyright (C) 2001-2021 Artifex Software, Inc.
    All Rights Reserved.
 
    This software is provided AS-IS with no warranty, either express or
@@ -326,7 +326,7 @@ gs_fapi_bstm_set_mm_weight_vector(gs_fapi_server *server, gs_fapi_font *ff, floa
     (void)ff;
     (void)wvector;
     (void)length;
-    
+
     return gs_error_invalidaccess;
 }
 

@@ -1,4 +1,4 @@
-/* Copyright (C) 2001-2020 Artifex Software, Inc.
+/* Copyright (C) 2001-2021 Artifex Software, Inc.
    All Rights Reserved.
 
    This software is provided AS-IS with no warranty, either express or
@@ -216,7 +216,7 @@ struct gx_image_enum_s {
     irender_proc((*render));
     int (*skip_next_line)(gx_image_enum *penum, gx_device *dev);
     const gs_gstate *pgs;
-    const gs_color_space *pcs;  /* color space of image */
+    gs_color_space *pcs;  /* color space of image */
     byte *buffer;               /* for expanding samples to a */
                                 /* byte or frac */
     uint buffer_size;

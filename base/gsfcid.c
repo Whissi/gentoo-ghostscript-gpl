@@ -1,4 +1,4 @@
-/* Copyright (C) 2001-2020 Artifex Software, Inc.
+/* Copyright (C) 2001-2021 Artifex Software, Inc.
    All Rights Reserved.
 
    This software is provided AS-IS with no warranty, either express or
@@ -112,9 +112,9 @@ subst_CID_on_WMode_finalize(const gs_memory_t *cmem, void *data)
     gs_subst_CID_on_WMode_t *subst = (gs_subst_CID_on_WMode_t *)data;
     (void)cmem; /* unused */
 
-    gs_free_object(subst->rc.memory, subst->data + 0, "subst_CID_on_WMode_finalize");
+    gs_free_object(subst->rc.memory, subst->data[0], "subst_CID_on_WMode_finalize");
     subst->data[0] = NULL;
-    gs_free_object(subst->rc.memory, subst->data + 1, "subst_CID_on_WMode_finalize");
+    gs_free_object(subst->rc.memory, subst->data[1], "subst_CID_on_WMode_finalize");
     subst->data[1] = NULL;
 }
 

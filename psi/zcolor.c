@@ -1,4 +1,4 @@
-/* Copyright (C) 2001-2020 Artifex Software, Inc.
+/* Copyright (C) 2001-2021 Artifex Software, Inc.
    All Rights Reserved.
 
    This software is provided AS-IS with no warranty, either express or
@@ -1598,7 +1598,7 @@ static int setcmykspace(i_ctx_t * i_ctx_p, ref *r, int *stage, int *cont, int CI
                 pcs = gs_cspace_new_DeviceCMYK(imemory);
                 if (pcs == NULL)
                     return_error(gs_error_VMerror);
-                /* Bug 693816 unset device color prior to possible overprint 
+                /* Bug 693816 unset device color prior to possible overprint
                    colorant check */
                 gx_unset_dev_color(igs);
                 code = gs_setcolorspace(igs, pcs);

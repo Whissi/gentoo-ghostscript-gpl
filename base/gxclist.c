@@ -1,4 +1,4 @@
-/* Copyright (C) 2001-2020 Artifex Software, Inc.
+/* Copyright (C) 2001-2021 Artifex Software, Inc.
    All Rights Reserved.
 
    This software is provided AS-IS with no warranty, either express or
@@ -31,6 +31,7 @@
 #include "gsicc_manage.h"
 #include "gsicc_cache.h"
 #include "gxdevsop.h"
+#include "gxobj.h"
 
 #include "valgrind.h"
 
@@ -361,7 +362,7 @@ clist_minimum_buffer(int nbands) {
 
 /*
  * Initialize the allocation for the band states, which are used only
- * when writing.  Requires: nbands.  Sets: states, cbuf, cend.
+ * when writing.  Requires: nbands.  Sets: states, cbuf, cend, band_range_list.
  */
 static int
 clist_init_states(gx_device * dev, byte * init_data, uint data_size)
@@ -378,7 +379,8 @@ clist_init_states(gx_device * dev, byte * init_data, uint data_size)
     cdev->cend = init_data + data_size;
     init_data +=  alignment;
     cdev->states = (gx_clist_state *) init_data;
-    cdev->cbuf = init_data + state_size;
+    cdev->band_range_list =  (cmd_list *)(init_data + state_size);
+    cdev->cbuf = init_data + state_size + sizeof(cmd_list);
     return 0;
 }
 
@@ -409,6 +411,8 @@ clist_init_data(gx_device * dev, byte * init_data, uint data_size)
     gx_device *pbdev = (gx_device *)&bdev;
     int code;
     int align = 1 << (target->log2_align_mod > log2_align_bitmap_mod ? target->log2_align_mod : log2_align_bitmap_mod);
+
+    align = align < obj_align_mod ? obj_align_mod : align;
 
     /* the clist writer has its own color info that depends upon the
        transparency group color space (if transparency exists).  The data that is
@@ -540,7 +544,7 @@ clist_reset(gx_device * dev)
        sizeof(*cdev->tile_table));
     cdev->cnext = cdev->cbuf;
     cdev->ccl = 0;
-    cdev->band_range_list.head = cdev->band_range_list.tail = 0;
+    cdev->band_range_list->head = cdev->band_range_list->tail = 0;
     cdev->band_range_min = 0;
     cdev->band_range_max = nbands - 1;
     {
@@ -756,6 +760,17 @@ clist_close(gx_device *dev)
     gs_free_object(cdev->memory->thread_safe_memory, cdev->icc_cache_list, "clist_close");
     cdev->icc_cache_list = NULL;
 
+    /* So despite the comment above, it seems necessary to free the cache_chunk here,
+     * if the device is not being retained.  The code in gx_pattern_cache_free_entry() doesn't
+     * actually free it, in at least some cases.
+     * TODO: Is it sufficient to only free it here, and not in the places mentioned above?
+     */
+    if (!cdev->retained) {
+        gs_free_object(cdev->memory->non_gc_memory, cdev->cache_chunk,
+                       "clist_close(cache_chunk)");
+        cdev->cache_chunk = NULL;
+    }
+
     if (cdev->do_not_open_or_close_bandfiles)
         return 0;
     if (dev_proc(cdev, open_device) == pattern_clist_open_device) {
@@ -848,6 +863,7 @@ clist_end_page(gx_device_clist_writer * cldev)
         clist_free_icc_table(cldev->icc_table, cldev->memory);
         cldev->icc_table = NULL;
     }
+
     if (code >= 0) {
         code = clist_write_color_usage_array(cldev);
         if (code >= 0) {
@@ -1205,6 +1221,17 @@ clist_write_color_usage_array(gx_device_clist_writer *cldev)
     return(0);
 }
 
+/* This writes out the spot equivalent cmyk values for the page.
+   These are used for overprint simulation.  Read back by the
+   pdf14 device during the put_image operation */
+int
+clist_write_op_equiv_cmyk_colors(gx_device_clist_writer *cldev,
+    equivalent_cmyk_color_params *op_equiv_cmyk)
+{
+    return cmd_write_pseudo_band(cldev, (unsigned char *)op_equiv_cmyk,
+        sizeof(equivalent_cmyk_color_params), SPOT_EQUIV_COLORS);
+}
+
 /* Compute color_usage over a Y range while writing clist */
 /* Sets color_usage fields and range_start.               */
 /* Returns range end (max dev->height)                    */
@@ -1351,7 +1378,7 @@ clist_make_accum_device(gs_memory_t *mem, gx_device *target, const char *dname, 
                         bool use_memory_clist, bool uses_transparency,
                         gs_pattern1_instance_t *pinst)
 {
-        gx_device_clist *cdev = gs_alloc_struct(mem, gx_device_clist,
+        gx_device_clist *cdev = gs_alloc_struct(mem->stable_memory, gx_device_clist,
                         &st_device_clist, "clist_make_accum_device");
         gx_device_clist_writer *cwdev = (gx_device_clist_writer *)cdev;
 
@@ -1361,10 +1388,10 @@ clist_make_accum_device(gs_memory_t *mem, gx_device *target, const char *dname, 
         cwdev->params_size = sizeof(gx_device_clist);
         cwdev->static_procs = NULL;
         cwdev->dname = dname;
-        cwdev->memory = mem;
+        cwdev->memory = mem->stable_memory;
         cwdev->stype = &st_device_clist;
         cwdev->stype_is_dynamic = false;
-        rc_init(cwdev, mem, 1);
+        rc_init(cwdev, mem->stable_memory, 1);
         cwdev->retained = true;
         cwdev->is_open = false;
         cwdev->color_info = target->color_info;
@@ -1447,3 +1474,116 @@ RELOC_PTRS_WITH(device_clist_mutatable_reloc_ptrs, gx_device_clist_mutatable *pd
         RELOC_PREFIX(st_device_forward);
 } RELOC_PTRS_END
 public_st_device_clist_mutatable();
+
+int
+clist_mutate_to_clist(gx_device_clist_mutatable  *pdev,
+                      gs_memory_t                *buffer_memory,
+                      byte                      **the_memory,
+                const gdev_space_params          *space_params,
+                      bool                        bufferSpace_is_exact,
+                const gx_device_buf_procs_t      *buf_procs,
+                      dev_proc_dev_spec_op(dev_spec_op),
+                      uint                        min_buffer_space)
+{
+    gx_device *target = (gx_device *)pdev;
+    uint space;
+    int code;
+    gx_device_clist *const pclist_dev = (gx_device_clist *)pdev;
+    gx_device_clist_common * const pcldev = &pclist_dev->common;
+    bool reallocate = the_memory != NULL && *the_memory != NULL;
+    byte *base;
+    bool save_is_open = pdev->is_open;	/* Save around temporary failure in open_c loop */
+
+    while (target->parent != NULL) {
+        target = target->parent;
+        gx_update_from_subclass(target);
+    }
+
+    /* Try to allocate based simply on param-requested buffer size */
+#ifdef DEBUGGING_HACKS
+#define BACKTRACE(first_arg)\
+  BEGIN\
+    ulong *fp_ = (ulong *)&first_arg - 2;\
+    for (; fp_ && (fp_[1] & 0xff000000) == 0x08000000; fp_ = (ulong *)*fp_)\
+        dmprintf2(buffer_memory, "  fp="PRI_INTPTR" ip=0x%lx\n", (intptr_t)fp_, fp_[1]);\
+  END
+dmputs(buffer_memory, "alloc buffer:\n");
+BACKTRACE(pdev);
+#endif /*DEBUGGING_HACKS*/
+    for ( space = space_params->BufferSpace; ; ) {
+        base = (reallocate ?
+                (byte *)gs_resize_object(buffer_memory, *the_memory, space,
+                                         "cmd list buffer") :
+                gs_alloc_bytes(buffer_memory, space,
+                               "cmd list buffer"));
+        if (base != NULL)
+            break; /* Allocation worked! Stop trying. */
+        if (bufferSpace_is_exact) {
+            /* We wanted a specific size. Accept no substitutes. */
+            break;
+        }
+        /* Let's try again for half the size. */
+        if (space == min_buffer_space)
+            break; /* We already failed at the minimum size. */
+        space >>= 1;
+        if (space < min_buffer_space)
+            space = min_buffer_space;
+    }
+    if (base == NULL)
+        return_error(gs_error_VMerror);
+
+    /* Try opening the command list, to see if we allocated */
+    /* enough buffer space. */
+open_c:
+    if (the_memory)
+        *the_memory = base;
+    pdev->buf = base;
+    pdev->buffer_space = space;
+    pclist_dev->common.orig_spec_op = dev_spec_op;
+    clist_init_io_procs(pclist_dev, pdev->BLS_force_memory);
+    clist_init_params(pclist_dev, base, space, target,
+                      *buf_procs,
+                      space_params->band,
+                      false, /* do_not_open_or_close_bandfiles */
+                      (pdev->bandlist_memory == 0 ? pdev->memory->non_gc_memory:
+                       pdev->bandlist_memory),
+                      pdev->clist_disable_mask,
+                      pdev->page_uses_transparency,
+                      pdev->page_uses_overprint);
+    code = (*gs_clist_device_procs.open_device)( (gx_device *)pcldev );
+    if (code < 0) {
+        /* If there wasn't enough room, and we haven't */
+        /* already shrunk the buffer, try enlarging it. */
+        if ( code == gs_error_rangecheck &&
+             space >= space_params->BufferSpace &&
+             !bufferSpace_is_exact
+             ) {
+            space += space / 8;
+            if (reallocate) {
+                base = gs_resize_object(buffer_memory,
+                                        *the_memory, space,
+                                        "cmd list buf(retry open)");
+            } else {
+                gs_free_object(buffer_memory, base,
+                               "cmd list buf(retry open)");
+                base = gs_alloc_bytes(buffer_memory, space,
+                                      "cmd list buf(retry open)");
+                if (the_memory != NULL)
+                    *the_memory = base;
+            }
+            if (base != NULL) {
+                pdev->is_open = save_is_open;	/* allow for success when we loop */
+                goto open_c;
+            }
+        }
+        /* Failure. */
+        if (!reallocate) {
+            gs_free_object(buffer_memory, base, "cmd list buf");
+            pdev->buffer_space = 0;
+            if (the_memory != NULL)
+                *the_memory = NULL;
+            pdev->buf = NULL;
+        }
+    }
+    return code;
+}

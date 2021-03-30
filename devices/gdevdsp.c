@@ -1,4 +1,4 @@
-/* Copyright (C) 2001-2020 Artifex Software, Inc.
+/* Copyright (C) 2001-2021 Artifex Software, Inc.
    All Rights Reserved.
 
    This software is provided AS-IS with no warranty, either express or
@@ -1430,9 +1430,6 @@ static int display_check_structure(gx_device_display *ddev)
     }
     else if (ddev->callback->size == sizeof(struct display_callback_v2_s)) {
         /* V2 structure with added display_separation callback */
-        if (ddev->callback->size != sizeof(display_callback))
-            return_error(gs_error_rangecheck);
-
         if (ddev->callback->version_major != DISPLAY_VERSION_MAJOR_V2)
             return_error(gs_error_rangecheck);
 
@@ -1649,7 +1646,7 @@ display_size_buf_device(gx_device_buf_space_t *space, gx_device *target,
                         int height, bool for_band)
 {
     gx_device_display *ddev = (gx_device_display *)target;
-    gx_device_memory mdev;
+    gx_device_memory mdev = { 0 };
     int code;
     int planar = ddev->nFormat & (DISPLAY_PLANAR | DISPLAY_PLANAR_INTERLEAVED);
     int interleaved = (ddev->nFormat & DISPLAY_PLANAR_INTERLEAVED);
@@ -1679,75 +1676,6 @@ static gx_device_buf_procs_t display_buf_procs = {
     gx_default_setup_buf_device,
     gx_default_destroy_buf_device
 };
-
-static int		/* returns 0 ok, else -ve error cde */
-setup_as_clist(gx_device_display *ddev, gs_memory_t *buffer_memory)
-{
-    gdev_space_params space_params = ddev->space_params;
-    gx_device *target = (gx_device *)ddev;
-    uint space;
-    int code;
-    gx_device_clist *const pclist_dev = (gx_device_clist *)ddev;
-    gx_device_clist_common * const pcldev = &pclist_dev->common;
-    byte *base;
-    bool save_is_open = ddev->is_open;	/* Save around temporary failure in open_c loop */
-
-    while (target->parent != NULL) {
-        target = target->parent;
-        gx_update_from_subclass(target);
-    }
-
-    /* Try to allocate based simply on param-requested buffer size */
-    for ( space = space_params.BufferSpace; ; ) {
-        base = gs_alloc_bytes(buffer_memory, space,
-                              "cmd list buffer");
-        if (base != NULL)
-            break;
-        if ((space >>= 1) < MIN_BUFFER_SPACE)
-            break;
-    }
-    if (base == NULL)
-        return_error(gs_error_VMerror);
-
-    /* Try opening the command list, to see if we allocated */
-    /* enough buffer space. */
-open_c:
-    ddev->buf = base;
-    ddev->buffer_space = space;
-    pclist_dev->common.orig_spec_op = ddev->orig_procs.dev_spec_op;
-    clist_init_io_procs(pclist_dev, ddev->BLS_force_memory);
-    clist_init_params(pclist_dev, base, space, target,
-                      display_buf_procs,
-                      space_params.band,
-                      false, /* do_not_open_or_close_bandfiles */
-                      (ddev->bandlist_memory == NULL ?
-                       ddev->memory->non_gc_memory:
-                       ddev->bandlist_memory),
-                      ddev->clist_disable_mask,
-                      ddev->page_uses_transparency);
-    code = (*gs_clist_device_procs.open_device)( (gx_device *)pcldev );
-    if (code < 0) {
-        /* If there wasn't enough room, and we haven't */
-        /* already shrunk the buffer, try enlarging it. */
-        if (code == gs_error_rangecheck &&
-            space >= space_params.BufferSpace) {
-            space += space / 8;
-            gs_free_object(buffer_memory, base,
-                           "cmd list buf(retry open)");
-            base = gs_alloc_bytes(buffer_memory, space,
-                                  "cmd list buf(retry open)");
-            ddev->buf = base;
-            if (base != NULL) {
-                ddev->is_open = save_is_open;	/* allow for success when we loop */
-                goto open_c;
-            }
-        }
-        /* Failure. */
-        gs_free_object(buffer_memory, base, "cmd list buf");
-        ddev->buffer_space = 0;
-    }
-    return code;
-}
 
 /* Allocate the backing bitmap. */
 static int
@@ -1814,7 +1742,14 @@ display_alloc_bitmap(gx_device_display * ddev, gx_device * param_dev)
             return_error(gs_error_VMerror);
         }
         /* Let's set up as a clist. */
-        ccode = setup_as_clist(ddev, ddev->memory->non_gc_memory);
+        ccode = clist_mutate_to_clist((gx_device_clist_mutatable *)ddev,
+                                      ddev->memory->non_gc_memory,
+                                      NULL,
+                                      &ddev->space_params,
+                                      0,
+                                      &display_buf_procs,
+                                      ddev->orig_procs.dev_spec_op,
+                                      MIN_BUFFER_SPACE);
         if (ccode >= 0)
             ddev->procs = gs_clist_device_procs;
     } else {
@@ -2285,7 +2220,7 @@ display_set_color_format(gx_device_display *ddev, int nFormat)
             if ((nFormat & DISPLAY_DEPTH_MASK) == DISPLAY_DEPTH_8) {
                 ddev->devn_params.bitspercomponent = bpc;
                 if (ddev->icc_struct == NULL) {
-                    ddev->icc_struct = gsicc_new_device_profile_array(ddev->memory);
+                    ddev->icc_struct = gsicc_new_device_profile_array((gx_device *)ddev);
                     if (ddev->icc_struct == NULL)
                         return_error(gs_error_VMerror);
                 }

@@ -1,4 +1,4 @@
-/* Copyright (C) 2001-2020 Artifex Software, Inc.
+/* Copyright (C) 2001-2021 Artifex Software, Inc.
    All Rights Reserved.
 
    This software is provided AS-IS with no warranty, either express or
@@ -252,6 +252,17 @@ gs_sethalftone_prepare(gs_gstate * pgs, gs_halftone * pht,
                 for (i = 0; i < count; i++, phc++) {
                     gx_ht_order_component *poc;
 
+                    if (gs_debug['h']) {
+                         int i;
+                         byte* pname;
+                         uint name_size;
+
+                         pht->params.multiple.get_colorname_string(pgs, phc->cname, &pname, &name_size);
+                         dmprintf(mem, "Colorant: ");
+                         for (i = 0; i < name_size; i++)
+                             dmprintf1(mem, "%c", pname[i]);
+                         dmprintf(mem, "\n");
+                    }
                     if (phc->comp_number == GX_DEVICE_COLOR_MAX_COMPONENTS) {
                         if (have_Default) {
                             /* Duplicate Default */

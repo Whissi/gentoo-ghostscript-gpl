@@ -1,4 +1,4 @@
-/* Copyright (C) 2001-2020 Artifex Software, Inc.
+/* Copyright (C) 2001-2021 Artifex Software, Inc.
    All Rights Reserved.
 
    This software is provided AS-IS with no warranty, either express or
@@ -629,7 +629,18 @@ rewrite_percent_specifiers(char *s)
             *s == 'X') {
             /* Success! */
             memset(match_start, '*', s - match_start + 1);
-            return;
+        }
+        /* If we have escaped percents ("%%") so the percent
+           will survive a call to sprintf and co, then we need
+           to drop the extra one here, because the validation
+           code will see the string *after* it's been sprintf'ed.
+         */
+        else if (*s == '%') {
+            char *s0 = s;
+            while (*s0) {
+                *s0 = *(s0 + 1);
+                s0++;
+            }
         }
     }
 }
@@ -825,13 +836,13 @@ gs_add_control_path_len_flags(const gs_memory_t *mem, gs_path_control_t type, co
 int
 gs_add_control_path(const gs_memory_t *mem, gs_path_control_t type, const char *path)
 {
-    return gs_add_control_path_len_flags(mem, type, path, strlen(path), 0);
+    return gs_add_control_path_len_flags(mem, type, path, path ? strlen(path) : 0, 0);
 }
 
 int
 gs_add_control_path_flags(const gs_memory_t *mem, gs_path_control_t type, const char *path, int flags)
 {
-    return gs_add_control_path_len_flags(mem, type, path, strlen(path), flags);
+    return gs_add_control_path_len_flags(mem, type, path, path ? strlen(path) : 0, flags);
 }
 
 int
@@ -1104,13 +1115,35 @@ gs_lib_ctx_stash_sanitized_arg(gs_lib_ctx_t *ctx, const char *arg)
         switch (arg[1])
         {
         case 0:   /* We can let - through unchanged */
+        case '-': /* Need to check for permitted file lists */
+            /* By default, we want to keep the key, but lose the value */
+            p = arg+2;
+            while (*p && *p != '=')
+                p++;
+            if (*p == '=')
+                p++;
+            if (*p == 0)
+                break; /* No value to elide */
+            /* Check for our blocked values here */
+#define ARG_MATCHES(STR, ARG, LEN) \
+    (strlen(STR) == LEN && !memcmp(STR, ARG, LEN))
+            if (ARG_MATCHES("permit-file-read", arg+2, p-arg-3))
+                elide=1;
+            if (ARG_MATCHES("permit-file-write", arg+2, p-arg-3))
+                elide=1;
+            if (ARG_MATCHES("permit-file-control", arg+2, p-arg-3))
+                elide=1;
+            if (ARG_MATCHES("permit-file-all", arg+2, p-arg-3))
+                elide=1;
+#undef ARG_MATCHES
+            /* Didn't match a blocked value, so allow it. */
+            break;
         case 'd': /* We can let -dFoo=<whatever> through unchanged */
         case 'D': /* We can let -DFoo=<whatever> through unchanged */
         case 'r': /* We can let -r through unchanged */
         case 'Z': /* We can let -Z through unchanged */
         case 'g': /* We can let -g through unchanged */
         case 'P': /* We can let -P through unchanged */
-        case '-': /* We can let -- through unchanged */
         case '+': /* We can let -+ through unchanged */
         case '_': /* We can let -_ through unchanged */
         case 'u': /* We can let -u through unchanged */
@@ -1147,6 +1180,8 @@ gs_lib_ctx_stash_sanitized_arg(gs_lib_ctx_t *ctx, const char *arg)
             if (ARG_MATCHES("SUBSTFONT", arg+2, p-arg-3))
                 break;
             if (ARG_MATCHES("ColorConversionStrategy", arg+2, p-arg-3))
+                break;
+            if (ARG_MATCHES("NupControl", arg+2, p-arg-3))
                 break;
             if (ARG_MATCHES("PageList", arg+2, p-arg-3))
                 break;

@@ -1,4 +1,4 @@
-/* Copyright (C) 2020 Artifex Software, Inc.
+/* Copyright (C) 2020-2021 Artifex Software, Inc.
    All Rights Reserved.
 
    This software is provided AS-IS with no warranty, either express or
@@ -21,25 +21,63 @@
 
 #include "gsmemory.h"
 
-int ocr_image_to_utf8(gs_memory_t *mem,
-                      int w, int h, int bpp, int raster,
-                      int xres, int yres,
-                      void *data, int restore_data,
-                      const char *language, char **out);
+enum
+{
+    OCR_ENGINE_DEFAULT = 0,
+    OCR_ENGINE_LSTM = 1,
+    OCR_ENGINE_LEGACY = 2,
+    OCR_ENGINE_BOTH = 3
+};
 
-int ocr_image_to_hocr(gs_memory_t *mem,
-                      int w, int h, int bpp, int raster,
-                      int xres, int yres, void *data, int restore,
-                      int pagecount, const char *language, char **out);
+int ocr_init_api(gs_memory_t  *mem,
+           const char         *language,
+		 int           engine,
+		 void        **state);
 
-int ocr_init_api(gs_memory_t *mem, const char *language, void **state);
+void ocr_fin_api(gs_memory_t *mem,
+		 void        *state);
 
-void ocr_fin_api(gs_memory_t *mem, void *api_);
-
-int ocr_recognise(void *api_, int w, int h, void *data,
-                  int xres, int yres,
+int ocr_recognise(void *state,
+		  int   w,
+		  int   h,
+		  void *data,
+                  int   xres,
+		  int   yres,
                   int (*callback)(void *, const char *, const int *, const int *, const int *, int),
                   void *arg);
 
-#endif
+int ocr_bitmap_to_unicodes(void *state,
+                     const void *data,
+			   int   data_x,
+                           int   w,
+			   int   h,
+			   int   raster,
+                           int   xres,
+			   int   yres,
+			   int  *unicode,
+			   int  *char_count);
 
+int ocr_image_to_utf8(void  *state,
+                      int    w,
+		      int    h,
+		      int    bpp,
+		      int    raster,
+                      int    xres,
+		      int    yres,
+                      void  *data,
+		      int    restore_data,
+                      char **out);
+
+int ocr_image_to_hocr(void  *state,
+                      int    w,
+		      int    h,
+		      int    bpp,
+		      int    raster,
+                      int    xres,
+		      int    yres,
+		      void  *data,
+		      int    restore,
+                      int    pagecount,
+		      char **out);
+
+#endif

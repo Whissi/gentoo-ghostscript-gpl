@@ -1,4 +1,4 @@
-/* Copyright (C) 2001-2020 Artifex Software, Inc.
+/* Copyright (C) 2001-2021 Artifex Software, Inc.
    All Rights Reserved.
 
    This software is provided AS-IS with no warranty, either express or
@@ -37,7 +37,7 @@ void gsicc_init_buffer(gsicc_bufferdesc_t *buffer_desc, unsigned char num_chan,
                   unsigned char bytes_per_chan, bool has_alpha, bool alpha_first,
                   bool is_planar, int plane_stride, int row_stride, int num_rows,
                   int pixels_per_row);
-bool gsicc_alloc_link_entry(gsicc_link_cache_t *icc_link_cache, 
+bool gsicc_alloc_link_entry(gsicc_link_cache_t *icc_link_cache,
                             gsicc_link_t **ret_link, gsicc_hashlink_t hash,
                             bool include_softproof, bool include_devlink);
 gsicc_link_t* gsicc_get_link(const gs_gstate * pgs, gx_device *dev,
@@ -52,10 +52,11 @@ gsicc_link_t* gsicc_get_link_profile(const gs_gstate *pgs, gx_device *dev,
                                      gs_memory_t *memory, bool devicegraytok);
 void gsicc_release_link(gsicc_link_t *icclink);
 void gsicc_link_free(gsicc_link_t *icc_link, const gs_memory_t *memory);
+bool gsicc_profiles_equal(cmm_profile_t *profile1, cmm_profile_t *profile2);
 void gsicc_get_icc_buff_hash(unsigned char *buffer, int64_t *hash, unsigned int buff_size);
 int64_t gsicc_get_hash(cmm_profile_t *profile);
 int gsicc_transform_named_color(const float tint_values[],
-                            gsicc_namedcolor_t color_names[], 
+                            gsicc_namedcolor_t color_names[],
                             uint num_names,
                             gx_color_value device_values[],
                             const gs_gstate *pgs, gx_device *dev,

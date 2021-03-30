@@ -1,4 +1,4 @@
-/* Copyright (C) 2001-2020 Artifex Software, Inc.
+/* Copyright (C) 2001-2021 Artifex Software, Inc.
    All Rights Reserved.
 
    This software is provided AS-IS with no warranty, either express or
@@ -31,11 +31,7 @@
 #include "strimpl.h"
 #include "ifilter.h"
 
-#ifdef USE_LDF_JB2
-#include "sjbig2_luratech.h"
-#else
 #include "sjbig2.h"
-#endif
 
 /* We define a structure, s_jbig2_global_data_t,
    allocated in the postscript

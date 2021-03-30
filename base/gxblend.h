@@ -1,4 +1,4 @@
-/* Copyright (C) 2001-2020 Artifex Software, Inc.
+/* Copyright (C) 2001-2021 Artifex Software, Inc.
    All Rights Reserved.
 
    This software is provided AS-IS with no warranty, either express or
@@ -100,7 +100,7 @@ void smask_blend(byte *gs_restrict src, int width, int height, int rowstride,
 
 void smask_copy(int num_rows, int num_cols, int row_stride,
                          byte *gs_restrict src, const byte *gs_restrict des);
-void smask_icc(gx_device *dev, int num_rows, int num_cols, int n_chan,
+int smask_icc(gx_device *dev, int num_rows, int num_cols, int n_chan,
                int row_stride, int plane_stride, byte *gs_restrict src, const byte *gs_restrict des,
                gsicc_link_t *icclink, bool deep);
 /* For spot colors, blend modes must be white preserving and separable */
@@ -389,7 +389,7 @@ void gx_build_blended_image_row16(const byte *gs_restrict buf_ptr, int planestri
 void gx_blend_image_buffer(byte *buf_ptr, int width, int height,
                       int rowstride, int planestride, int num_comp, byte bg);
 void gx_blend_image_buffer16(byte *buf_ptr, int width, int height,
-    int rowstride, int planestride, int num_comp, uint16_t bg);
+    int rowstride, int planestride, int num_comp, uint16_t bg, bool keep_native);
 void gx_blend_image_buffer8to16(const byte *buf_ptr, unsigned short *buf_ptr_out,
     int width, int height, int rowstride, int planestride, int num_comp, byte bg);
 int gx_put_blended_image_custom(gx_device *target, byte *buf_ptr,

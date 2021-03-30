@@ -1,4 +1,4 @@
-/* Copyright (C) 2001-2020 Artifex Software, Inc.
+/* Copyright (C) 2001-2021 Artifex Software, Inc.
    All Rights Reserved.
 
    This software is provided AS-IS with no warranty, either express or
@@ -1426,6 +1426,19 @@ overprint_dev_spec_op(gx_device* pdev, int dev_spec_op,
     if (dev_spec_op == gxdso_overprint_active)
         return !opdev->is_idle;
 
+    if (dev_spec_op == gxdso_device_child) {
+        gxdso_device_child_request *d = (gxdso_device_child_request *)data;
+        if (d->target == pdev) {
+            d->target = tdev;
+            return 1;
+        }
+    }
+    if (dev_spec_op == gxdso_device_insert_child) {
+        opdev->target = (gx_device *)data;
+        rc_increment(opdev->target);
+        rc_decrement_only(tdev, "overprint_dev_spec_op");
+        return 0;
+    }
     return dev_proc(tdev, dev_spec_op)(tdev, dev_spec_op, data, size);
 }
 
@@ -1473,6 +1486,7 @@ c_overprint_create_default_compositor(
     const gs_overprint_t *  ovrpct = (const gs_overprint_t *)pct;
     overprint_device_t *    opdev = 0;
     gs_overprint_params_t params;
+    int code;
 
     /* see if there is anything to do */
     if ( !ovrpct->params.retain_any_comps) {
@@ -1525,5 +1539,8 @@ c_overprint_create_default_compositor(
     opdev->retain_none_stroke = true;
 
     /* set up the overprint parameters */
-    return update_overprint_params(opdev, &params);
+    code = update_overprint_params(opdev, &params);
+    if (code < 0)
+        return code;
+    return 1;
 }

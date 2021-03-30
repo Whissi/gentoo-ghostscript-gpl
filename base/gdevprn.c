@@ -1,4 +1,4 @@
-/* Copyright (C) 2001-2020 Artifex Software, Inc.
+/* Copyright (C) 2001-2021 Artifex Software, Inc.
    All Rights Reserved.
 
    This software is provided AS-IS with no warranty, either express or
@@ -100,8 +100,12 @@ gdev_prn_open(gx_device * pdev)
             gx_copy_device_procs(pdev->parent, pdev, &gs_obj_filter_device);
             pdev = pdev->parent;
         }
-        if (pdev->PageHandlerPushed)
+        if (pdev->PageHandlerPushed) {
             gx_copy_device_procs(pdev->parent, pdev, &gs_flp_device);
+            pdev = pdev->parent;
+        }
+        if (pdev->NupHandlerPushed)
+            gx_copy_device_procs(pdev->parent, pdev, &gs_nup_device);
     }
     if (code < 0)
         return code;
@@ -118,10 +122,11 @@ prn_finish_bg_print(gx_device_printer *ppdev)
     /* if we have a a bg printing device that was created, then wait for its	*/
     /* semaphore (it may already have been signalled, but that's OK.) then	*/
     /* close and unlink the files and free the device and its private allocator	*/
-    if (ppdev->bg_print.device != NULL) {
+    if (ppdev->bg_print && (ppdev->bg_print->device != NULL)) {
         int closecode;
-        gx_device_printer *bgppdev = (gx_device_printer *)ppdev->bg_print.device;
-        gx_semaphore_wait(ppdev->bg_print.sema);
+        gx_device_printer *bgppdev = (gx_device_printer *)ppdev->bg_print->device;
+
+        gx_semaphore_wait(ppdev->bg_print->sema);
         /* If numcopies > 1, then the bg_print->device will have closed and reopened
          * the output file, so the pointer in the original device is now stale,
          * so copy it back.
@@ -129,29 +134,29 @@ prn_finish_bg_print(gx_device_printer *ppdev)
          */
         ppdev->file = bgppdev->file;
         closecode = gdev_prn_close_printer((gx_device *)ppdev);
-        if (ppdev->bg_print.return_code == 0)
-            ppdev->bg_print.return_code = closecode;	/* return code here iff there wasn't another error */
-        teardown_device_and_mem_for_thread(ppdev->bg_print.device,
-                                           ppdev->bg_print.thread_id, true);
-        ppdev->bg_print.device = NULL;
-        if (ppdev->bg_print.ocfile) {
-            closecode = ppdev->bg_print.oio_procs->fclose(ppdev->bg_print.ocfile, ppdev->bg_print.ocfname, true);
-            if (ppdev->bg_print.return_code == 0)
-               ppdev->bg_print.return_code = closecode;
+        if (ppdev->bg_print->return_code == 0)
+            ppdev->bg_print->return_code = closecode;	/* return code here iff there wasn't another error */
+        teardown_device_and_mem_for_thread(ppdev->bg_print->device,
+                                           ppdev->bg_print->thread_id, true);
+        ppdev->bg_print->device = NULL;
+        if (ppdev->bg_print->ocfile) {
+            closecode = ppdev->bg_print->oio_procs->fclose(ppdev->bg_print->ocfile, ppdev->bg_print->ocfname, true);
+            if (ppdev->bg_print->return_code == 0)
+               ppdev->bg_print->return_code = closecode;
         }
-        if (ppdev->bg_print.ocfname) {
-            gs_free_object(ppdev->memory->non_gc_memory, ppdev->bg_print.ocfname, "prn_finish_bg_print(ocfname)");
+        if (ppdev->bg_print->ocfname) {
+            gs_free_object(ppdev->memory->non_gc_memory, ppdev->bg_print->ocfname, "prn_finish_bg_print(ocfname)");
         }
-        if (ppdev->bg_print.obfile) {
-            closecode = ppdev->bg_print.oio_procs->fclose(ppdev->bg_print.obfile, ppdev->bg_print.obfname, true);
-            if (ppdev->bg_print.return_code == 0)
-               ppdev->bg_print.return_code = closecode;
+        if (ppdev->bg_print->obfile) {
+            closecode = ppdev->bg_print->oio_procs->fclose(ppdev->bg_print->obfile, ppdev->bg_print->obfname, true);
+            if (ppdev->bg_print->return_code == 0)
+               ppdev->bg_print->return_code = closecode;
         }
-        if (ppdev->bg_print.obfname) {
-            gs_free_object(ppdev->memory->non_gc_memory, ppdev->bg_print.obfname, "prn_finish_bg_print(obfname)");
+        if (ppdev->bg_print->obfname) {
+            gs_free_object(ppdev->memory->non_gc_memory, ppdev->bg_print->obfname, "prn_finish_bg_print(obfname)");
         }
-        ppdev->bg_print.ocfile = ppdev->bg_print.obfile =
-          ppdev->bg_print.ocfname = ppdev->bg_print.obfname = NULL;
+        ppdev->bg_print->ocfile = ppdev->bg_print->obfile =
+          ppdev->bg_print->ocfname = ppdev->bg_print->obfname = NULL;
     }
 }
 /* Generic closing for the printer device. */
@@ -163,9 +168,9 @@ gdev_prn_close(gx_device * pdev)
     int code = 0;
 
     prn_finish_bg_print(ppdev);
-    if (ppdev->bg_print.sema != NULL) {
-        gx_semaphore_free(ppdev->bg_print.sema);
-        ppdev->bg_print.sema = NULL;		/* prevent double free */
+    if (ppdev->bg_print != NULL && ppdev->bg_print->sema != NULL) {
+        gx_semaphore_free(ppdev->bg_print->sema);
+        ppdev->bg_print->sema = NULL;		/* prevent double free */
     }
     gdev_prn_free_memory(pdev);
     if (ppdev->file != NULL) {
@@ -211,106 +216,6 @@ gdev_prn_dev_spec_op(gx_device *pdev, int dev_spec_op, void *data, int size)
 #endif
 
     return gx_default_dev_spec_op(pdev, dev_spec_op, data, size);
-}
-
-static int		/* returns 0 ok, else -ve error cde */
-gdev_prn_setup_as_command_list(gx_device *pdev, gs_memory_t *buffer_memory,
-                               byte **the_memory,
-                               const gdev_space_params *space_params,
-                               bool bufferSpace_is_exact)
-{
-    gx_device_printer * const ppdev = (gx_device_printer *)pdev;
-    gx_device *target = pdev;
-    uint space;
-    int code;
-    gx_device_clist *const pclist_dev = (gx_device_clist *)pdev;
-    gx_device_clist_common * const pcldev = &pclist_dev->common;
-    bool reallocate = *the_memory != 0;
-    byte *base;
-    bool save_is_open = pdev->is_open;	/* Save around temporary failure in open_c loop */
-
-    while (target->parent != NULL) {
-        target = target->parent;
-        gx_update_from_subclass(target);
-    }
-
-    /* Try to allocate based simply on param-requested buffer size */
-#ifdef DEBUGGING_HACKS
-#define BACKTRACE(first_arg)\
-  BEGIN\
-    ulong *fp_ = (ulong *)&first_arg - 2;\
-    for (; fp_ && (fp_[1] & 0xff000000) == 0x08000000; fp_ = (ulong *)*fp_)\
-        dmprintf2(buffer_memory, "  fp="PRI_INTPTR" ip=0x%lx\n", (intptr_t)fp_, fp_[1]);\
-  END
-dmputs(buffer_memory, "alloc buffer:\n");
-BACKTRACE(pdev);
-#endif /*DEBUGGING_HACKS*/
-    for ( space = space_params->BufferSpace; ; ) {
-        base = (reallocate ?
-                (byte *)gs_resize_object(buffer_memory, *the_memory, space,
-                                         "cmd list buffer") :
-                gs_alloc_bytes(buffer_memory, space,
-                               "cmd list buffer"));
-        if (base != 0)
-            break;
-        if (bufferSpace_is_exact || (space >>= 1) < PRN_MIN_BUFFER_SPACE)
-            break;
-    }
-    if (base == 0)
-        return_error(gs_error_VMerror);
-    *the_memory = base;
-
-    /* Try opening the command list, to see if we allocated */
-    /* enough buffer space. */
-open_c:
-    ppdev->buf = base;
-    ppdev->buffer_space = space;
-    pclist_dev->common.orig_spec_op = dev_proc(ppdev, dev_spec_op);
-    clist_init_io_procs(pclist_dev, ppdev->BLS_force_memory);
-    clist_init_params(pclist_dev, base, space, target,
-                      ppdev->printer_procs.buf_procs,
-                      space_params->band,
-                      false, /* do_not_open_or_close_bandfiles */
-                      (ppdev->bandlist_memory == 0 ? pdev->memory->non_gc_memory:
-                       ppdev->bandlist_memory),
-                      ppdev->clist_disable_mask,
-                      ppdev->page_uses_transparency);
-    code = (*gs_clist_device_procs.open_device)( (gx_device *)pcldev );
-    if (code < 0) {
-        /* If there wasn't enough room, and we haven't */
-        /* already shrunk the buffer, try enlarging it. */
-        if ( code == gs_error_rangecheck &&
-             space >= space_params->BufferSpace &&
-             !bufferSpace_is_exact
-             ) {
-            space += space / 8;
-            if (reallocate) {
-                base = gs_resize_object(buffer_memory,
-                                        *the_memory, space,
-                                        "cmd list buf(retry open)");
-                if (base != 0)
-                    *the_memory = base;
-            } else {
-                gs_free_object(buffer_memory, base,
-                               "cmd list buf(retry open)");
-                *the_memory = base =
-                    gs_alloc_bytes(buffer_memory, space,
-                                   "cmd list buf(retry open)");
-            }
-            ppdev->buf = *the_memory;
-            if (base != 0) {
-                pdev->is_open = save_is_open;	/* allow for success when we loop */
-                goto open_c;
-            }
-        }
-        /* Failure. */
-        if (!reallocate) {
-            gs_free_object(buffer_memory, base, "cmd list buf");
-            ppdev->buffer_space = 0;
-            *the_memory = 0;
-        }
-    }
-    return code;
 }
 
 static bool	/* ret true if device was cmd list, else false */
@@ -386,6 +291,16 @@ gdev_prn_allocate(gx_device *pdev, gdev_space_params *new_space_params,
     /* If reallocate, find allocated memory & tear down buffer device */
     if (reallocate)
         save_is_command_list = gdev_prn_tear_down(pdev, &the_memory);
+
+
+    /* bg_print allocation is not fatal, we just continue (as far as possible) without BGPrint */
+    if (ppdev->bg_print == NULL)
+        ppdev->bg_print = (bg_print_t *)gs_alloc_bytes(pdev->memory->non_gc_memory, sizeof(bg_print_t), "prn bg_print");
+    if (ppdev->bg_print == NULL) {
+        emprintf(pdev->memory, "Failed to allocate memory for BGPrint, attempting to continue without BGPrint\n");
+    } else {
+        memset(ppdev->bg_print, 0, sizeof(bg_print_t));
+    }
 
     /* Re/allocate memory */
     ppdev->orig_procs = pdev->procs;
@@ -505,24 +420,23 @@ gdev_prn_allocate(gx_device *pdev, gdev_space_params *new_space_params,
                 ecode = gs_note_error(gs_error_VMerror);
                 continue;
             }
-            ppdev->bg_print.ocfname = ppdev->bg_print.obfname =
-                ppdev->bg_print.obfile = ppdev->bg_print.ocfile = NULL;
+            if (ppdev->bg_print) {
+                ppdev->bg_print->ocfname = ppdev->bg_print->obfname =
+                    ppdev->bg_print->obfile = ppdev->bg_print->ocfile = NULL;
+            }
 
-            code = gdev_prn_setup_as_command_list(pdev, buffer_memory,
-                                                  &the_memory, &space_params,
-                                                  !bufferSpace_is_default);
+            code = clist_mutate_to_clist((gx_device_clist_mutatable *)pdev,
+                                         buffer_memory,
+                                         &the_memory, &space_params,
+                                         !bufferSpace_is_default,
+                                         &ppdev->printer_procs.buf_procs,
+                                         gdev_prn_forwarding_dev_spec_op,
+                                         PRN_MIN_BUFFER_SPACE);
             if (ecode == 0)
                 ecode = code;
 
             if (code >= 0 || (reallocate && pass > 1))
                 ppdev->procs = gs_clist_device_procs;
-            if (code > 0) {
-                /*
-                 * Now the device is a clist device, we enable multi-threaded rendering.
-                 * It will remain enabled, but that doesn't really cause any problems.
-                 */
-                clist_enable_multi_thread_render(pdev);
-            }
         } else {
             /* Render entirely in memory. */
             gx_device *bdev = (gx_device *)pmemdev;
@@ -620,6 +534,8 @@ gdev_prn_free_memory(gx_device *pdev)
          ppdev->buffer_memory);
 
     gdev_prn_tear_down(pdev, &the_memory);
+    gs_free_object(pdev->memory->non_gc_memory, ppdev->bg_print, "gdev_prn_free_memory");
+    ppdev->bg_print = NULL;
     gs_free_object(buffer_memory, the_memory, "gdev_prn_free_memory");
     return 0;
 }
@@ -941,6 +857,7 @@ gdev_prn_put_params(gx_device * pdev, gs_param_list * plist)
     ppdev->OpenOutputFile = oof;
     ppdev->ReopenPerPage = rpp;
 
+    /* If BGPrint was previously true and it is being turned off, wait for the BG thread */
     if (ppdev->bg_print_requested && !bg_print_requested) {
         prn_finish_bg_print(ppdev);
     }
@@ -1035,7 +952,7 @@ gdev_prn_output_page_aux(gx_device * pdev, int num_copies, int flush, bool seeka
             int threads_enabled = 0;
             int print_foreground = 1;		/* default to foreground printing */
 
-            if (bg_print_ok && PRINTER_IS_CLIST(ppdev) &&
+            if (bg_print_ok && PRINTER_IS_CLIST(ppdev) && ppdev->bg_print &&
                 (ppdev->bg_print_requested || ppdev->num_render_threads_requested > 0)) {
                 threads_enabled = clist_enable_multi_thread_render(pdev);
             }
@@ -1043,12 +960,12 @@ gdev_prn_output_page_aux(gx_device * pdev, int num_copies, int flush, bool seeka
             /* If there was an error, abort on this page -- no good way to handle this */
             /* but it means that the error will be reported AFTER another page was     */
             /* interpreted and written to clist files. FIXME: ???                      */
-            if (ppdev->bg_print.return_code < 0) {
-                outcode = ppdev->bg_print.return_code;
+            if (ppdev->bg_print && (ppdev->bg_print->return_code < 0)) {
+                outcode = ppdev->bg_print->return_code;
                 threads_enabled = 0;	/* and allow current page to try foreground */
             }
             /* Use 'while' instead of 'if' to avoid nesting */
-            while (ppdev->bg_print_requested && threads_enabled) {
+            while (ppdev->bg_print_requested && ppdev->bg_print && threads_enabled) {
                 gx_device *ndev;
                 gx_device_printer *npdev;
                 gx_device_clist_reader *crdev = (gx_device_clist_reader *)ppdev;
@@ -1060,27 +977,27 @@ gdev_prn_output_page_aux(gx_device * pdev, int num_copies, int flush, bool seeka
                 /* We need to hang onto references to these files, so we can ensure the main file data
                  * gets freed with the correct allocator.
                  */
-                ppdev->bg_print.ocfname =
+                ppdev->bg_print->ocfname =
                      (char *)gs_alloc_bytes(ppdev->memory->non_gc_memory,
                            strnlen(crdev->page_info.cfname, gp_file_name_sizeof - 1) + 1, "gdev_prn_output_page_aux(ocfname)");
-                ppdev->bg_print.obfname =
+                ppdev->bg_print->obfname =
                      (char *)gs_alloc_bytes(ppdev->memory->non_gc_memory,
                            strnlen(crdev->page_info.bfname, gp_file_name_sizeof - 1) + 1,"gdev_prn_output_page_aux(ocfname)");
 
-                if (!ppdev->bg_print.ocfname || !ppdev->bg_print.obfname)
+                if (!ppdev->bg_print->ocfname || !ppdev->bg_print->obfname)
                     break;
 
-                strncpy(ppdev->bg_print.ocfname, crdev->page_info.cfname, strnlen(crdev->page_info.cfname, gp_file_name_sizeof - 1) + 1);
-                strncpy(ppdev->bg_print.obfname, crdev->page_info.bfname, strnlen(crdev->page_info.bfname, gp_file_name_sizeof - 1) + 1);
-                ppdev->bg_print.obfile = crdev->page_info.bfile;
-                ppdev->bg_print.ocfile = crdev->page_info.cfile;
-                ppdev->bg_print.oio_procs = crdev->page_info.io_procs;
+                strncpy(ppdev->bg_print->ocfname, crdev->page_info.cfname, strnlen(crdev->page_info.cfname, gp_file_name_sizeof - 1) + 1);
+                strncpy(ppdev->bg_print->obfname, crdev->page_info.bfname, strnlen(crdev->page_info.bfname, gp_file_name_sizeof - 1) + 1);
+                ppdev->bg_print->obfile = crdev->page_info.bfile;
+                ppdev->bg_print->ocfile = crdev->page_info.cfile;
+                ppdev->bg_print->oio_procs = crdev->page_info.io_procs;
                 crdev->page_info.cfile = crdev->page_info.bfile = NULL;
 
-                if (ppdev->bg_print.sema == NULL)
+                if (ppdev->bg_print->sema == NULL)
                 {
-                    ppdev->bg_print.sema = gx_semaphore_label(gx_semaphore_alloc(ppdev->memory->non_gc_memory), "BGPrint");
-                    if (ppdev->bg_print.sema == NULL)
+                    ppdev->bg_print->sema = gx_semaphore_label(gx_semaphore_alloc(ppdev->memory->non_gc_memory), "BGPrint");
+                    if (ppdev->bg_print->sema == NULL)
                         break;			/* couldn't create the semaphore */
                 }
 
@@ -1088,20 +1005,26 @@ gdev_prn_output_page_aux(gx_device * pdev, int num_copies, int flush, bool seeka
                 if (ndev == NULL) {
                     break;
                 }
-                ppdev->bg_print.device = ndev;
-                ppdev->bg_print.num_copies = num_copies;
+                ppdev->bg_print->device = ndev;
+                ppdev->bg_print->num_copies = num_copies;
                 npdev = (gx_device_printer *)ndev;
                 npdev->bg_print_requested = 0;
                 npdev->num_render_threads_requested = ppdev->num_render_threads_requested;
+                /* The bgprint's device was created with normal procs, so multi-threaded */
+                /* rendering was turned off. Re-enable it now if it is needed.           */
+                if (npdev->num_render_threads_requested > 0) {
+                    /* ignore return code - even if it fails, we'll output the page */
+                    (void)clist_enable_multi_thread_render(ndev);
+                }
 
                 /* Now start the thread to print the page */
                 if ((code = gp_thread_start(prn_print_page_in_background,
-                                            (void *)&(ppdev->bg_print),
-                                            &(ppdev->bg_print.thread_id))) < 0) {
+                                            (void *)(ppdev->bg_print),
+                                            &(ppdev->bg_print->thread_id))) < 0) {
                     /* Did not start cleanly - clean up is in print_foreground block below */
                     break;
                 }
-                gp_thread_label(ppdev->bg_print.thread_id, "BG print thread");
+                gp_thread_label(ppdev->bg_print->thread_id, "BG print thread");
                 /* Page was succesfully started in bg_print mode */
                 print_foreground = 0;
                 /* Now we need to set up the next page so it will use new clist files */
@@ -1111,18 +1034,19 @@ gdev_prn_output_page_aux(gx_device * pdev, int num_copies, int flush, bool seeka
                 break;				/* exit the while loop */
             }
             if (print_foreground) {
+                if (ppdev->bg_print) {
+                     gs_free_object(ppdev->memory->non_gc_memory, ppdev->bg_print->ocfname, "gdev_prn_output_page_aux(ocfname)");
+                     gs_free_object(ppdev->memory->non_gc_memory, ppdev->bg_print->obfname, "gdev_prn_output_page_aux(obfname)");
+                     ppdev->bg_print->ocfname = ppdev->bg_print->obfname = NULL;
 
-                 gs_free_object(ppdev->memory->non_gc_memory, ppdev->bg_print.ocfname, "gdev_prn_output_page_aux(ocfname)");
-                 gs_free_object(ppdev->memory->non_gc_memory, ppdev->bg_print.obfname, "gdev_prn_output_page_aux(obfname)");
-                 ppdev->bg_print.ocfname = ppdev->bg_print.obfname = NULL;
-
-                /* either bg_print was not requested or was not able to start */
-                if (ppdev->bg_print.sema != NULL && ppdev->bg_print.device != NULL) {
-                    /* There was a problem. Teardown the device and its allocator, but */
-                    /* leave the semaphore for possible later use.                     */
-                    teardown_device_and_mem_for_thread(ppdev->bg_print.device,
-                                                       ppdev->bg_print.thread_id, true);
-                    ppdev->bg_print.device = NULL;
+                    /* either bg_print was not requested or was not able to start */
+                    if (ppdev->bg_print->sema != NULL && ppdev->bg_print->device != NULL) {
+                        /* There was a problem. Teardown the device and its allocator, but */
+                        /* leave the semaphore for possible later use.                     */
+                        teardown_device_and_mem_for_thread(ppdev->bg_print->device,
+                                                           ppdev->bg_print->thread_id, true);
+                        ppdev->bg_print->device = NULL;
+                    }
                 }
                 /* Here's where we actually let the device's print_page_copies work */
                 /* Print the accumulated page description. */

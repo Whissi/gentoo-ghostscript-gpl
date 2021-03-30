@@ -1,4 +1,4 @@
-/* Copyright (C) 2001-2020 Artifex Software, Inc.
+/* Copyright (C) 2001-2021 Artifex Software, Inc.
    All Rights Reserved.
 
    This software is provided AS-IS with no warranty, either express or
@@ -299,13 +299,29 @@ static void
 pdf_text_release(gs_text_enum_t *pte, client_name_t cname)
 {
     pdf_text_enum_t *const penum = (pdf_text_enum_t *)pte;
+    gx_device_pdf *pdev = (gx_device_pdf *)penum->dev;
+    ocr_glyph_t *next;
 
     if (penum->pte_default) {
-        gs_text_release(penum->pte_default, cname);
+        gs_text_release(NULL, penum->pte_default, cname);
         penum->pte_default = 0;
     }
     pdf_text_release_cgp(penum);
+
+    while (pdev->ocr_glyphs != NULL)
+    {
+        next = pdev->ocr_glyphs->next;
+
+        gs_free_object(pdev->memory, pdev->ocr_glyphs->data, "free bitmap");
+        gs_free_object(pdev->memory, pdev->ocr_glyphs, "free bitmap");
+        pdev->ocr_glyphs = next;
+    }
+    if (pdev->OCRUnicode != NULL)
+        gs_free_object(pdev->memory, pdev->OCRUnicode, "free returned unicodes");
+    pdev->OCRUnicode = NULL;
+
     gx_default_text_release(pte, cname);
+    pdev->OCRStage = 0;
 }
 void
 pdf_text_release_cgp(pdf_text_enum_t *penum)
@@ -591,7 +607,7 @@ gdev_pdf_text_begin(gx_device * dev, gs_gstate * pgs,
             if (penum->fstack.items[penum->fstack.depth].font->FontType == 3)
                 user_defined = 1;
         }
-        gs_text_release((gs_text_enum_t *)penum, "pdf_text_process");
+        gs_text_release(NULL, (gs_text_enum_t *)penum, "pdf_text_process");
     }
 
     if (!user_defined || !(text->operation & TEXT_DO_ANY_CHARPATH)) {
@@ -633,9 +649,12 @@ gdev_pdf_text_begin(gx_device * dev, gs_gstate * pgs,
     penum->cdevproc_callout = false;
     penum->returned.total_width.x = penum->returned.total_width.y = 0;
     penum->cgp = NULL;
+    penum->returned.current_glyph = GS_NO_GLYPH;
     penum->output_char_code = GS_NO_CHAR;
     code = gs_text_enum_init((gs_text_enum_t *)penum, &pdf_text_procs,
                              dev, pgs, text, font, path, pdcolor, pcpath, mem);
+    penum->k_text_release = 1; /* early release of black_text_state */
+
     if (code < 0) {
         gs_free_object(mem, penum, "gdev_pdf_text_begin");
         return code;
@@ -678,12 +697,23 @@ pdf_font_cache_elem_t **
 pdf_locate_font_cache_elem(gx_device_pdf *pdev, gs_font *font)
 {
     pdf_font_cache_elem_t **e = &pdev->font_cache;
+    pdf_font_cache_elem_t *prev = NULL;
     long id = pdf_font_cache_elem_id(font);
 
-    for (; *e != 0; e = &(*e)->next)
+    for (; *e != 0; e = &(*e)->next) {
         if ((*e)->font_id == id) {
-            return e;
+            if (prev != NULL) {
+                pdf_font_cache_elem_t *curr = *e;
+
+                /* move the curr font to head of list (Most Recently Used) */
+                prev->next = curr->next;
+                curr->next = pdev->font_cache;
+                pdev->font_cache = curr;
+            }
+            return &(pdev->font_cache);
         }
+        prev = *e;
+    }
     return 0;
 }
 
@@ -757,6 +787,13 @@ alloc_font_cache_elem_arrays(gx_device_pdf *pdev, pdf_font_cache_elem_t *e,
 
     font_cache_elem_array_sizes(pdev, font, &num_widths, &num_chars);
     len = (num_chars + 7) / 8;
+    if (e->glyph_usage != NULL)
+        gs_free_object(pdev->pdf_memory, e->glyph_usage,
+                            "pdf_attach_font_resource, reallocating");
+    if (e->real_widths != NULL)
+        gs_free_object(pdev->pdf_memory, e->real_widths,
+                            "alloc_font_cache_elem_arrays, reallocating");
+
     e->glyph_usage = gs_alloc_bytes(pdev->pdf_memory,
                         len, "alloc_font_cache_elem_arrays");
 
@@ -3085,7 +3122,7 @@ static int complete_charproc(gx_device_pdf *pdev, gs_text_enum_t *pte,
     code = gx_default_text_restore_state(pte_default);
     if (code < 0)
         return code;
-    gs_text_release(pte_default, "pdf_text_process");
+    gs_text_release(NULL, pte_default, "pdf_text_process");
     penum->pte_default = 0;
 
     return 0;
@@ -3132,6 +3169,57 @@ static int pdf_query_purge_cached_char(const gs_memory_t *mem, cached_char *cc, 
     return 0;
 }
 
+static int ProcessTextForOCR(gs_text_enum_t *pte)
+{
+    pdf_text_enum_t *const penum = (pdf_text_enum_t *)pte;
+    gx_device_pdf *pdev = (gx_device_pdf *)penum->dev;
+    gs_text_enum_t *pte_default;
+    int code;
+
+    if (pdev->OCRStage == OCR_UnInit) {
+        gs_gsave(pte->pgs);
+        pdev->OCRSaved = (gs_text_enum_t*)gs_alloc_bytes(pdev->memory,sizeof(gs_text_enum_t),"saved enumerator for OCR");
+        if(pdev->OCRSaved == NULL)
+            return_error(gs_error_VMerror);
+        *(pdev->OCRSaved) = *pte;
+        gs_text_enum_copy_dynamic(pdev->OCRSaved,pte,true);
+
+        code = pdf_default_text_begin(pte, &pte->text, &pte_default);
+        if (code < 0)
+            return code;
+        penum->pte_default = pte_default;
+        gs_text_enum_copy_dynamic(pte_default, pte, false);
+        pdev->OCRStage = OCR_Rendering;
+    }
+
+    if (pdev->OCRStage == OCR_Rendering) {
+        penum->pte_default->can_cache = 0;
+        code = gs_text_process(penum->pte_default);
+        pdev->OCR_char_code = penum->pte_default->returned.current_char;
+        pdev->OCR_glyph = penum->pte_default->returned.current_glyph;
+        gs_text_enum_copy_dynamic(pte, penum->pte_default, true);
+        if (code == TEXT_PROCESS_RENDER)
+            return code;
+        if (code != 0) {
+            gs_free_object(pdev->memory, pdev->OCRSaved,"saved enumerator for OCR");
+            pdev->OCRSaved = NULL;
+            gs_grestore(pte->pgs);
+            gs_text_release(pte->pgs, penum->pte_default, "pdf_text_process");
+            penum->pte_default = NULL;
+            return code;
+        }
+        gs_grestore(pte->pgs);
+        *pte = *(pdev->OCRSaved);
+        gs_text_enum_copy_dynamic(pte, pdev->OCRSaved, true);
+        gs_free_object(pdev->memory, pdev->OCRSaved,"saved enumerator for OCR");
+        pdev->OCRSaved = NULL;
+        gs_text_release(pte->pgs, penum->pte_default, "pdf_text_process");
+        penum->pte_default = NULL;
+        pdev->OCRStage = OCR_Rendered;
+    }
+    return 0;
+}
+
 /*
  * Continue processing text.  This is the 'process' procedure in the text
  * enumerator.  Per the check in pdf_text_begin, we know the operation is
@@ -3142,7 +3230,7 @@ pdf_text_process(gs_text_enum_t *pte)
 {
     pdf_text_enum_t *const penum = (pdf_text_enum_t *)pte;
     uint operation = pte->text.operation;
-    uint size = pte->text.size - pte->index;
+    uint size = 0;
     gs_text_enum_t *pte_default;
     PROCESS_TEXT_PROC((*process));
     int code = 0, early_accumulator = 0;
@@ -3186,6 +3274,15 @@ pdf_text_process(gs_text_enum_t *pte)
         if (!penum->charproc_accum)
             goto default_impl;
     }
+
+    if (pdev->UseOCR != UseOCRNever) {
+        code = ProcessTextForOCR(pte);
+        if (code != 0)
+            return code;
+    }
+
+    operation = pte->text.operation;
+    size = pte->text.size - pte->index;
 
     code = -1;                /* to force default implementation */
 
@@ -3352,10 +3449,13 @@ pdf_text_process(gs_text_enum_t *pte)
                 pdev->procs.get_initial_matrix = pdf_type3_get_initial_matrix;
 
                 pdev->pte = (gs_text_enum_t *)penum; /* CAUTION: See comment in gdevpdfx.h . */
+                /* In case of error, text_process will restore back to the enumerator 'level'
+                 * we must make certain we do not restore back too far!
+                 */
+                pte_default->level = penum->pgs->level;
                 code = gs_text_process(pte_default);
                 if (code < 0) {
                     (void)complete_charproc(pdev, pte, pte_default, penum, false);
-                    gs_grestore(pgs);
                     return code;
                 }
                 pdev->pte = NULL;         /* CAUTION: See comment in gdevpdfx.h . */
@@ -3524,9 +3624,10 @@ pdf_text_process(gs_text_enum_t *pte)
         }
 
         gs_text_enum_copy_dynamic(pte, pte_default, true);
+
         if (code)
             return code;
-        gs_text_release(pte_default, "pdf_text_process");
+        gs_text_release(NULL, pte_default, "pdf_text_process");
         penum->pte_default = 0;
         if (pdev->type3charpath)
             pdev->type3charpath = false;

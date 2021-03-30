@@ -1,4 +1,4 @@
-/* Copyright (C) 2001-2020 Artifex Software, Inc.
+/* Copyright (C) 2001-2021 Artifex Software, Inc.
    All Rights Reserved.
 
    This software is provided AS-IS with no warranty, either express or
@@ -32,6 +32,7 @@
 #include "gdevpdtf.h"
 #include "gdevpdtw.h"
 #include "gdevpdti.h"
+#include "gdevpdfo.h"       /* for cos_free() */
 #include "whitelst.h"		/* Checks whether protected fonta cna be embedded */
 
 #include "gscencs.h"
@@ -336,7 +337,9 @@ pdf_outline_fonts_alloc(gs_memory_t *mem)
 pdf_standard_font_t *
 pdf_standard_fonts(const gx_device_pdf *pdev)
 {
-    return pdev->text->outline_fonts->standard_fonts;
+    if (pdev->text != NULL && pdev->text->outline_fonts != NULL)
+        return pdev->text->outline_fonts->standard_fonts;
+    return NULL;
 }
 
 /*
@@ -347,7 +350,8 @@ pdf_clean_standard_fonts(const gx_device_pdf *pdev)
 {
     pdf_standard_font_t *ppsf = pdf_standard_fonts(pdev);
 
-    memset(ppsf, 0, PDF_NUM_STANDARD_FONTS * sizeof(*ppsf));
+    if (ppsf != NULL)
+        memset(ppsf, 0, PDF_NUM_STANDARD_FONTS * sizeof(*ppsf));
 }
 
 /* ---------------- Font resources ---------------- */
@@ -470,6 +474,14 @@ int font_resource_free(gx_device_pdf *pdev, pdf_font_resource_t *pdfont)
             if (pdfont->u.simple.s.type3.char_procs) {
                 pdf_free_charproc_ownership(pdev, (pdf_resource_t *)pdfont->u.simple.s.type3.char_procs);
                 pdfont->u.simple.s.type3.char_procs = 0;
+            }
+            if (pdfont->u.simple.s.type3.cached) {
+                gs_free_object(pdev->pdf_memory, pdfont->u.simple.s.type3.cached, "Free type 3 cached array");
+                pdfont->u.simple.s.type3.cached = NULL;
+            }
+            if (pdfont->u.simple.s.type3.Resources != NULL) {
+                cos_free((cos_object_t *)pdfont->u.simple.s.type3.Resources, "Free type 3 Resources dictionary");
+                pdfont->u.simple.s.type3.Resources = NULL;
             }
             break;
         case ft_CID_encrypted:

@@ -1,4 +1,4 @@
-/* Copyright (C) 2001-2020 Artifex Software, Inc.
+/* Copyright (C) 2001-2021 Artifex Software, Inc.
    All Rights Reserved.
 
    This software is provided AS-IS with no warranty, either express or
@@ -103,6 +103,8 @@ typedef struct pdf_font_descriptor_s pdf_font_descriptor_t;
 int pdf_font_descriptor_alloc(gx_device_pdf *pdev,
                               pdf_font_descriptor_t **ppfd,
                               gs_font_base *font, bool embed);
+
+int pdf_base_font_free(gx_device_pdf *pdev, pdf_base_font_t *pbfont);
 
 int pdf_font_descriptor_free(gx_device_pdf *pdev, pdf_resource_t *pres);
 

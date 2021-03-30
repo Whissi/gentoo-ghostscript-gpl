@@ -1,4 +1,4 @@
-/* Copyright (C) 2001-2020 Artifex Software, Inc.
+/* Copyright (C) 2001-2021 Artifex Software, Inc.
    All Rights Reserved.
 
    This software is provided AS-IS with no warranty, either express or
@@ -100,7 +100,7 @@ struct pdf14_mask_s {
 /* A structure to hold information about the group color related
  * procs and other information. These may change depending upon
  * if the blending space is different than the base space.
- * The structure is a list that is updated upo every transparency 
+ * The structure is a list that is updated upo every transparency
  * group push and pop */
 
 typedef struct pdf14_group_color_s pdf14_group_color_t;
@@ -208,6 +208,7 @@ typedef struct pdf14_device_s {
     const pdf14_procs_t * pdf14_procs;	   /* Must follow devn_params. */
     const pdf14_nonseparable_blending_procs_t * blend_procs; /* Must follow pdf14_procs */
     int num_std_colorants;
+    equivalent_cmyk_color_params op_pequiv_cmyk_colors;
 
     pdf14_ctx *ctx;
     pdf14_smaskcolor_t *smaskcolor;
@@ -232,6 +233,8 @@ typedef struct pdf14_device_s {
     bool free_devicen;              /* Used to avoid freeing a deviceN parameter from target clist device */
     bool sep_device;
     bool using_blend_cs;
+    bool overprint_sim;
+    bool target_support_devn;
 
     /* We now have some variables to help us determine whether
      * we are in an SMask or not. Firstly, we have in_smask_construction,
@@ -320,6 +323,7 @@ int gs_pdf14_device_color_mon_set(gx_device *pdev, bool monitoring);
 /* depth are critical since these must match when reading back colors.             */
 bool pdf14_ok_to_optimize(gx_device *bdev);
 
-
+int
+pdf14_accum_dev_spec_op(gx_device *pdev, int dev_spec_op, void *data, int size);
 
 #endif /* gdevp14_INCLUDED */

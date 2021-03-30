@@ -1,4 +1,4 @@
-/* Copyright (C) 2001-2020 Artifex Software, Inc.
+/* Copyright (C) 2001-2021 Artifex Software, Inc.
    All Rights Reserved.
 
    This software is provided AS-IS with no warranty, either express or
@@ -319,6 +319,8 @@ const gx_device_bit gs_bitrgbtags_device =
         0,  /*DisablePageHandler*/
         0,  /*ObjectFilter*/
         0,  /*ObjectHandlerPushed*/
+        0,  /*NupControl*/
+        0,  /*NupHandlerPushed*/
         0,  /*PageCount*/
         0,  /*ShowPageCount*/
         1,  /*NumCopies*/
@@ -332,6 +334,7 @@ const gx_device_bit gs_bitrgbtags_device =
         {false}, /*sgr*/
         0, /*MaxPatternBitmap*/
         0, /*page_uses_transparency*/
+        0, /*page_uses_overprint*/
         {
           MAX_BITMAP, BUFFER_SPACE,
           { BAND_PARAMS_INITIAL_VALUES },
@@ -365,7 +368,7 @@ const gx_device_bit gs_bitrgbtags_device =
         false, /* file_is_new */
         NULL,  /* file */
         false, /* bg_print_requested */
-        {0},   /* bg_print */
+        0,     /* bg_print *  */
         0,     /* num_render_threads_requested */
         NULL,  /* saved_pages_list */
         {0}    /* save_procs_while_delaying_erasepage */

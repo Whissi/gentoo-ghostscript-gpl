@@ -1,4 +1,4 @@
-/* Copyright (C) 2001-2020 Artifex Software, Inc.
+/* Copyright (C) 2001-2021 Artifex Software, Inc.
    All Rights Reserved.
 
    This software is provided AS-IS with no warranty, either express or
@@ -566,19 +566,23 @@ image_color_icc_prep(gx_image_enum *penum_orig, const byte *psrc, uint w,
                     decode_row_cie(penum, psrc, spp, psrc_decode,
                                     psrc_decode+w, get_cie_range(penum->pcs));
                 }
-                (penum->icc_link->procs.map_buffer)(dev, penum->icc_link,
+                code = (penum->icc_link->procs.map_buffer)(dev, penum->icc_link,
                                                     &input_buff_desc,
                                                     &output_buff_desc,
                                                     (void*) psrc_decode,
                                                     (void*) *psrc_cm);
                 gs_free_object(pgs->memory, psrc_decode, "image_color_icc_prep");
+                if (code < 0)
+                    return code;
             } else {
                 /* CM only. No decode */
-                (penum->icc_link->procs.map_buffer)(dev, penum->icc_link,
+                code = (penum->icc_link->procs.map_buffer)(dev, penum->icc_link,
                                                     &input_buff_desc,
                                                     &output_buff_desc,
                                                     (void*) psrc,
                                                     (void*) *psrc_cm);
+                if (code < 0)
+                    return code;
             }
         }
     }
@@ -1133,6 +1137,14 @@ image_render_color_DeviceN(gx_image_enum *penum_orig, const byte *buffer, int da
     bits32 mask = penum->mask_color.mask;
     bits32 test = penum->mask_color.test;
     bool lab_case = false;
+
+    if (device_encodes_tags(dev)) {
+        devc1.tag = (dev->graphics_type_tag & ~GS_DEVICE_ENCODES_TAGS);
+        devc2.tag = (dev->graphics_type_tag & ~GS_DEVICE_ENCODES_TAGS);
+    } else {
+        devc1.tag = 0;
+        devc2.tag = 0;
+    }
 
     if (h == 0)
         return 0;

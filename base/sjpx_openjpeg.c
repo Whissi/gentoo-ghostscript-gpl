@@ -1,4 +1,4 @@
-/* Copyright (C) 2001-2020 Artifex Software, Inc.
+/* Copyright (C) 2001-2021 Artifex Software, Inc.
    All Rights Reserved.
 
    This software is provided AS-IS with no warranty, either express or
@@ -435,25 +435,43 @@ static int decode_image(stream_jpxd_state * const state)
     {
         case OPJ_CLRSPC_GRAY:
             state->colorspace = gs_jpx_cs_gray;
-            break;
-        case OPJ_CLRSPC_UNKNOWN: /* make the best guess based on number of channels */
-        {
-            if (numprimcomp < 3)
-            {
-                state->colorspace = gs_jpx_cs_gray;
+            if (numprimcomp > 1) {
+                dmprintf1(state->memory, "openjpeg warning: Ignoring extra components for %d component Gray data.\n", numprimcomp);
+                numprimcomp = 1;
             }
-            else if (numprimcomp == 4)
-            {
+            break;
+        case OPJ_CLRSPC_SRGB:
+        case OPJ_CLRSPC_SYCC:
+        case OPJ_CLRSPC_EYCC:
+            state->colorspace = gs_jpx_cs_rgb;
+            if (numprimcomp > 3) {
+                dmprintf1(state->memory, "openjpeg warning: Ignoring extra components for %d component RGB data.\n", numprimcomp);
+                numprimcomp = 3;
+            }
+           break;
+        case OPJ_CLRSPC_CMYK:
+            state->colorspace = gs_jpx_cs_cmyk;
+            if (numprimcomp > 4) {
+                dmprintf1(state->memory, "openjpeg warning: Ignoring extra components for %d component CMYK data.\n", numprimcomp);
+                numprimcomp = 4;
+            }
+            break;
+        default:
+        case OPJ_CLRSPC_UNSPECIFIED:
+        case OPJ_CLRSPC_UNKNOWN:
+            if (numprimcomp == 1) {
+                dmprintf1(state->memory, "openjpeg warning: unspec CS. %d component so assuming gray.\n", numprimcomp);
+                state->colorspace = gs_jpx_cs_gray;
+            } else if (numprimcomp == 4) {
+                dmprintf1(state->memory, "openjpeg warning: unspec CS. %d components so assuming CMYK.\n", numprimcomp);
                 state->colorspace = gs_jpx_cs_cmyk;
-             }
-            else
-            {
+            } else {
+                /* Note, numprimcomp > 4 possible here. Bug 694909.
+                   Trust that it is RGB though.  Do not set numprimcomp */
+                dmprintf1(state->memory, "openjpeg warning: unspec CS. %d components. Assuming data RGB.\n", numprimcomp);
                 state->colorspace = gs_jpx_cs_rgb;
             }
             break;
-        }
-        default: /* OPJ_CLRSPC_SRGB, OPJ_CLRSPC_SYCC, OPJ_CLRSPC_EYCC */
-            state->colorspace = gs_jpx_cs_rgb;
     }
 
     state->alpha_comp = -1;
@@ -560,12 +578,12 @@ static int process_one_trunk(stream_jpxd_state * const state, stream_cursor_writ
                             for (b=0; b<bytepp1; b++)
                                 *row++ = (((*(state->pdata[compno]) << shift_bit) >> (8*(bytepp1-b-1))))
                                                         + (b==0 ? state->sign_comps[compno] : 0); /* split and shift input int to output bytes */
-                            state->pdata[compno]++; 
+                            state->pdata[compno]++;
                         }
                     }
                 }
                 else
-                {   
+                {
                     /* shift_bit = 0, bpp < 8 */
                     int bt=0;
                     int bit_pos = 0;
@@ -678,7 +696,7 @@ s_opjd_process(stream_state * ss, stream_cursor_read * pr,
     int locked = 0;
     int code;
 
-    if (in_size > 0) 
+    if (in_size > 0)
     {
         /* buffer available data */
         code = opj_lock(ss->memory);
@@ -703,7 +721,7 @@ s_opjd_process(stream_state * ss, stream_cursor_read * pr,
         }
     }
 
-    if (last == 1) 
+    if (last == 1)
     {
         if (state->image == NULL)
         {
@@ -774,11 +792,11 @@ s_opjd_release(stream_state *ss)
     /* free image data structure */
     if (state->image)
         opj_image_destroy(state->image);
-    
+
     /* free stream */
     if (state->stream)
         opj_stream_destroy(state->stream);
-		
+
     /* free decoder handle */
     if (state->codec)
 	opj_destroy_codec(state->codec);

@@ -1,4 +1,4 @@
-/* Copyright (C) 2001-2020 Artifex Software, Inc.
+/* Copyright (C) 2001-2021 Artifex Software, Inc.
    All Rights Reserved.
 
    This software is provided AS-IS with no warranty, either express or
@@ -295,6 +295,8 @@ pdf_complete_image_data(gx_device_pdf *pdev, pdf_image_writer *piw, int data_h,
 /* Finish writing the binary image data. */
 int pdf_end_image_binary(gx_device_pdf *pdev, pdf_image_writer *piw,
                          int data_h);
+
+int pdf_end_abort_image(gx_device_pdf * pdev, pdf_image_writer * piw);
 
 /*
  * Finish writing an image.  If in-line, write the BI/dict/ID/data/EI and

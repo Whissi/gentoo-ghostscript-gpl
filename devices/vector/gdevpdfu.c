@@ -1,4 +1,4 @@
-/* Copyright (C) 2001-2020 Artifex Software, Inc.
+/* Copyright (C) 2001-2021 Artifex Software, Inc.
    All Rights Reserved.
 
    This software is provided AS-IS with no warranty, either express or
@@ -39,12 +39,6 @@
 #include "sstring.h"
 #include "strmio.h"
 #include "szlibx.h"
-#ifdef USE_LDF_JB2
-#include "sjbig2_luratech.h"
-#endif
-#ifdef USE_LWF_JP2
-#include "sjpx_luratech.h"
-#endif
 
 #include "opdfread.h"
 #include "gdevagl.h"
@@ -768,6 +762,9 @@ pdf_open_obj(gx_device_pdf * pdev, long id, pdf_resource_type_t type)
 {
     stream *s = pdev->strm;
 
+    if (s == NULL)
+        return_error(gs_error_ioerror);
+
     if (id <= 0) {
         id = pdf_obj_ref(pdev);
     } else {
@@ -777,10 +774,10 @@ pdf_open_obj(gx_device_pdf * pdev, long id, pdf_resource_type_t type)
 
         if (gp_fseek(tfile, ((int64_t)(id - pdev->FirstObjectNumber)) * sizeof(pos),
               SEEK_SET) != 0)
-	  return_error(gs_error_ioerror);
+	        return_error(gs_error_ioerror);
         gp_fwrite(&pos, sizeof(pos), 1, tfile);
         if (gp_fseek(tfile, tpos, SEEK_SET) != 0)
-	  return_error(gs_error_ioerror);
+	        return_error(gs_error_ioerror);
     }
     if (pdev->ForOPDFRead && pdev->ProduceDSC) {
         switch(type) {
@@ -1887,7 +1884,7 @@ pdf_page_id(gx_device_pdf * pdev, int page_num)
 {
     cos_dict_t *Page;
 
-    if (page_num < 1)
+    if (page_num < 1 || pdev->pages == NULL)
         return 0;
     if (page_num >= pdev->num_pages) {	/* Grow the pages array. */
         uint new_num_pages;
@@ -2394,14 +2391,6 @@ pdf_put_filters(cos_dict_t *pcd, gx_device_pdf *pdev, stream *s,
             filter_name = pfn->FlateDecode;
         else if (TEMPLATE_IS(s_LZWE_template))
             filter_name = pfn->LZWDecode;
-#ifdef USE_LDF_JB2
-        else if (TEMPLATE_IS(s_jbig2encode_template))
-            filter_name = pfn->JBIG2Decode;
-#endif
-#ifdef USE_LWF_JP2
-        else if (TEMPLATE_IS(s_jpxe_template))
-            filter_name = pfn->JPXDecode;
-#endif
         else if (TEMPLATE_IS(s_PNGPE_template)) {
             /* This is a predictor for FlateDecode or LZWEncode. */
             const stream_PNGP_state *const ss =

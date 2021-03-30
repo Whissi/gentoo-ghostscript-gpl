@@ -1,4 +1,4 @@
-/* Copyright (C) 2001-2020 Artifex Software, Inc.
+/* Copyright (C) 2001-2021 Artifex Software, Inc.
    All Rights Reserved.
 
    This software is provided AS-IS with no warranty, either express or
@@ -843,7 +843,7 @@ gx_upright_get_initial_matrix(gx_device * dev, register gs_matrix * pmat)
 }
 
 int
-gx_default_sync_output(gx_device * dev)
+gx_default_sync_output(gx_device * dev) /* lgtm [cpp/useless-expression] */
 {
     return 0;
 }
@@ -1431,6 +1431,8 @@ int gx_device_subclass(gx_device *dev_to_subclass, gx_device *new_prototype, uns
         rc_increment(dev_to_subclass->icc_struct);
     if (dev_to_subclass->PageList)
         rc_increment(dev_to_subclass->PageList);
+    if (dev_to_subclass->NupControl)
+        rc_increment(dev_to_subclass->NupControl);
 
     /* In case the new device we're creating has already been initialised, copy
      * its additional data.
@@ -1561,6 +1563,8 @@ int gx_device_unsubclass(gx_device *dev)
             rc_decrement(child->icc_struct, "gx_unsubclass_device, icc_struct");
         if (child->PageList)
             rc_decrement(child->PageList, "gx_unsubclass_device, PageList");
+        if (child->NupControl)
+            rc_decrement(child->NupControl, "gx_unsubclass_device, NupControl");
         /* we cannot afford to free the child device if its stype is not dynamic because
          * we can't 'null' the finalise routine, and we cannot permit the device to be finalised
          * because we have copied it up one level, not discarded it.
@@ -1692,6 +1696,10 @@ int gx_subclass_create_compositor(gx_device *dev, gx_device **pcdev, const gs_co
 
                     p14dev->target = subclass_device;
 
+                    /* We return 0, rather than 1, as we have not created
+                     * a new compositor that wraps dev. */
+                    if (code == 1)
+                        code = 0;
                     return code;
                 }
                 break;

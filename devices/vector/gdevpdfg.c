@@ -1,4 +1,4 @@
-/* Copyright (C) 2001-2020 Artifex Software, Inc.
+/* Copyright (C) 2001-2021 Artifex Software, Inc.
    All Rights Reserved.
 
    This software is provided AS-IS with no warranty, either express or
@@ -2371,7 +2371,7 @@ pdf_write_spot_function(gx_device_pdf *pdev, const gx_ht_order *porder,
     return code;
 }
 
-/* if (memcmp(order.levels, porder->levels, order.num_levels * sizeof(*order.levels))) */ 
+/* if (memcmp(order.levels, porder->levels, order.num_levels * sizeof(*order.levels))) */
 static int
 compare_gx_ht_order_levels(const gx_ht_order *order1, const gx_ht_order *order2) {
   int i;

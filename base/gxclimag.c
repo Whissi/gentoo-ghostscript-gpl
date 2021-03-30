@@ -1,4 +1,4 @@
-/* Copyright (C) 2001-2020 Artifex Software, Inc.
+/* Copyright (C) 2001-2021 Artifex Software, Inc.
    All Rights Reserved.
 
    This software is provided AS-IS with no warranty, either express or
@@ -478,6 +478,7 @@ clist_begin_typed_image(gx_device * dev, const gs_gstate * pgs,
     bool is_planar_dev = dev->is_planar;
     bool render_is_valid;
     int csi;
+    gx_clip_path *lpcpath = NULL;
 
     /* We can only handle a limited set of image types. */
     switch ((gs_debug_c('`') ? -1 : pic->type->index)) {
@@ -600,7 +601,19 @@ clist_begin_typed_image(gx_device * dev, const gs_gstate * pgs,
             pie->rect.q.x = pim->Width, pie->rect.q.y = pim->Height;
         }
         pie->pgs = pgs;
-        pie->pcpath = pcpath;
+
+        if (pcpath) {
+            lpcpath = gx_cpath_alloc(mem, "clist_begin_typed_image(lpcpath)");
+            if (!lpcpath) {
+                goto use_default;
+            }
+            code = gx_cpath_copy(pcpath, lpcpath);
+            if (code < 0) {
+                goto use_default;
+            }
+        }
+        pie->pcpath = lpcpath;
+
         pie->buffer = NULL;
         pie->format = format;
         pie->bits_per_plane = bits_per_pixel / pie->num_planes;
@@ -767,7 +780,7 @@ clist_begin_typed_image(gx_device * dev, const gs_gstate * pgs,
     gs_bbox_transform(&sbox, &mat, &dbox);
 
     if (cdev->disable_mask & clist_disable_complex_clip)
-        if (!check_rect_for_trivial_clip(pcpath,
+        if (!check_rect_for_trivial_clip(lpcpath,
                                 (int)floor(dbox.p.x), (int)floor(dbox.p.y),
                                 (int)ceil(dbox.q.x), (int)ceil(dbox.q.y)))
             goto use_default;
@@ -797,7 +810,7 @@ clist_begin_typed_image(gx_device * dev, const gs_gstate * pgs,
         if (!indexed) {
             pie->monitor_color = true;
             /* Set up the unpacking proc for monitoring */
-            get_unpack_proc((gx_image_enum_common_t*) pie, &(pie->decode), 
+            get_unpack_proc((gx_image_enum_common_t*) pie, &(pie->decode),
                              pim->format, pim->Decode);
             get_map(&(pie->decode), pim->format, pim->Decode);
             if (pie->decode.unpack == NULL) {
@@ -874,10 +887,14 @@ clist_begin_typed_image(gx_device * dev, const gs_gstate * pgs,
             for (i = 0; i <= max_value; ++i) {
                 /* Enumerate the indexed colors, or just Black (DeviceGray = 0) */
                 cc.paint.values[0] = (double)i;
-                remap_color(&cc, pcs, &dcolor, pgs, dev,
+                code = remap_color(&cc, pcs, &dcolor, pgs, dev,
                             gs_color_select_source);
+                if (code < 0)
+                    break;
                 color_usage |= cmd_drawing_color_usage(cdev, &dcolor);
             }
+            if (code < 0)
+                goto use_default;
         }
     }
     pie->color_usage.or = color_usage;
@@ -892,9 +909,9 @@ clist_begin_typed_image(gx_device * dev, const gs_gstate * pgs,
         int y0 = (int)floor(dbox.p.y - 0.51);   /* adjust + rounding slop */
         int y1 = (int)ceil(dbox.q.y + 0.51);    /* ditto */
 
-        if (pcpath) {
+        if (lpcpath) {
             gs_fixed_rect obox;
-            gx_cpath_outer_box(pcpath, &obox);
+            gx_cpath_outer_box(lpcpath, &obox);
             pie->ymin = max(0, max(y0, fixed2int(obox.p.y)));
             pie->ymax = min(min(y1, fixed2int(obox.q.y)), dev->height);
         } else {
@@ -930,6 +947,9 @@ use_default:
         gs_free_object(mem, pie->buffer, "clist_begin_typed_image");
     gs_free_object(mem, pie, "clist_begin_typed_image");
     *pinfo = NULL;
+
+    if (lpcpath != NULL)
+        gx_cpath_free(lpcpath, "clist_begin_typed_image(lpcpath)");
 
     if (pgs->has_transparency){
         return -1;
@@ -1258,6 +1278,9 @@ clist_image_end_image(gx_image_enum_common_t * info, bool draw_last)
 #endif
     code = write_image_end_all(dev, pie);
     cdev->image_enum_id = gs_no_id;
+    gx_cpath_free((gx_clip_path *)pie->pcpath, "clist_image_end_image(pie->pcpath)");
+    cdev->clip_path = NULL;
+    cdev->clip_path_id = gs_no_id;
     gx_image_free_enum(&info);
     return code;
 }
@@ -1278,6 +1301,7 @@ clist_create_compositor(gx_device * dev,
     int first_band = 0, no_of_bands = cdev->nbands;
     int code = pcte->type->procs.write(pcte, 0, &size, cdev);
     int temp_cropping_min, temp_cropping_max;
+    int newdev;
 
     CMD_CHECK_LAST_OP_BLOCK_DEFINED(cdev);
 
@@ -1291,6 +1315,7 @@ clist_create_compositor(gx_device * dev,
                                                         pcdev, pgs, mem);
     if (code < 0)
         return code;
+    newdev = code == 1;
 
     CMD_CHECK_LAST_OP_BLOCK_DEFINED(cdev);
 
@@ -1356,6 +1381,9 @@ clist_create_compositor(gx_device * dev,
         /* serialize the remainder of the compositor */
         if ((code = pcte->type->procs.write(pcte, dp + 3, &size_dummy, cdev)) < 0)
             ((gx_device_clist_writer *)dev)->cnext = dp;
+
+        if (code >= 0 && newdev)
+            code = 1; /* Return 1 to indicate we created a new device. */
         return code;
     }
     if (cropping_op == PUSHCROP) {
@@ -1372,6 +1400,11 @@ clist_create_compositor(gx_device * dev,
         temp_cropping_min = cdev->cropping_min;
         temp_cropping_max = cdev->cropping_max;
     }
+    /* Adjust the lower and upper bound to allow for image gridfitting changing boundaries */
+    if (temp_cropping_min > 0)
+        temp_cropping_min--;
+    if (temp_cropping_max < dev->height - 1)
+        temp_cropping_max++;
     if (temp_cropping_min < temp_cropping_max) {
         /* The pdf14 compositor could be applied
            only to bands covered by the pcte->params.bbox. */
@@ -1396,6 +1429,9 @@ clist_create_compositor(gx_device * dev,
         if (code < 0)
             return code;
     }
+
+    if (newdev)
+        code = 1; /* Return 1 to indicate we created a new device. */
 
     return code;
 }
@@ -2004,7 +2040,7 @@ cmd_image_plane_data_mon(gx_device_clist_writer * cldev, gx_clist_state * pcls,
                to see if we have any non-neutral colors */
             int pdata_x;
             byte *data_ptr =  (byte *)(planes[0].data + i * planes[0].raster + offsets[0] + offset);
-            byte *buffer = (byte *)(*pie_c->decode.unpack)(pie_c->buffer, &pdata_x, 
+            byte *buffer = (byte *)(*pie_c->decode.unpack)(pie_c->buffer, &pdata_x,
                                      data_ptr, 0, dsize, pie_c->decode.map,
                 pie_c->decode.spread, pie_c->decode.spp);
 

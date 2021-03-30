@@ -1,4 +1,4 @@
-/* Copyright (C) 2001-2020 Artifex Software, Inc.
+/* Copyright (C) 2001-2021 Artifex Software, Inc.
    All Rights Reserved.
 
    This software is provided AS-IS with no warranty, either express or
@@ -368,7 +368,10 @@ gx_begin_image3_generic(gx_device * dev,
 
     /* Bug 700438: If the rectangle is out of range, bail */
     if (mrect.p.x >= (double)INT_MAX || mrect.q.x <= (double)INT_MIN ||
-        mrect.p.y >= (double)INT_MAX || mrect.q.y <= (double)INT_MIN) {
+        mrect.p.y >= (double)INT_MAX || mrect.q.y <= (double)INT_MIN ||
+        mrect.p.x <= (double)INT_MIN || mrect.q.x >= (double)INT_MAX ||
+        mrect.p.y <= (double)INT_MIN || mrect.q.y >= (double)INT_MAX
+	) {
             code = gs_note_error(gs_error_rangecheck);
         goto out1;
     }

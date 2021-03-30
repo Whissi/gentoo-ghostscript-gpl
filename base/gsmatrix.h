@@ -1,4 +1,4 @@
-/* Copyright (C) 2001-2020 Artifex Software, Inc.
+/* Copyright (C) 2001-2021 Artifex Software, Inc.
    All Rights Reserved.
 
    This software is provided AS-IS with no warranty, either express or
@@ -26,7 +26,7 @@
 /* transformation matrices. */
 
 /* if you make any additions/changes to the gs_matrix_s structure or the
-   _matrix_body macro you need to make the appropriate additions/changes 
+   _matrix_body macro you need to make the appropriate additions/changes
    to the gs_matrix_compare() function in gsmatrix.c */
 /* Structure for a transformation matrix. */
 #define _matrix_body\

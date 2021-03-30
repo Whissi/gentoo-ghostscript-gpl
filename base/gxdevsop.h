@@ -1,4 +1,4 @@
-/* Copyright (C) 2001-2020 Artifex Software, Inc.
+/* Copyright (C) 2001-2021 Artifex Software, Inc.
    All Rights Reserved.
 
    This software is provided AS-IS with no warranty, either express or
@@ -29,7 +29,7 @@
  * ioctl is to unix file handles.
  *
  * Design features of this scheme ensure that:
- *  * Devices that support a given call call efficiently implement both
+ *  * Devices that support a given call can efficiently implement both
  *    input and output.
  *  * Devices that do not support a given call can efficiently refuse it
  *    (without having to know all the possible calls).
@@ -366,7 +366,13 @@ enum {
     * 0 otherwise.
     */
     gxdso_in_smask,
-
+    /* gxdso_in_smask_construction:
+    *     data = NULL
+    *     size = 0
+    * Returns 1 if we are within an smask construction,
+    * 0 otherwise.
+    */
+    gxdso_in_smask_construction,
     /* Debug only dsos follow here */
 #ifdef DEBUG
     /* Private dso used to check that a printer device properly forwards to the default */
@@ -395,6 +401,35 @@ enum {
      * for example).
      */
     gxdso_skip_icc_component_validation,
+
+    /* gxdso_copy_alpha_disabled:
+     *     data = NULL
+     *     size = 0
+     * Returns 1 if the command list device sets clist_disable_copy_alpha flag,
+     * 0 otherwise.
+     */
+    gxdso_copy_alpha_disabled,
+
+    /* gxdso_set_HWSize:
+     *     data = int[2], [0] is width [1] is height
+     *     size = sizeof(int[2])
+     * Returns 1 if the device controls dev->width, dev->height
+     * 0 otherwise.
+     * NB: caller should set dev->wdith and dev->height if return is <= 0
+     */
+    gxdso_set_HWSize,
+
+    /* gxdso_device_insert_child:
+     *     data = pointer to device to insert as child of the device
+     *            handling this special op.
+     *     size = 0
+     * Returns 0 if completed successfully, negative otherwise.
+     */
+    gxdso_device_insert_child,
+
+    /* Determine if a given device is a clist one. Returns 1 if it is. */
+    gxdso_is_clist_device,
+
     /* Add new gxdso_ keys above this. */
     gxdso_pattern__LAST
 };

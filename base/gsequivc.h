@@ -1,4 +1,4 @@
-/* Copyright (C) 2001-2020 Artifex Software, Inc.
+/* Copyright (C) 2001-2021 Artifex Software, Inc.
    All Rights Reserved.
 
    This software is provided AS-IS with no warranty, either express or
@@ -45,7 +45,7 @@ typedef struct cmyk_color_s {
 } cmyk_color;
 
 /* if you make any additions/changes to the equivalent_cmyk_color_params or the
-   cmyk_color structrs you need to make the appropriate additions/changes 
+   cmyk_color structrs you need to make the appropriate additions/changes
    to the compare_equivalent_cmyk_color_params() function in gdevdevn.c */
 
 /*

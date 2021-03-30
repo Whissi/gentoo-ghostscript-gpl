@@ -1,4 +1,4 @@
-/* Copyright (C) 2001-2020 Artifex Software, Inc.
+/* Copyright (C) 2001-2021 Artifex Software, Inc.
    All Rights Reserved.
 
    This software is provided AS-IS with no warranty, either express or
@@ -402,7 +402,8 @@ void smask_copy(int num_rows, int num_cols, int row_stride,
     }
 }
 
-void smask_icc(gx_device *dev, int num_rows, int num_cols, int n_chan,
+int
+smask_icc(gx_device *dev, int num_rows, int num_cols, int n_chan,
                int row_stride, int plane_stride, byte *gs_restrict src, const byte *gs_restrict dst,
                gsicc_link_t *icclink, bool deep)
 {
@@ -427,7 +428,7 @@ void smask_icc(gx_device *dev, int num_rows, int num_cols, int n_chan,
                   false, false, true, plane_stride,
                   row_stride, num_rows, num_cols);
     /* Transform the data */
-    (icclink->procs.map_buffer)(dev, icclink, &input_buff_desc, &output_buff_desc,
+    return (icclink->procs.map_buffer)(dev, icclink, &input_buff_desc, &output_buff_desc,
                                 (void*) src, (void*) dst);
 }
 
@@ -1244,7 +1245,7 @@ art_blend_pixel_8_inline(byte *gs_restrict dst, const byte *gs_restrict backdrop
             break;
         case BLEND_MODE_Hue:
             {
-                byte tmp[4];
+                byte tmp[ART_MAX_CHAN];
 
                 pblend_procs->blend_luminosity(n_chan, tmp, src, backdrop);
                 pblend_procs->blend_saturation(n_chan, dst, tmp, backdrop);
@@ -1504,7 +1505,7 @@ art_blend_pixel_16_inline(uint16_t *gs_restrict dst, const uint16_t *gs_restrict
             break;
         case BLEND_MODE_Hue:
             {
-                uint16_t tmp[4];
+                uint16_t tmp[ART_MAX_CHAN];
 
                 pblend_procs->blend_luminosity16(n_chan, tmp, src, backdrop);
                 pblend_procs->blend_saturation16(n_chan, dst, tmp, backdrop);
@@ -5165,10 +5166,11 @@ do_mark_fill_rectangle(gx_device * dev, int x, int y, int w, int h,
      * Unpack the gx_color_index values.  Complement the components for subtractive
      * color spaces.
      */
-    if (has_tags) {
-        curr_tag = (color >> (num_comp*8)) & 0xff;
-    }
+
     if (devn) {
+        if (has_tags) {
+            curr_tag = pdc->tag;
+        }
         if (additive) {
             for (j = 0; j < (num_comp - num_spots); j++) {
                 src[j] = ((pdc->colors.devn.values[j]) >> shift & mask);
@@ -5182,8 +5184,12 @@ do_mark_fill_rectangle(gx_device * dev, int x, int y, int w, int h,
                 src[j] = 255 - ((pdc->colors.devn.values[j]) >> shift & mask);
             }
         }
-    } else
+    } else {
+        if (has_tags) {
+            curr_tag = (color >> (num_comp * 8)) & 0xff;
+        }
         pdev->pdf14_procs->unpack_color(num_comp, color, pdev, src);
+    }
     src_alpha = src[num_comp] = (byte)floor (255 * pdev->alpha + 0.5);
     if (has_shape)
         shape = (byte)floor (255 * pdev->shape + 0.5);
@@ -5796,10 +5802,10 @@ do_mark_fill_rectangle16(gx_device * dev, int x, int y, int w, int h,
      * Unpack the gx_color_index values.  Complement the components for subtractive
      * color spaces.
      */
-    if (has_tags) {
-        curr_tag = (color >> (num_comp*16)) & 0xff;
-    }
     if (devn) {
+        if (has_tags) {
+            curr_tag = pdc->tag;
+        }
         if (additive) {
             for (j = 0; j < (num_comp - num_spots); j++) {
                 src[j] = pdc->colors.devn.values[j];
@@ -5813,8 +5819,12 @@ do_mark_fill_rectangle16(gx_device * dev, int x, int y, int w, int h,
                 src[j] = 65535 - pdc->colors.devn.values[j];
             }
         }
-    } else
+    } else {
+        if (has_tags) {
+            curr_tag = (color >> (num_comp * 16)) & 0xff;
+        }
         pdev->pdf14_procs->unpack_color16(num_comp, color, pdev, src);
+    }
     src_alpha = src[num_comp] = (uint16_t)floor (65535 * pdev->alpha + 0.5);
     if (has_shape)
         shape = (uint16_t)floor (65535 * pdev->shape + 0.5);

@@ -9,6 +9,7 @@ using System.Diagnostics;
 using Microsoft.Win32;
 using GhostNET;
 using System.IO;
+using System.Windows.Media;
 
 static class Constants
 {
@@ -51,6 +52,7 @@ namespace ghostnet_wpf_example
 		NOTSET,
 		BLANK
 	};
+
 	public enum zoom_t
 	{
 		NO_ZOOM,
@@ -64,7 +66,22 @@ namespace ghostnet_wpf_example
 		PDF,
 		PS,
 		PCL,
+		PNG,
+		EPS,
+		JPG,
+		TIF,
 		XPS
+	}
+
+	public enum ViewerState_t
+	{
+		NO_FILE,
+		OPENING,
+		BUSY_RENDER,
+		DOC_OPEN,
+		DISTILLING,
+		PRINTING,
+		RESIZING
 	}
 
 	public struct idata_t
@@ -85,10 +102,9 @@ namespace ghostnet_wpf_example
 
 	public partial class MainWindow : Window
 	{
-
 		ghostsharp m_ghostscript;
-		bool m_file_open;
 		doc_t m_document_type;
+		bool m_doc_type_has_page_access;
 		String m_currfile;
 		List<TempFile> m_tempfiles;
 		String m_origfile;
@@ -100,14 +116,11 @@ namespace ghostnet_wpf_example
 		public List<pagesizes_t> m_page_sizes;
 		List<idata_t> m_list_thumb;
 		List<idata_t> m_images_rendered;
-		bool m_init_done;
-		bool m_busy_render;
-		bool m_firstime;
 		bool m_validZoom;
 		bool m_aa;
-		bool m_aa_change;
 		List<int> m_toppage_pos;
 		int m_page_progress_count;
+		ViewerState_t m_viewer_state;
 
 		private static List<Page_Content_t> m_pageType;
 
@@ -132,6 +145,7 @@ namespace ghostnet_wpf_example
 			m_ghostscript.gsUpdateMain += new ghostsharp.gsCallBackMain(gsProgress);
 			m_ghostscript.gsIOUpdateMain += new ghostsharp.gsIOCallBackMain(gsIO);
 			m_ghostscript.gsDLLProblemMain += new ghostsharp.gsDLLProblem(gsDLL);
+			m_ghostscript.DisplayDeviceOpen();
 
 			m_currpage = 0;
 			m_gsoutput = new gsOutput();
@@ -141,30 +155,53 @@ namespace ghostnet_wpf_example
 			m_docPages = new Pages();
 			m_pageType = new List<Page_Content_t>();
 			m_page_sizes = new List<pagesizes_t>();
-			m_file_open = false;
 			m_document_type = doc_t.UNKNOWN;
 			m_doczoom = 1.0;
-			m_init_done = false;
-			m_busy_render = true;
+			m_viewer_state = ViewerState_t.NO_FILE;
 			m_validZoom = true;
-			m_firstime = true;
+			m_doc_type_has_page_access = true;
 			m_list_thumb = new List<idata_t>();
 			m_images_rendered = new List<idata_t>();
-			m_busy_rendering = false;
 			m_aa = true;
-			m_aa_change = false;
 
 			xaml_PageList.AddHandler(Grid.DragOverEvent, new System.Windows.DragEventHandler(Grid_DragOver), true);
 			xaml_PageList.AddHandler(Grid.DropEvent, new System.Windows.DragEventHandler(Grid_Drop), true);
 
-			/* For case of opening another file */
+
+			/* For case of opening another file, or launching a print process */
 			string[] arguments = Environment.GetCommandLineArgs();
-			if (arguments.Length > 1)
+			if (arguments.Length == 3)
 			{
 				string filePath = arguments[1];
-				ProcessFile(filePath);
+				string job = arguments[2];
+
+				if (String.Equals(job, "open"))
+					ProcessFile(filePath);
 			}
+			else if (arguments.Length == 5)
+			{
+				string filePath = arguments[1];
+				string job = arguments[2];
+
+				try
+				{
+					m_currpage = Int32.Parse(arguments[3]);
+					m_numpages = Int32.Parse(arguments[4]);
+				}
+				catch (FormatException)
+				{
+					Console.WriteLine("Failure to parse print page info");
+					Close();
+				}
+
+				/* Keep main window hidden if we are doing a print process */
+				this.IsVisibleChanged += new System.Windows.DependencyPropertyChangedEventHandler(WindowVisible);
+				m_viewer_state = ViewerState_t.PRINTING;
+				Print(filePath);
+			}
+
 		}
+
 		private void gsIO(String mess, int len)
 		{
 			m_gsoutput.Update(mess, len);
@@ -198,8 +235,8 @@ namespace ghostnet_wpf_example
 				{
 
 					case GS_Task_t.CREATE_XPS:
-						xaml_DistillProgress.Value = 100;
-						xaml_DistillGrid.Visibility = System.Windows.Visibility.Collapsed;
+						m_printstatus.xaml_PrintProgress.Value = 100;
+						m_printstatus.xaml_PrintProgressGrid.Visibility = System.Windows.Visibility.Collapsed;
 						break;
 
 					case GS_Task_t.PS_DISTILL:
@@ -210,11 +247,11 @@ namespace ghostnet_wpf_example
 					case GS_Task_t.SAVE_RESULT:
 						break;
 
-					case GS_Task_t.DISPLAY_DEV_THUMBS_NON_PDF:
-					case GS_Task_t.DISPLAY_DEV_THUMBS_PDF:
+					case GS_Task_t.DISPLAY_DEV_THUMBS:
 						ThumbsDone();
 						break;
 
+					case GS_Task_t.DISPLAY_DEV_RUN_FILE:
 					case GS_Task_t.DISPLAY_DEV_PDF:
 					case GS_Task_t.DISPLAY_DEV_NON_PDF:
 						RenderingDone();
@@ -251,7 +288,7 @@ namespace ghostnet_wpf_example
 				switch (asyncInformation.Params.task)
 				{
 					case GS_Task_t.CREATE_XPS:
-						this.xaml_DistillProgress.Value = asyncInformation.Progress;
+						m_printstatus.xaml_PrintProgress.Value = asyncInformation.Progress;
 						break;
 
 					case GS_Task_t.PS_DISTILL:
@@ -308,7 +345,6 @@ namespace ghostnet_wpf_example
 			switch (gs_result.task)
 			{
 				case GS_Task_t.CREATE_XPS:
-					xaml_DistillGrid.Visibility = System.Windows.Visibility.Collapsed;
 					/* Always do print all from xps conversion as it will do
 					 * the page range handling for us */
 					/* Add file to temp file list */
@@ -341,6 +377,7 @@ namespace ghostnet_wpf_example
 
 					}
 					tempfile.DeleteFile();
+					m_viewer_state = ViewerState_t.NO_FILE;
 					break;
 
 				case GS_Task_t.SAVE_RESULT:
@@ -357,8 +394,6 @@ namespace ghostnet_wpf_example
 
 		private void CleanUp()
 		{
-			m_init_done = false;
-
 			/* Collapse this stuff since it is going to be released */
 			xaml_ThumbGrid.Visibility = System.Windows.Visibility.Collapsed;
 
@@ -381,23 +416,29 @@ namespace ghostnet_wpf_example
 			m_currfile = null;
 			m_origfile = null;
 			m_numpages = -1;
-			m_file_open = false;
-			m_firstime = true;
+			m_doc_type_has_page_access = true;
 			m_document_type = doc_t.UNKNOWN;
 			m_origfile = null;
 			CleanUpTempFiles();
-			m_file_open = false;
-			m_busy_render = true;
 			xaml_TotalPages.Text = "/ 0";
 			xaml_currPage.Text = "0";
 			CloseExtraWindows(false);
 
+			m_ghostscript.gsPageRenderedMain -= new ghostsharp.gsCallBackPageRenderedMain(gsPageRendered);
+			m_ghostscript.DisplayDeviceClose();
+			m_ghostscript.DisplayDeviceOpen();
+			m_viewer_state = ViewerState_t.NO_FILE;
+
+			/* Set vertical scroll to top position */
+			Decorator border = VisualTreeHelper.GetChild(xaml_PageList, 0) as Decorator;
+			ScrollViewer scrollViewer = border.Child as ScrollViewer;
+			scrollViewer.ScrollToVerticalOffset(0);
 			return;
 		}
 
 		private void CloseCommand(object sender, ExecutedRoutedEventArgs e)
 		{
-			if (m_init_done)
+			if (m_viewer_state == ViewerState_t.DOC_OPEN)
 				CleanUp();
 		}
 
@@ -420,7 +461,7 @@ namespace ghostnet_wpf_example
 				return;
 
 			OpenFileDialog dlg = new OpenFileDialog();
-			dlg.Filter = "Document Files(*.ps;*.eps;*.pdf)|*.ps;*.eps;*.pdf;|All files (*.*)|*.*";
+			dlg.Filter = "Document Files(*.ps;*.eps;*.pdf;*.bin;*.xps;*.oxps;*.jpg;*.png;*.tif|*.ps;*.eps;*.pdf;*.bin;*.xps;*.oxps;*.jpg;*.png;*.tif|All files (*.*)|*.*";
 			dlg.FilterIndex = 1;
 			if (dlg.ShowDialog() == true)
 				ProcessFile(dlg.FileName);
@@ -435,7 +476,7 @@ namespace ghostnet_wpf_example
 				ShowMessage(NotifyType_t.MESS_STATUS, "File not found!");
 				return;
 			}
-			if (m_file_open)
+			if (m_viewer_state == ViewerState_t.DOC_OPEN)
 			{
 				/* In this case, we want to go ahead and launch a new process
 				 * handing it the filename */
@@ -443,7 +484,8 @@ namespace ghostnet_wpf_example
 				string path = System.Reflection.Assembly.GetExecutingAssembly().CodeBase;
 				try
 				{
-					Process.Start(path, FileName);
+					string Arguments = FileName + " open";
+					Process.Start(path, Arguments);
 				}
 				catch (InvalidOperationException)
 				{
@@ -455,6 +497,10 @@ namespace ghostnet_wpf_example
 				}
 				return;
 			}
+			else if (m_viewer_state != ViewerState_t.NO_FILE)
+				return;
+
+			m_viewer_state = ViewerState_t.OPENING;
 
 			/* If we have a ps or eps file then launch the distiller first
 			 * and then we will get a temp pdf file which we will open.  This is done
@@ -470,7 +516,7 @@ namespace ghostnet_wpf_example
 					m_document_type = doc_t.PS;
 					break;
 				case ".EPS":
-					m_document_type = doc_t.PS;
+					m_document_type = doc_t.EPS;
 					break;
 				case ".PDF":
 					m_document_type = doc_t.PDF;
@@ -478,24 +524,40 @@ namespace ghostnet_wpf_example
 				case ".XPS":
 					m_document_type = doc_t.XPS;
 					break;
+				case ".OXPS":
+					m_document_type = doc_t.XPS;
+					break;
 				case ".BIN":
 					m_document_type = doc_t.PCL;
+					break;
+				case ".PNG":
+					m_document_type = doc_t.PNG;
+					break;
+				case ".JPG":
+					m_document_type = doc_t.JPG;
+					break;
+				case ".TIF":
+					m_document_type = doc_t.TIF;
 					break;
 				default:
 					{
 						m_document_type = doc_t.UNKNOWN;
 						ShowMessage(NotifyType_t.MESS_STATUS, "Unknown File Type");
+						m_viewer_state = ViewerState_t.NO_FILE;
 						return;
 					}
 			}
-			if (extension.ToUpper() != ".PDF")
+			if (m_document_type == doc_t.PCL ||
+				m_document_type == doc_t.XPS ||
+				m_document_type == doc_t.PS)
 			{
 
-				MessageBoxResult result = MessageBox.Show("Would you like to Distill this file?", "ghostnet", MessageBoxButton.YesNoCancel);
+				MessageBoxResult result = MessageBox.Show("Would you like to distill this file?", "ghostnet", MessageBoxButton.YesNoCancel);
 				switch (result)
 				{
 					case MessageBoxResult.Yes:
 						xaml_DistillProgress.Value = 0;
+						m_viewer_state = ViewerState_t.DISTILLING;
 						if (m_ghostscript.DistillPS(FileName, Constants.DEFAULT_GS_RES) == gsStatus.GS_BUSY)
 						{
 							ShowMessage(NotifyType_t.MESS_STATUS, "GS currently busy");
@@ -507,21 +569,23 @@ namespace ghostnet_wpf_example
 						xaml_DistillGrid.Visibility = System.Windows.Visibility.Visible;
 						return;
 					case MessageBoxResult.No:
+						//m_doc_type_has_page_access = false;
 						break;
 					case MessageBoxResult.Cancel:
+						m_viewer_state = ViewerState_t.NO_FILE;
 						return;
 				}
 			}
 			m_currfile = FileName;
-			//m_numpages = m_ghostscript.GetPageCount(m_currfile);
 			RenderThumbs();
 			return;
-
 		}
+
 		private void CancelDistillClick(object sender, RoutedEventArgs e)
 		{
 
 		}
+
 		private void DeleteTempFile(String file)
 		{
 			for (int k = 0; k < m_tempfiles.Count; k++)
@@ -557,6 +621,7 @@ namespace ghostnet_wpf_example
 			}
 			m_tempfiles.Clear();
 		}
+
 		private void OnAboutClick(object sender, RoutedEventArgs e)
 		{
 			About about = new About(this);
@@ -624,7 +689,7 @@ namespace ghostnet_wpf_example
 		{
 			e.Handled = true;
 
-			if (!m_init_done || m_busy_rendering || m_toppage_pos == null)
+			if (m_viewer_state != ViewerState_t.DOC_OPEN)
 				return;
 
 			/* Find the pages that are visible.  */
@@ -640,7 +705,7 @@ namespace ghostnet_wpf_example
 			}
 			else
 			{
-				for (int k = 0; k < (m_toppage_pos.Count() - 1); k++)
+				for (int k = 0; k < (m_toppage_pos.Count - 1); k++)
 				{
 					if (top_window <= m_toppage_pos[k + 1] && bottom_window >= m_toppage_pos[k])
 					{
@@ -666,13 +731,9 @@ namespace ghostnet_wpf_example
 			m_currpage = first_page;
 			xaml_currPage.Text = (m_currpage + 1).ToString();
 
-			/* Only PDF does this page sensitive approach */
-			if (m_document_type != doc_t.PDF)
-				return;
+			if (m_doc_type_has_page_access)
+				PageRangeRender(first_page, last_page);
 
-			/* Disable for now.  All do full doc rendering.  NB implement
-			 * for XPS and PDF which allow direct page access */
-			//PageRangeRender(first_page, last_page);
 			return;
 		}
 		private void Grid_DragOver(object sender, System.Windows.DragEventArgs e)
@@ -686,6 +747,15 @@ namespace ghostnet_wpf_example
 				e.Effects = System.Windows.DragDropEffects.None;
 			}
 			e.Handled = false;
+		}
+		
+		/* Keep main window hidden if we are doing a print process */
+		public void WindowVisible(object sender, DependencyPropertyChangedEventArgs e)
+		{
+			if (m_viewer_state == ViewerState_t.PRINTING)
+			{
+				this.Visibility = Visibility.Hidden;
+			}
 		}
 
 		private void Grid_Drop(object sender, System.Windows.DragEventArgs e)
@@ -725,15 +795,13 @@ namespace ghostnet_wpf_example
 		private void AA_uncheck(object sender, RoutedEventArgs e)
 		{
 			m_aa = false;
-			m_aa_change = true;
-			RenderMainAll();
+			RenderMain();
 		}
 
 		private void AA_check(object sender, RoutedEventArgs e)
 		{
 			m_aa = true;
-			m_aa_change = true;
-			RenderMainAll();
+			RenderMain();
 		}
 	}
 }

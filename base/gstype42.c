@@ -1,4 +1,4 @@
-/* Copyright (C) 2001-2020 Artifex Software, Inc.
+/* Copyright (C) 2001-2021 Artifex Software, Inc.
    All Rights Reserved.
 
    This software is provided AS-IS with no warranty, either express or
@@ -346,9 +346,10 @@ gs_type42_font_init(gs_font_type42 * pfont, int subfontID)
             code = gs_font_notify_register((gs_font *)pfont, gs_len_glyphs_release, (void *)pfont);
             if (code < 0) {
                 gs_free_object(pfont->memory, pfont->data.len_glyphs, "gs_len_glyphs_release");
+                pfont->data.len_glyphs = NULL;
                 return code;
             }
-            
+            memset(pfont->data.len_glyphs, 0x00, loca_size * sizeof(uint));
             /* The 'loca' may not be in order, so we construct a glyph length array */
             /* Since 'loca' is usually sorted, first try the simple linear scan to  */
             /* avoid the need to perform the more expensive process. */
@@ -386,7 +387,7 @@ gs_type42_font_init(gs_font_type42 * pfont, int subfontID)
                 gs_type42_font_init_sort_t *psortary =
                     (gs_type42_font_init_sort_t *)gs_alloc_byte_array(pfont->memory,
                         loca_size, sizeof(gs_type42_font_init_sort_t), "gs_type42_font_init(sort loca)");
-            
+
                 if (psortary == 0)
                     return_error(gs_error_VMerror);
                 /* loca_size > 0 due to condition above, so we always have the 0th element. */
@@ -406,7 +407,7 @@ gs_type42_font_init(gs_font_type42 * pfont, int subfontID)
                     return_error(gs_error_invalidfont);
                 for (i = num_valid_loca_elm; i--;) {
                     long old_length;
-            
+
                     psort = psortary + i;
                     old_length = psort->glyph_length;
                     if (old_length < 0 || old_length > 2000 /*  arbitrary */) {

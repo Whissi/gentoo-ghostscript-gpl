@@ -1,4 +1,4 @@
-/* Copyright (C) 2001-2020 Artifex Software, Inc.
+/* Copyright (C) 2001-2021 Artifex Software, Inc.
    All Rights Reserved.
 
    This software is provided AS-IS with no warranty, either express or
@@ -1014,7 +1014,16 @@ op_show_restore(i_ctx_t *i_ctx_p, bool for_error)
         } else
             code = gs_grestore(igs);
     }
-    gs_text_release(penum, "op_show_restore");
+
+    /* Possibly restore color. This occurs if we are going to a high
+       level device or if we were only doing a fill.
+       If we are going to be doing the stroke
+       operation through zstroke then we do not want to restore yet. */
+    if (penum->k_text_release) {
+        gsicc_restore_black_text(igs);
+    }
+
+    gs_text_release(NULL, penum, "op_show_restore");
     return code;
 }
 /* Clean up after an error. */

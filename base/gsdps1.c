@@ -1,4 +1,4 @@
-/* Copyright (C) 2001-2020 Artifex Software, Inc.
+/* Copyright (C) 2001-2021 Artifex Software, Inc.
    All Rights Reserved.
 
    This software is provided AS-IS with no warranty, either express or
@@ -196,7 +196,7 @@ gs_rectfill(gs_gstate * pgs, const gs_rect * pr, uint count)
     const gs_gstate *pgs2 = (const gs_gstate *)pgs;
     bool hl_color_available = gx_hld_is_hl_color_available(pgs2, pdc);
     bool hl_color = (hl_color_available &&
-                dev_proc(pdev, dev_spec_op)(pdev, gxdso_supports_hlcolor, 
+                dev_proc(pdev, dev_spec_op)(pdev, gxdso_supports_hlcolor,
                                   NULL, 0));
     bool center_of_pixel = (pgs->fill_adjust.x == 0 && pgs->fill_adjust.y == 0);
 
@@ -206,7 +206,12 @@ gs_rectfill(gs_gstate * pgs, const gs_rect * pr, uint count)
     code = gx_set_dev_color(pgs);
     if (code != 0)
         return code;
-    if ((is_fzero2(pgs->ctm.xy, pgs->ctm.yx) ||
+
+    if ( !(pgs->device->page_uses_transparency ||
+          dev_proc(pgs->device, dev_spec_op)(pgs->device,
+              gxdso_is_pdf14_device, &(pgs->device),
+              sizeof(pgs->device))) &&
+        (is_fzero2(pgs->ctm.xy, pgs->ctm.yx) ||
          is_fzero2(pgs->ctm.xx, pgs->ctm.yy)) &&
         gx_effective_clip_path(pgs, &pcpath) >= 0 &&
         clip_list_is_rectangle(gx_cpath_list(pcpath)) &&

@@ -1,4 +1,4 @@
-/* Copyright (C) 2001-2020 Artifex Software, Inc.
+/* Copyright (C) 2001-2021 Artifex Software, Inc.
    All Rights Reserved.
 
    This software is provided AS-IS with no warranty, either express or
@@ -1498,7 +1498,7 @@ gx_pattern_load(gx_device_color * pdc, const gs_gstate * pgs,
         goto fail;
     if (pinst->templat.uses_transparency) {
         if_debug0m('v', mem, "gx_pattern_load: pushing the pdf14 compositor device into this graphics state\n");
-        if ((code = gs_push_pdf14trans_device(saved, true, false)) < 0)
+        if ((code = gs_push_pdf14trans_device(saved, true, false, 0, 0)) < 0)   /* FIXME: do we need spot_color_count ??? */
             return code;
         saved->device->is_open = true;
     } else {

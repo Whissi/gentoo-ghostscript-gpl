@@ -1,4 +1,4 @@
-/* Copyright (C) 2020 Artifex Software, Inc.
+/* Copyright (C) 2020-2021 Artifex Software, Inc.
    All Rights Reserved.
 
    This software is provided AS-IS with no warranty, either express or
@@ -123,7 +123,7 @@ unsigned int imscale_foo(unsigned int v5x5) {
     unsigned int r3 = ( v5x5 >> 20 ) & 0x1f;
     unsigned int r4 = ( v5x5 >> 25 ) & 0x1f;
 #endif
-    
+
     switch(v3x3) {
     case 0:
     case 1:
