@@ -95,7 +95,7 @@ mandir = @mandir@
 man1ext = 1
 man1dir = $(mandir)/man$(man1ext)
 datadir = @datadir@
-docdir = @docdir@@VERSIONED_PATH@
+docdir = @docdir@
 
 # The following must be substituted using @datadir@ and @libdir@
 # to avoid adding RPM generation paths (CUPS STR #1112)
